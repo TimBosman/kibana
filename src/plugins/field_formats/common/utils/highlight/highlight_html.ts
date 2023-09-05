@@ -12,7 +12,8 @@ import { htmlTags } from './html_tags';
 
 export function getHighlightHtml(
   fieldValue: string | object,
-  highlights: string[] | undefined | null
+  highlights: string[] | undefined | null,
+  shortHighlight: boolean = false
 ) {
   let highlightHtml = typeof fieldValue === 'object' ? JSON.stringify(fieldValue) : fieldValue;
 
@@ -34,7 +35,8 @@ export function getHighlightHtml(
       .join(htmlTags.post);
 
     // Replace all instances of the untagged string with the properly tagged string
-    highlightHtml = highlightHtml.split(untaggedHighlight).join(taggedHighlight);
+    highlightHtml = shortHighlight ? taggedHighlight:
+    highlightHtml.split(untaggedHighlight).join(taggedHighlight);
   });
 
   return highlightHtml;
