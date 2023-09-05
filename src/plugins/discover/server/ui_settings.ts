@@ -22,6 +22,7 @@ import {
   CONTEXT_DEFAULT_SIZE_SETTING,
   CONTEXT_STEP_SETTING,
   CONTEXT_TIE_BREAKER_FIELDS_SETTING,
+  DOC_SHORT_HIGHLIGHT,
   DOC_TABLE_LEGACY,
   MODIFY_COLUMNS_ON_SWITCH,
   SEARCH_FIELDS_FROM_SOURCE,
@@ -120,6 +121,19 @@ export const getUiSettings: (docLinks: DocLinksServiceSetup) => Record<string, U
       defaultMessage:
         'Controls whether a search is executed when Discover first loads. This setting does not ' +
         'have an effect when loading a saved search.',
+    }),
+    category: ['discover'],
+    schema: schema.boolean(),
+  },
+  [DOC_SHORT_HIGHLIGHT]: {
+    name: i18n.translate('data.advancedSettings.docTableShortHighlightTitle', {
+      defaultMessage: 'Short Highlights',
+    }),
+    value: false,
+    description: i18n.translate('data.advancedSettings.docTableShortHighlightText', {
+      defaultMessage:
+        'Show the fields that are highlighted in the results from the sentence where ' +
+        'the highlight is found',
     }),
     category: ['discover'],
     schema: schema.boolean(),
