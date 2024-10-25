@@ -12,7 +12,7 @@ jobs:
     - uses: repo-sync/github-sync@v2
       name: Sync repo to branch
       with:
-        source_repo: elastic:kibana
+        source_repo: https://github.com/elastic/kibana.git
         source_branch: main
         destination_branch: intermediate-branch
         github_token: ${{ secrets.GITHUB_TOKEN }}
