@@ -14,6 +14,11 @@
     "@kbn/monaco",
     "@kbn/core-ui-settings-browser-mocks",
     "@kbn/core-ui-settings-browser",
+    "@kbn/std",
+    "@kbn/ui-theme",
+    "@kbn/code-editor",
+    "@kbn/core-lifecycle-browser",
+    "@kbn/react-kibana-mount"
   ],
   "exclude": [
     "target/**/*",

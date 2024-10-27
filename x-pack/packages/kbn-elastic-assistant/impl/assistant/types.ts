@@ -5,13 +5,12 @@
  * 2.0.
  */
 
-export type PromptType = 'system' | 'user';
+export interface KnowledgeBaseConfig {
+  latestAlerts: number;
+}
 
-export interface Prompt {
-  id: string;
-  content: string;
-  name: string;
-  promptType: PromptType;
-  isDefault?: boolean; // TODO: Should be renamed to isImmutable as this flag is used to prevent users from deleting prompts
-  isNewConversationDefault?: boolean;
+export interface TraceOptions {
+  apmUrl: string;
+  langSmithProject: string;
+  langSmithApiKey: string;
 }

@@ -93,10 +93,9 @@ describe('ResolveAllConflicts', () => {
             className="spcCopyToSpace__resolveAllConflictsLink"
             onClick={[Function]}
           >
-            <FormattedMessage
+            <Memo(MemoizedFormattedMessage)
               defaultMessage="(resolve all)"
               id="xpack.spaces.management.copyToSpace.resolveAllConflictsLink"
-              values={Object {}}
             />
           </EuiLink>
         }
@@ -107,8 +106,9 @@ describe('ResolveAllConflicts', () => {
         isOpen={false}
         ownFocus={true}
         panelPaddingSize="none"
+        repositionToCrossAxis={true}
       >
-        <EuiContextMenuPanel
+        <EuiContextMenuPanelClass
           items={
             Array [
               <EuiContextMenuItem

@@ -7,7 +7,7 @@
 
 import { IndicesSimulateIndexTemplateResponse } from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { Logger, ElasticsearchClient } from '@kbn/core/server';
-import { get } from 'lodash';
+import { get, sortBy } from 'lodash';
 import { IIndexPatternString } from '../resource_installer_utils';
 import { retryTransientEsErrors } from './retry_transient_es_errors';
 import { DataStreamAdapter } from './data_stream_adapter';
@@ -22,6 +22,7 @@ interface UpdateIndexMappingsOpts {
   logger: Logger;
   esClient: ElasticsearchClient;
   totalFieldsLimit: number;
+  validIndexPrefixes?: string[];
   concreteIndices: ConcreteIndexInfo[];
 }
 
@@ -107,22 +108,42 @@ export const updateIndexMappings = async ({
   esClient,
   totalFieldsLimit,
   concreteIndices,
+  validIndexPrefixes,
 }: UpdateIndexMappingsOpts) => {
+  let validConcreteIndices = [];
+  if (validIndexPrefixes) {
+    for (const cIdx of concreteIndices) {
+      if (!validIndexPrefixes?.some((prefix: string) => cIdx.index.startsWith(prefix))) {
+        logger.warn(
+          `Found unexpected concrete index name "${
+            cIdx.index
+          }" while expecting index with one of the following prefixes: [${validIndexPrefixes.join(
+            ','
+          )}] Not updating mappings or settings for this index.`
+        );
+      } else {
+        validConcreteIndices.push(cIdx);
+      }
+    }
+  } else {
+    validConcreteIndices = concreteIndices;
+  }
+
   logger.debug(
-    `Updating underlying mappings for ${concreteIndices.length} indices / data streams.`
+    `Updating underlying mappings for ${validConcreteIndices.length} indices / data streams.`
   );
 
   // Update total field limit setting of found indices
   // Other index setting changes are not updated at this time
   await Promise.all(
-    concreteIndices.map((index) =>
+    validConcreteIndices.map((index) =>
       updateTotalFieldLimitSetting({ logger, esClient, totalFieldsLimit, concreteIndexInfo: index })
     )
   );
 
   // Update mappings of the found indices.
   await Promise.all(
-    concreteIndices.map((index) =>
+    validConcreteIndices.map((index) =>
       updateUnderlyingMapping({ logger, esClient, totalFieldsLimit, concreteIndexInfo: index })
     )
   );
@@ -144,3 +165,45 @@ export interface CreateConcreteWriteIndexOpts {
 export const createConcreteWriteIndex = async (opts: CreateConcreteWriteIndexOpts) => {
   await opts.dataStreamAdapter.createStream(opts);
 };
+
+interface SetConcreteWriteIndexOpts {
+  logger: Logger;
+  esClient: ElasticsearchClient;
+  concreteIndices: ConcreteIndexInfo[];
+}
+
+export async function setConcreteWriteIndex(opts: SetConcreteWriteIndexOpts) {
+  const { logger, esClient, concreteIndices } = opts;
+  const lastIndex = concreteIndices.length - 1;
+  const concreteIndex = sortBy(concreteIndices, ['index'])[lastIndex];
+  logger.debug(
+    `Attempting to set index: ${concreteIndex.index} as the write index for alias: ${concreteIndex.alias}.`
+  );
+  try {
+    await retryTransientEsErrors(
+      () =>
+        esClient.indices.updateAliases({
+          body: {
+            actions: [
+              { remove: { index: concreteIndex.index, alias: concreteIndex.alias } },
+              {
+                add: {
+                  index: concreteIndex.index,
+                  alias: concreteIndex.alias,
+                  is_write_index: true,
+                },
+              },
+            ],
+          },
+        }),
+      { logger }
+    );
+    logger.info(
+      `Successfully set index: ${concreteIndex.index} as the write index for alias: ${concreteIndex.alias}.`
+    );
+  } catch (error) {
+    throw new Error(
+      `Failed to set index: ${concreteIndex.index} as the write index for alias: ${concreteIndex.alias}.`
+    );
+  }
+}

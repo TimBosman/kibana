@@ -22,7 +22,6 @@ import {
   EuiIconTip,
   EuiKeyPadMenu,
   EuiKeyPadMenuItem,
-  EuiPageTemplate_Deprecated as EuiPageTemplate,
   EuiPopover,
   EuiSpacer,
   EuiText,
@@ -30,20 +29,32 @@ import {
   useEuiTheme,
   useGeneratedHtmlId,
 } from '@elastic/eui';
+import { css } from '@emotion/react';
 import { Form, FormikProvider, useFormik, useFormikContext } from 'formik';
 import type { FunctionComponent } from 'react';
 import React, { useRef, useState } from 'react';
 import useUpdateEffect from 'react-use/lib/useUpdateEffect';
 
-import type { CoreStart, IUiSettingsClient } from '@kbn/core/public';
+import type { CoreStart, IUiSettingsClient, ThemeServiceStart } from '@kbn/core/public';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { useKibana } from '@kbn/kibana-react-plugin/public';
+import {
+  FormChangesProvider,
+  FormField,
+  FormLabel,
+  FormRow,
+  OptionalText,
+  useFormChanges,
+  useFormChangesContext,
+} from '@kbn/security-form-components';
+import { KibanaPageTemplate } from '@kbn/shared-ux-page-kibana-template';
 import type { DarkModeValue, UserProfileData } from '@kbn/user-profile-components';
 import { UserAvatar, useUpdateUserProfile } from '@kbn/user-profile-components';
 
-import { createImageHandler, getRandomColor, IMAGE_FILE_TYPES, VALID_HEX_COLOR } from './utils';
+import { createImageHandler, getRandomColor, VALID_HEX_COLOR } from './utils';
 import type { AuthenticatedUser } from '../../../common';
+import { IMAGE_FILE_TYPES } from '../../../common/constants';
 import {
   canUserChangeDetails,
   canUserChangePassword,
@@ -52,16 +63,14 @@ import {
 } from '../../../common/model';
 import { useSecurityApiClients } from '../../components';
 import { Breadcrumb } from '../../components/breadcrumb';
-import {
-  FormChangesProvider,
-  useFormChanges,
-  useFormChangesContext,
-} from '../../components/form_changes';
-import { FormField } from '../../components/form_field';
-import { FormLabel } from '../../components/form_label';
-import { FormRow, OptionalText } from '../../components/form_row';
 import { ChangePasswordModal } from '../../management/users/edit_user/change_password_modal';
 import { isUserReserved } from '../../management/users/user_utils';
+
+const formRowCSS = css`
+  .euiFormRow__label {
+    flex: 1;
+  }
+`;
 
 export interface UserProfileProps {
   user: AuthenticatedUser;
@@ -127,33 +136,39 @@ const UserDetailsEditor: FunctionComponent<UserDetailsEditorProps> = ({ user }) 
       }
     >
       <FormRow
+        css={formRowCSS}
         label={
           <FormLabel for="user.full_name">
-            <FormattedMessage
-              id="xpack.security.accountManagement.userProfile.fullNameLabel"
-              defaultMessage="Full name"
-            />
+            <EuiFlexGroup justifyContent="spaceBetween">
+              <FormattedMessage
+                id="xpack.security.accountManagement.userProfile.fullNameLabel"
+                defaultMessage="Full name"
+              />
+              <OptionalText />
+            </EuiFlexGroup>
           </FormLabel>
         }
-        labelAppend={<OptionalText />}
         fullWidth
       >
-        <FormField name="user.full_name" fullWidth />
+        <FormField name="user.full_name" data-test-subj={'userProfileFullName'} fullWidth />
       </FormRow>
 
       <FormRow
+        css={formRowCSS}
         label={
           <FormLabel for="user.email">
-            <FormattedMessage
-              id="xpack.security.accountManagement.userProfile.emailLabel"
-              defaultMessage="Email address"
-            />
+            <EuiFlexGroup justifyContent="spaceBetween">
+              <FormattedMessage
+                id="xpack.security.accountManagement.userProfile.emailLabel"
+                defaultMessage="Email address"
+              />
+              <OptionalText />
+            </EuiFlexGroup>
           </FormLabel>
         }
-        labelAppend={<OptionalText />}
         fullWidth
       >
-        <FormField type="email" name="user.email" fullWidth />
+        <FormField type="email" name="user.email" data-test-subj={'userProfileEmail'} fullWidth />
       </FormRow>
     </EuiDescribedFormGroup>
   );
@@ -189,6 +204,7 @@ const UserSettingsEditor: FunctionComponent<UserSettingsEditorProps> = ({
       <EuiKeyPadMenuItem
         name={id}
         label={label}
+        data-test-subj={`themeKeyPadItem${label}`}
         checkable="single"
         isSelected={idSelected === id}
         isDisabled={isThemeOverridden}
@@ -421,7 +437,18 @@ function UserAvatarEditor({
               )
             }
             onChange={createImageHandler((imageUrl) => {
-              formik.setFieldValue('data.avatar.imageUrl', imageUrl ?? '');
+              if (!imageUrl) {
+                formik.setFieldError(
+                  'data.avatar.imageUrl',
+                  i18n.translate(
+                    'xpack.security.accountManagement.userProfile.imageUrlRequiredError',
+                    { defaultMessage: 'Upload an image.' }
+                  )
+                );
+                formik.setFieldTouched('data.avatar.imageUrl', true);
+              } else {
+                formik.setFieldValue('data.avatar.imageUrl', imageUrl ?? '');
+              }
             })}
             validate={{
               required: i18n.translate(
@@ -654,7 +681,8 @@ export const UserProfile: FunctionComponent<UserProfileProps> = ({ user, data })
   const isCloudUser = user.elastic_cloud_user;
 
   const { isThemeOverridden, isOverriddenThemeDarkMode } = determineIfThemeOverridden(
-    services.settings.client
+    services.settings.client,
+    services.theme
   );
 
   const rightSideItems = [
@@ -750,17 +778,16 @@ export const UserProfile: FunctionComponent<UserProfileProps> = ({ user, data })
               />
             ) : null}
 
-            <EuiPageTemplate
-              className="eui-fullHeight"
-              pageHeader={{
-                pageTitle: (
+            <KibanaPageTemplate className="eui-fullHeight" restrictWidth={1000}>
+              <KibanaPageTemplate.Header
+                pageTitle={
                   <FormattedMessage
                     id="xpack.security.accountManagement.userProfile.title"
                     defaultMessage="Profile"
                   />
-                ),
-                pageTitleProps: { id: titleId },
-                rightSideItems: rightSideItems.reverse().map((item) => (
+                }
+                id={titleId}
+                rightSideItems={rightSideItems.reverse().map((item) => (
                   <EuiDescriptionList
                     textStyle="reverse"
                     listItems={[
@@ -791,28 +818,35 @@ export const UserProfile: FunctionComponent<UserProfileProps> = ({ user, data })
                     ]}
                     compressed
                   />
-                )),
-              }}
-              bottomBar={formChanges.count > 0 ? <SaveChangesBottomBar /> : null}
-              bottomBarProps={{ paddingSize: 'm', position: 'fixed' }}
-              restrictWidth={1000}
-            >
-              <Form aria-labelledby={titleId}>
-                <UserDetailsEditor user={user} />
-                {isCloudUser ? null : <UserAvatarEditor user={user} formik={formik} />}
-                <UserPasswordEditor
-                  user={user}
-                  onShowPasswordForm={() => setShowChangePasswordForm(true)}
-                />
-                {isCloudUser ? null : (
-                  <UserSettingsEditor
-                    formik={formik}
-                    isThemeOverridden={isThemeOverridden}
-                    isOverriddenThemeDarkMode={isOverriddenThemeDarkMode}
+                ))}
+              />
+              <KibanaPageTemplate.Section>
+                <Form aria-labelledby={titleId}>
+                  <UserDetailsEditor user={user} />
+                  {isCloudUser ? null : <UserAvatarEditor user={user} formik={formik} />}
+                  <UserPasswordEditor
+                    user={user}
+                    onShowPasswordForm={() => setShowChangePasswordForm(true)}
                   />
-                )}
-              </Form>
-            </EuiPageTemplate>
+                  {isCloudUser ? null : (
+                    <UserSettingsEditor
+                      formik={formik}
+                      isThemeOverridden={isThemeOverridden}
+                      isOverriddenThemeDarkMode={isOverriddenThemeDarkMode}
+                    />
+                  )}
+                </Form>
+              </KibanaPageTemplate.Section>
+              {formChanges.count > 0 ? (
+                <KibanaPageTemplate.BottomBar
+                  paddingSize="m"
+                  position="fixed"
+                  data-test-subj={'userProfileBottomBar'}
+                >
+                  <SaveChangesBottomBar />
+                </KibanaPageTemplate.BottomBar>
+              ) : null}
+            </KibanaPageTemplate>
           </Breadcrumb>
         </FormChangesProvider>
       </FormikProvider>
@@ -962,7 +996,7 @@ export const SaveChangesBottomBar: FunctionComponent = () => {
         </EuiFlexGroup>
       </EuiFlexItem>
       <EuiFlexItem grow={false}>
-        <EuiButtonEmpty onClick={formik.handleReset} color="ghost">
+        <EuiButtonEmpty onClick={formik.handleReset} color="text">
           <FormattedMessage
             id="xpack.security.accountManagement.userProfile.discardChangesButton"
             defaultMessage="Discard"
@@ -972,6 +1006,7 @@ export const SaveChangesBottomBar: FunctionComponent = () => {
       <EuiFlexItem grow={false}>
         <EuiButton
           onClick={formik.submitForm}
+          data-test-subj="saveProfileChangesButton"
           isLoading={formik.isSubmitting}
           isDisabled={formik.submitCount > 0 && !formik.isValid}
           color="success"
@@ -989,12 +1024,15 @@ export const SaveChangesBottomBar: FunctionComponent = () => {
   );
 };
 
-function determineIfThemeOverridden(settingsClient: IUiSettingsClient): {
+function determineIfThemeOverridden(
+  settingsClient: IUiSettingsClient,
+  theme: ThemeServiceStart
+): {
   isThemeOverridden: boolean;
   isOverriddenThemeDarkMode: boolean;
 } {
   return {
     isThemeOverridden: settingsClient.isOverridden('theme:darkMode'),
-    isOverriddenThemeDarkMode: settingsClient.get<boolean>('theme:darkMode'),
+    isOverriddenThemeDarkMode: theme.getTheme().darkMode,
   };
 }

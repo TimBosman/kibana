@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import { set, omit, unset } from 'lodash';
+import { omit, unset } from 'lodash';
+import { set } from '@kbn/safer-lodash-set';
 import { loggerMock } from '@kbn/logging-mocks';
 import { savedObjectsClientMock } from '@kbn/core/server/mocks';
 import type {
@@ -107,9 +108,11 @@ describe('CaseUserActionService', () => {
       describe('create case', () => {
         it('creates a create case user action', async () => {
           await service.creator.createUserAction({
-            ...commonArgs,
-            payload: casePayload,
-            type: UserActionTypes.create_case,
+            userAction: {
+              ...commonArgs,
+              payload: casePayload,
+              type: UserActionTypes.create_case,
+            },
           });
 
           expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledWith(
@@ -159,9 +162,11 @@ describe('CaseUserActionService', () => {
 
         it('logs a create case user action', async () => {
           await service.creator.createUserAction({
-            ...commonArgs,
-            payload: casePayload,
-            type: UserActionTypes.create_case,
+            userAction: {
+              ...commonArgs,
+              payload: casePayload,
+              type: UserActionTypes.create_case,
+            },
           });
 
           expect(mockAuditLogger.log).toBeCalledTimes(1);
@@ -193,9 +198,11 @@ describe('CaseUserActionService', () => {
         describe('status', () => {
           it('creates an update status user action', async () => {
             await service.creator.createUserAction({
-              ...commonArgs,
-              payload: { status: CaseStatuses.closed },
-              type: UserActionTypes.status,
+              userAction: {
+                ...commonArgs,
+                payload: { status: CaseStatuses.closed },
+                type: UserActionTypes.status,
+              },
             });
 
             expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledWith(
@@ -218,9 +225,11 @@ describe('CaseUserActionService', () => {
 
           it('logs an update status user action', async () => {
             await service.creator.createUserAction({
-              ...commonArgs,
-              payload: { status: CaseStatuses.closed },
-              type: UserActionTypes.status,
+              userAction: {
+                ...commonArgs,
+                payload: { status: CaseStatuses.closed },
+                type: UserActionTypes.status,
+              },
             });
 
             expect(mockAuditLogger.log).toBeCalledTimes(1);
@@ -253,9 +262,11 @@ describe('CaseUserActionService', () => {
         describe('severity', () => {
           it('creates an update severity user action', async () => {
             await service.creator.createUserAction({
-              ...commonArgs,
-              payload: { severity: CaseSeverity.MEDIUM },
-              type: UserActionTypes.severity,
+              userAction: {
+                ...commonArgs,
+                payload: { severity: CaseSeverity.MEDIUM },
+                type: UserActionTypes.severity,
+              },
             });
 
             expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledWith(
@@ -278,9 +289,11 @@ describe('CaseUserActionService', () => {
 
           it('logs an update severity user action', async () => {
             await service.creator.createUserAction({
-              ...commonArgs,
-              payload: { severity: CaseSeverity.MEDIUM },
-              type: UserActionTypes.severity,
+              userAction: {
+                ...commonArgs,
+                payload: { severity: CaseSeverity.MEDIUM },
+                type: UserActionTypes.severity,
+              },
             });
 
             expect(mockAuditLogger.log).toBeCalledTimes(1);
@@ -313,9 +326,11 @@ describe('CaseUserActionService', () => {
         describe('push', () => {
           it('creates a push user action', async () => {
             await service.creator.createUserAction({
-              ...commonArgs,
-              payload: { externalService },
-              type: UserActionTypes.pushed,
+              userAction: {
+                ...commonArgs,
+                payload: { externalService },
+                type: UserActionTypes.pushed,
+              },
             });
 
             expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledWith(
@@ -357,9 +372,11 @@ describe('CaseUserActionService', () => {
 
           it('logs a push user action', async () => {
             await service.creator.createUserAction({
-              ...commonArgs,
-              payload: { externalService },
-              type: UserActionTypes.pushed,
+              userAction: {
+                ...commonArgs,
+                payload: { externalService },
+                type: UserActionTypes.pushed,
+              },
             });
 
             expect(mockAuditLogger.log).toBeCalledTimes(1);
@@ -396,11 +413,13 @@ describe('CaseUserActionService', () => {
             [UserActionActions.update],
           ])('creates a comment user action of action: %s', async (action) => {
             await service.creator.createUserAction({
-              ...commonArgs,
-              type: UserActionTypes.comment,
-              action,
-              attachmentId: 'test-id',
-              payload: { attachment: comment },
+              userAction: {
+                ...commonArgs,
+                type: UserActionTypes.comment,
+                action,
+                attachmentId: 'test-id',
+                payload: { attachment: comment },
+              },
             });
 
             expect(unsecuredSavedObjectsClient.create).toHaveBeenCalledWith(
@@ -438,11 +457,13 @@ describe('CaseUserActionService', () => {
             [UserActionActions.update],
           ])('logs a comment user action of action: %s', async (action) => {
             await service.creator.createUserAction({
-              ...commonArgs,
-              type: UserActionTypes.comment,
-              action,
-              attachmentId: 'test-id',
-              payload: { attachment: comment },
+              userAction: {
+                ...commonArgs,
+                type: UserActionTypes.comment,
+                action,
+                attachmentId: 'test-id',
+                payload: { attachment: comment },
+              },
             });
 
             expect(mockAuditLogger.log).toBeCalledTimes(1);
@@ -1922,6 +1943,222 @@ describe('CaseUserActionService', () => {
                   },
                 ],
                 "score": 0,
+                "type": "cases-user-actions",
+              }
+            `);
+          });
+
+          it('constructs the user actions filter correctly', async () => {
+            const userAction = createUserActionSO();
+            const soFindRes = createSOFindResponse([createUserActionFindSO(userAction)]);
+            unsecuredSavedObjectsClient.find.mockResolvedValue(soFindRes);
+
+            await service.getMostRecentUserAction('123');
+
+            expect(unsecuredSavedObjectsClient.find.mock.calls[0][0]).toMatchInlineSnapshot(`
+              Object {
+                "filter": Object {
+                  "arguments": Array [
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "comment",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "description",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "tags",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "title",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                  ],
+                  "function": "or",
+                  "type": "function",
+                },
+                "hasReference": Object {
+                  "id": "123",
+                  "type": "cases",
+                },
+                "page": 1,
+                "perPage": 1,
+                "sortField": "created_at",
+                "sortOrder": "desc",
+                "type": "cases-user-actions",
+              }
+            `);
+          });
+
+          it('constructs the user actions filter correctly for the webhook connector', async () => {
+            const userAction = createUserActionSO();
+            const soFindRes = createSOFindResponse([createUserActionFindSO(userAction)]);
+            unsecuredSavedObjectsClient.find.mockResolvedValue(soFindRes);
+
+            await service.getMostRecentUserAction('123', true);
+
+            expect(unsecuredSavedObjectsClient.find.mock.calls[0][0]).toMatchInlineSnapshot(`
+              Object {
+                "filter": Object {
+                  "arguments": Array [
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "comment",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "description",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "tags",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "title",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "severity",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                    Object {
+                      "arguments": Array [
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "cases-user-actions.attributes.type",
+                        },
+                        Object {
+                          "isQuoted": false,
+                          "type": "literal",
+                          "value": "status",
+                        },
+                      ],
+                      "function": "is",
+                      "type": "function",
+                    },
+                  ],
+                  "function": "or",
+                  "type": "function",
+                },
+                "hasReference": Object {
+                  "id": "123",
+                  "type": "cases",
+                },
+                "page": 1,
+                "perPage": 1,
+                "sortField": "created_at",
+                "sortOrder": "desc",
                 "type": "cases-user-actions",
               }
             `);

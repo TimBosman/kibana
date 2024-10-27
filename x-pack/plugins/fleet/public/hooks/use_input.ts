@@ -7,9 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type React from 'react';
-import type { EuiSwitchEvent } from '@elastic/eui';
-
-import type { KafkaTopicWhenType, ValueOf } from '../../common/types';
+import type { EuiComboBoxOptionOption, EuiSwitchEvent } from '@elastic/eui';
 
 export interface FormInput {
   validate: () => boolean;
@@ -84,6 +82,73 @@ export function useInput(
   };
 }
 
+type MaybeSecret = string | { id: string } | undefined;
+
+export function useSecretInput(
+  initialValue: MaybeSecret,
+  validate?: (value: MaybeSecret) => string[] | undefined,
+  disabled: boolean = false
+) {
+  const [value, setValue] = useState<MaybeSecret>(initialValue);
+  const [errors, setErrors] = useState<string[] | undefined>();
+  const [hasChanged, setHasChanged] = useState(false);
+
+  const onChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const newValue = e.target.value;
+      setValue(newValue);
+      if (errors && validate && validate(newValue) === undefined) {
+        setErrors(undefined);
+      }
+    },
+    [errors, validate]
+  );
+
+  useEffect(() => {
+    if (hasChanged) {
+      return;
+    }
+    if (value !== initialValue) {
+      setHasChanged(true);
+    }
+  }, [hasChanged, value, initialValue]);
+
+  const isInvalid = errors !== undefined;
+
+  return {
+    value,
+    errors,
+    props: {
+      onChange,
+      value: typeof value === 'string' ? value : '',
+      isInvalid,
+      disabled,
+    },
+    formRowProps: {
+      error: errors,
+      isInvalid,
+      initialValue,
+      disabled,
+      clear: () => {
+        setValue('');
+      },
+    },
+    cancelEdit: () => {
+      setValue(initialValue || '');
+    },
+    validate: () => {
+      if (validate) {
+        const newErrors = validate(value);
+        setErrors(newErrors);
+        return newErrors === undefined;
+      }
+
+      return true;
+    },
+    setValue,
+    hasChanged,
+  };
+}
 export function useRadioInput(defaultValue: string, disabled = false) {
   const [value, setValue] = useState<string>(defaultValue);
   const [hasChanged, setHasChanged] = useState(false);
@@ -241,25 +306,6 @@ export function useKeyValueInput(
   );
 }
 
-type Topic = Array<{
-  topic: string;
-  when?: {
-    type?: ValueOf<KafkaTopicWhenType>;
-    condition?: string;
-  };
-}>;
-
-export function useTopicsInput(
-  id: string,
-  defaultValue: Topic = [],
-  validate?: (
-    value: Topic
-  ) => Array<{ message: string; index: number; condition?: boolean }> | undefined,
-  disabled = false
-) {
-  return useCustomInput<Topic>(id, defaultValue, validate, disabled);
-}
-
 export function useNumberInput(
   defaultValue: number | undefined,
   validate?: (value: number) => number[] | undefined,
@@ -344,5 +390,73 @@ export function useSelectInput(
       setValue('');
     },
     setValue,
+  };
+}
+
+export function useComboBoxWithCustomInput(
+  id: string,
+  defaultValue: Array<EuiComboBoxOptionOption<string>> = [],
+  validate?: (value: Array<EuiComboBoxOptionOption<string>>) => string[] | undefined,
+  disabled = false
+) {
+  const [selectedOptions, setSelected] = useState(defaultValue);
+  const [errors, setErrors] = useState<string[] | undefined>();
+
+  const onChange = useCallback(
+    (selected: Array<EuiComboBoxOptionOption<string>>) => {
+      setSelected(selected);
+      if (errors && validate) {
+        setErrors(validate(selected));
+      }
+    },
+    [validate, errors]
+  );
+
+  const onCreateOption = (searchValue: string) => {
+    const normalizedSearchValue = searchValue.trim();
+    const newOption = {
+      label: normalizedSearchValue,
+      value: normalizedSearchValue,
+    };
+    setSelected([newOption]);
+    if (validate) {
+      setErrors(validate([newOption]));
+    }
+  };
+
+  const validateCallback = useCallback(() => {
+    if (validate) {
+      const newErrors = validate(selectedOptions);
+      setErrors(newErrors);
+
+      return newErrors === undefined;
+    }
+
+    return true;
+  }, [validate, selectedOptions]);
+
+  const value = selectedOptions.length > 0 ? selectedOptions[0]?.value : '';
+  const isInvalid = errors !== undefined;
+
+  return {
+    props: {
+      id,
+      onChange,
+      onCreateOption,
+      errors,
+      isInvalid,
+      disabled,
+      selectedOptions,
+    },
+    formRowProps: {
+      error: errors,
+      isInvalid,
+    },
+    value,
+    clear: () => {
+      setSelected(defaultValue);
+    },
+    setSelected,
+    validate: validateCallback,
   };
 }

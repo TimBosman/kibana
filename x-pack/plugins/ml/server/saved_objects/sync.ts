@@ -61,7 +61,7 @@ export function syncSavedObjectsFactory(
       if (job.checks.savedObjectExits === false) {
         const type = 'anomaly-detector';
         if (results.savedObjectsCreated[type] === undefined) {
-          results.savedObjectsCreated[type] = {};
+          results.savedObjectsCreated[type] = Object.create(null);
         }
         if (simulate === true) {
           results.savedObjectsCreated[type]![job.jobId] = { success: true };
@@ -88,7 +88,7 @@ export function syncSavedObjectsFactory(
       if (job.checks.savedObjectExits === false) {
         const type = 'data-frame-analytics';
         if (results.savedObjectsCreated[type] === undefined) {
-          results.savedObjectsCreated[type] = {};
+          results.savedObjectsCreated[type] = Object.create(null);
         }
         if (simulate === true) {
           results.savedObjectsCreated[type]![job.jobId] = { success: true };
@@ -119,7 +119,7 @@ export function syncSavedObjectsFactory(
           const { modelId } = model;
           const type = 'trained-model';
           if (results.savedObjectsCreated[type] === undefined) {
-            results.savedObjectsCreated[type] = {};
+            results.savedObjectsCreated[type] = Object.create(null);
           }
           if (simulate === true) {
             results.savedObjectsCreated[type]![modelId] = { success: true };
@@ -137,6 +137,10 @@ export function syncSavedObjectsFactory(
                 }
                 const job = getJobDetailsFromTrainedModel(mod);
                 await mlSavedObjectService.createTrainedModel(modelId, job);
+                if (modelId.startsWith('.')) {
+                  // if the model id starts with a dot, it is an internal model and should be in all spaces
+                  await mlSavedObjectService.updateTrainedModelsSpaces([modelId], ['*'], []);
+                }
                 results.savedObjectsCreated[type]![modelId] = {
                   success: true,
                 };
@@ -157,7 +161,7 @@ export function syncSavedObjectsFactory(
       if (job.checks.jobExists === false) {
         const type = 'anomaly-detector';
         if (results.savedObjectsDeleted[type] === undefined) {
-          results.savedObjectsDeleted[type] = {};
+          results.savedObjectsDeleted[type] = Object.create(null);
         }
         if (simulate === true) {
           results.savedObjectsDeleted[type]![job.jobId] = { success: true };
@@ -187,7 +191,7 @@ export function syncSavedObjectsFactory(
       if (job.checks.jobExists === false) {
         const type = 'data-frame-analytics';
         if (results.savedObjectsDeleted[type] === undefined) {
-          results.savedObjectsDeleted[type] = {};
+          results.savedObjectsDeleted[type] = Object.create(null);
         }
         if (simulate === true) {
           results.savedObjectsDeleted[type]![job.jobId] = { success: true };
@@ -221,7 +225,7 @@ export function syncSavedObjectsFactory(
         const { modelId, namespaces } = model;
         const type = 'trained-model';
         if (results.savedObjectsDeleted[type] === undefined) {
-          results.savedObjectsDeleted[type] = {};
+          results.savedObjectsDeleted[type] = Object.create(null);
         }
 
         if (simulate === true) {
@@ -261,7 +265,7 @@ export function syncSavedObjectsFactory(
             adJobsById[job.jobId].datafeedId !== job.datafeedId)
         ) {
           if (results.datafeedsAdded[type] === undefined) {
-            results.datafeedsAdded[type] = {};
+            results.datafeedsAdded[type] = Object.create(null);
           }
           // add datafeed id for jobs where the datafeed exists but the id is missing from the saved object
           // or if the datafeed id in the saved object is not the same as the one attached to the job in es
@@ -294,7 +298,7 @@ export function syncSavedObjectsFactory(
           job.datafeedId !== undefined
         ) {
           if (results.datafeedsRemoved[type] === undefined) {
-            results.datafeedsRemoved[type] = {};
+            results.datafeedsRemoved[type] = Object.create(null);
           }
           // remove datafeed id for jobs where the datafeed no longer exists but the id is populated in the saved object
           if (simulate === true) {

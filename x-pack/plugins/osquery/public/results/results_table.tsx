@@ -59,6 +59,11 @@ const euiProgressCss = {
   marginTop: '-2px',
 };
 
+const resultsTableContainerCss = {
+  width: '100%',
+  maxWidth: '1200px',
+};
+
 export interface ResultsTableComponentProps {
   actionId: string;
   selectedAgent?: string;
@@ -87,6 +92,7 @@ const ResultsTableComponent: React.FC<ResultsTableComponentProps> = ({
     data: { aggregations },
   } = useActionResults({
     actionId,
+    startDate,
     activePage: 0,
     agentIds,
     limit: 0,
@@ -103,7 +109,7 @@ const ResultsTableComponent: React.FC<ResultsTableComponentProps> = ({
   } = useKibana().services;
 
   const getFleetAppUrl = useCallback(
-    (agentId) =>
+    (agentId: any) =>
       getUrlForApp('fleet', {
         path: pagePathGetters.agent_details({ agentId })[1],
       }),
@@ -112,7 +118,7 @@ const ResultsTableComponent: React.FC<ResultsTableComponentProps> = ({
 
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 });
   const onChangeItemsPerPage = useCallback(
-    (pageSize) =>
+    (pageSize: any) =>
       setPagination((currentPagination) => ({
         ...currentPagination,
         pageSize,
@@ -121,7 +127,7 @@ const ResultsTableComponent: React.FC<ResultsTableComponentProps> = ({
     [setPagination]
   );
   const onChangePage = useCallback(
-    (pageIndex) => setPagination((currentPagination) => ({ ...currentPagination, pageIndex })),
+    (pageIndex: any) => setPagination((currentPagination) => ({ ...currentPagination, pageIndex })),
     [setPagination]
   );
 
@@ -135,6 +141,7 @@ const ResultsTableComponent: React.FC<ResultsTableComponentProps> = ({
 
   const { data: allResultsData, isLoading } = useAllResults({
     actionId,
+    startDate,
     activePage: pagination.pageIndex,
     limit: pagination.pageSize,
     isLive,
@@ -335,7 +342,8 @@ const ResultsTableComponent: React.FC<ResultsTableComponentProps> = ({
             };
             const eventId = data[visibleRowIndex]?._id;
 
-            return <AddToTimelineButton field="_id" value={eventId} isIcon={true} />;
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            return <AddToTimelineButton field="_id" value={eventId!} isIcon={true} />;
           },
         },
       ];
@@ -435,19 +443,21 @@ const ResultsTableComponent: React.FC<ResultsTableComponentProps> = ({
         </EuiPanel>
       ) : (
         <DataContext.Provider value={allResultsData?.edges}>
-          <EuiDataGrid
-            css={euiDataGridCss}
-            data-test-subj="osqueryResultsTable"
-            aria-label="Osquery results"
-            columns={columns}
-            columnVisibility={columnVisibility}
-            rowCount={allResultsData?.total ?? 0}
-            renderCellValue={renderCellValue}
-            leadingControlColumns={leadingControlColumns}
-            sorting={tableSorting}
-            pagination={tablePagination}
-            toolbarVisibility={toolbarVisibility}
-          />
+          <div css={resultsTableContainerCss}>
+            <EuiDataGrid
+              css={euiDataGridCss}
+              data-test-subj="osqueryResultsTable"
+              aria-label="Osquery results"
+              columns={columns}
+              columnVisibility={columnVisibility}
+              rowCount={allResultsData?.total ?? 0}
+              renderCellValue={renderCellValue}
+              leadingControlColumns={leadingControlColumns}
+              sorting={tableSorting}
+              pagination={tablePagination}
+              toolbarVisibility={toolbarVisibility}
+            />
+          </div>
         </DataContext.Provider>
       )}
     </>

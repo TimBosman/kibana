@@ -18,6 +18,7 @@ import type {
   AssetsGroupedByServiceByType,
 } from '@kbn/fleet-plugin/common';
 import { agentPolicyStatuses } from '@kbn/fleet-plugin/common';
+import { clone } from 'lodash';
 import { EndpointMetadataGenerator } from './data_generators/endpoint_metadata_generator';
 import type {
   AlertEvent,
@@ -29,7 +30,6 @@ import type {
   SafeEndpointEvent,
 } from './types';
 import { HostPolicyResponseActionStatus } from './types';
-import { policyFactory } from './models/policy_config';
 import {
   ancestryArray,
   entityIDSafeVersion,
@@ -40,6 +40,8 @@ import {
 import { firstNonNullValue } from './models/ecs_safety_helpers';
 import type { EventOptions } from './types/generator';
 import { BaseDataGenerator } from './data_generators/base_data_generator';
+import type { PartialEndpointPolicyData } from './data_generators/fleet_package_policy_generator';
+import { FleetPackagePolicyGenerator } from './data_generators/fleet_package_policy_generator';
 
 export type Event = AlertEvent | SafeEndpointEvent;
 /**
@@ -239,6 +241,7 @@ export interface Tree {
   allEvents: Event[];
   startTime: Date;
   endTime: Date;
+  agentId: string;
 }
 
 export interface TreeOptions {
@@ -290,17 +293,17 @@ export function getTreeOptionsWithDef(options?: TreeOptions): TreeOptionDefaults
   };
 }
 
-const metadataDefaultDataStream = {
+const metadataDefaultDataStream = () => ({
   type: 'metrics',
   dataset: 'endpoint.metadata',
   namespace: 'default',
-};
+});
 
-const policyDefaultDataStream = {
+const policyDefaultDataStream = () => ({
   type: 'metrics',
   dataset: 'endpoint.policy',
   namespace: 'default',
-};
+});
 
 const eventsDefaultDataStream = {
   type: 'logs',
@@ -330,7 +333,14 @@ const alertsDefaultDataStream = {
  *        contain shared data structures.
  */
 export class EndpointDocGenerator extends BaseDataGenerator {
-  commonInfo: CommonHostInfo;
+  /**
+   * DO NOT ACCESS THIS PROPERTY DIRECTORY.
+   * Should only be accessed from the `getter/setter` property for `commonInfo` defined further
+   * below.
+   * @deprecated (just to ensure that its obvious not to access it directory)
+   */
+  _commonInfo: CommonHostInfo;
+
   sequence: number = 0;
 
   private readonly metadataGenerator: EndpointMetadataGenerator;
@@ -347,7 +357,7 @@ export class EndpointDocGenerator extends BaseDataGenerator {
   ) {
     super(seed);
     this.metadataGenerator = new MetadataGenerator(seed);
-    this.commonInfo = this.createHostData();
+    this._commonInfo = this.createHostData();
   }
 
   /**
@@ -369,20 +379,43 @@ export class EndpointDocGenerator extends BaseDataGenerator {
     };
   }
 
+  // Ensure that `this.commonInfo` is returned cloned data
+  protected get commonInfo() {
+    return clone(this._commonInfo);
+  }
+
+  protected set commonInfo(newInfo) {
+    this._commonInfo = newInfo;
+  }
+
   /**
    * Creates new random IP addresses for the host to simulate new DHCP assignment
    */
   public updateHostData() {
-    this.commonInfo.host.ip = this.randomArray(3, () => this.randomIP());
+    const newInfo = this.commonInfo;
+    newInfo.host.ip = this.randomArray(3, () => this.randomIP());
+    this.commonInfo = newInfo;
   }
 
   /**
    * Updates the current Host common record applied Policy to a different one from the list
    * of random choices and gives it a random policy response status.
+   *
    */
-  public updateHostPolicyData() {
-    this.commonInfo.Endpoint.policy.applied = this.randomChoice(APPLIED_POLICIES);
-    this.commonInfo.Endpoint.policy.applied.status = this.randomChoice(POLICY_RESPONSE_STATUSES);
+  public updateHostPolicyData({
+    excludeInitialPolicy = false,
+  }: Partial<{
+    /** Excludes the initial policy id (non-existent) that endpoint reports when it first is installed */
+    excludeInitialPolicy: boolean;
+  }> = {}) {
+    const newInfo = this.commonInfo;
+    newInfo.Endpoint.policy.applied = this.randomChoice(
+      excludeInitialPolicy
+        ? APPLIED_POLICIES.filter(({ id }) => id !== '00000000-0000-0000-0000-000000000000')
+        : APPLIED_POLICIES
+    );
+    newInfo.Endpoint.policy.applied.status = this.randomChoice(POLICY_RESPONSE_STATUSES);
+    this.commonInfo = newInfo;
   }
 
   /**
@@ -425,13 +458,15 @@ export class EndpointDocGenerator extends BaseDataGenerator {
    */
   public generateHostMetadata(
     ts = new Date().getTime(),
-    metadataDataStream = metadataDefaultDataStream
+    metadataDataStream = metadataDefaultDataStream()
   ): HostMetadata {
-    return this.metadataGenerator.generate({
-      '@timestamp': ts,
-      data_stream: metadataDataStream,
-      ...this.commonInfo,
-    });
+    return clone(
+      this.metadataGenerator.generate({
+        '@timestamp': ts,
+        data_stream: metadataDataStream,
+        ...this.commonInfo,
+      })
+    );
   }
 
   /**
@@ -1162,6 +1197,7 @@ export class EndpointDocGenerator extends BaseDataGenerator {
       childrenLevels: levels,
       startTime,
       endTime,
+      agentId: this.commonInfo.agent.id,
     };
   }
 
@@ -1556,46 +1592,14 @@ export class EndpointDocGenerator extends BaseDataGenerator {
   /**
    * Generates a Fleet `package policy` that includes the Endpoint Policy data
    */
-  public generatePolicyPackagePolicy(): PolicyData {
-    const created = new Date(Date.now() - 8.64e7).toISOString(); // 24h ago
-    // FIXME: remove and use new FleetPackagePolicyGenerator (#2262)
-    return {
-      id: this.seededUUIDv4(),
-      name: 'Endpoint Policy',
-      description: 'Policy to protect the worlds data',
-      created_at: created,
-      created_by: 'elastic',
-      updated_at: new Date().toISOString(),
-      updated_by: 'elastic',
-      policy_id: this.seededUUIDv4(),
-      enabled: true,
-      inputs: [
-        {
-          type: 'endpoint',
-          enabled: true,
-          streams: [],
-          config: {
-            artifact_manifest: {
-              value: {
-                manifest_version: '1.0.0',
-                schema_version: 'v1',
-                artifacts: {},
-              },
-            },
-            policy: {
-              value: policyFactory(),
-            },
-          },
-        },
-      ],
-      namespace: 'default',
-      package: {
-        name: 'endpoint',
-        title: 'Elastic Endpoint',
-        version: '1.0.0',
-      },
-      revision: 1,
-    };
+  public generatePolicyPackagePolicy({
+    seed,
+    overrides,
+  }: {
+    seed?: string;
+    overrides?: PartialEndpointPolicyData;
+  } = {}): PolicyData {
+    return new FleetPackagePolicyGenerator(seed).generateEndpointPackagePolicy(overrides);
   }
 
   /**
@@ -1790,7 +1794,7 @@ export class EndpointDocGenerator extends BaseDataGenerator {
   public generatePolicyResponse({
     ts = new Date().getTime(),
     allStatus,
-    policyDataStream = policyDefaultDataStream,
+    policyDataStream = policyDefaultDataStream(),
   }: {
     ts?: number;
     allStatus?: HostPolicyResponseActionStatus;

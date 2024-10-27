@@ -24,6 +24,13 @@ export const listActionTypesRoute = (
   router.get(
     {
       path: `${BASE_ACTION_API_PATH}/list_action_types`,
+      options: {
+        access: 'public',
+        summary: `Get connector types`,
+        // @ts-expect-error TODO(https://github.com/elastic/kibana/issues/196095): Replace {RouteDeprecationInfo}
+        deprecated: true,
+        tags: ['oas-tag:connectors'],
+      },
       validate: {},
     },
     router.handleLegacyErrors(async function (context, req, res) {

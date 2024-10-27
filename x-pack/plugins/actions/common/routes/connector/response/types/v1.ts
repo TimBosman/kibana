@@ -6,21 +6,29 @@
  */
 
 import { TypeOf } from '@kbn/config-schema';
-import { connectorResponseSchemaV1, connectorTypesResponseSchemaV1 } from '..';
+import {
+  connectorResponseSchemaV1,
+  connectorTypesResponseSchemaV1,
+  allConnectorsResponseSchema,
+  connectorExecuteResponseSchema,
+} from '..';
 
-export type ActionTypeConfig = Record<string, unknown>;
 type ConnectorResponseSchemaType = TypeOf<typeof connectorResponseSchemaV1>;
+type AllConnectorsResponseSchemaType = TypeOf<typeof allConnectorsResponseSchema>;
 
-export interface ConnectorResponse<Config extends ActionTypeConfig = ActionTypeConfig> {
+export interface ConnectorResponse {
   id: ConnectorResponseSchemaType['id'];
   name: ConnectorResponseSchemaType['name'];
-  config?: Config;
+  config?: ConnectorResponseSchemaType['config'];
   connector_type_id: ConnectorResponseSchemaType['connector_type_id'];
   is_missing_secrets?: ConnectorResponseSchemaType['is_missing_secrets'];
   is_preconfigured: ConnectorResponseSchemaType['is_preconfigured'];
   is_deprecated: ConnectorResponseSchemaType['is_deprecated'];
   is_system_action: ConnectorResponseSchemaType['is_system_action'];
-  referenced_by_count: ConnectorResponseSchemaType['referenced_by_count'];
+}
+
+export interface AllConnectorsResponse extends ConnectorResponse {
+  referenced_by_count: AllConnectorsResponseSchemaType['referenced_by_count'];
 }
 
 type ConnectorTypesResponseSchemaType = TypeOf<typeof connectorTypesResponseSchemaV1>;
@@ -33,4 +41,15 @@ export interface ConnectorTypesResponse {
   minimum_license_required: ConnectorTypesResponseSchemaType['minimum_license_required'];
   supported_feature_ids: ConnectorTypesResponseSchemaType['supported_feature_ids'];
   is_system_action_type: ConnectorTypesResponseSchemaType['is_system_action_type'];
+}
+
+type ConnectorExecuteResponseSchemaType = TypeOf<typeof connectorExecuteResponseSchema>;
+export interface ConnectorExecuteResponse {
+  connector_id: ConnectorExecuteResponseSchemaType['connector_id'];
+  status: ConnectorExecuteResponseSchemaType['status'];
+  message?: ConnectorExecuteResponseSchemaType['message'];
+  service_message?: ConnectorExecuteResponseSchemaType['service_message'];
+  data?: ConnectorExecuteResponseSchemaType['data'];
+  retry?: ConnectorExecuteResponseSchemaType['retry'];
+  errorSource?: ConnectorExecuteResponseSchemaType['errorSource'];
 }

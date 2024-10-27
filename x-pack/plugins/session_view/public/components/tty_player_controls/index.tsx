@@ -59,11 +59,11 @@ export const TTYPlayerControls = ({
   const commonButtonProps: Partial<EuiButtonIconProps> = {
     display: 'empty',
     size: 's',
-    color: 'ghost',
+    color: 'text',
     css: styles.controlButton,
   };
 
-  const onLineChange: EuiRangeProps['onChange'] = useCallback(
+  const onLineChange = useCallback<NonNullable<EuiRangeProps['onChange']>>(
     (event) => {
       const line = parseInt(event.currentTarget.value || '0', 10);
       onSeekLine(line);
@@ -188,7 +188,7 @@ export const TTYPlayerControls = ({
             onClick={handleViewInSession}
             iconType="arrowRight"
             aria-label={VIEW_IN_SESSION}
-            color="ghost"
+            color="text"
           >
             {VIEW_IN_SESSION}
           </EuiButtonEmpty>

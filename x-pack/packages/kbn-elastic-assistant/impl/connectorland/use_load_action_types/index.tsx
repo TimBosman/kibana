@@ -7,7 +7,6 @@
 
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
-import type { UserProfile } from '@kbn/security-plugin/common';
 import type { ServerError } from '@kbn/cases-plugin/public/types';
 import { loadActionTypes } from '@kbn/triggers-actions-ui-plugin/public/common/constants';
 import type { IHttpFetchError } from '@kbn/core-http-browser';
@@ -15,14 +14,14 @@ import type { IHttpFetchError } from '@kbn/core-http-browser';
 import type { ActionType } from '@kbn/actions-plugin/common';
 import { HttpSetup } from '@kbn/core-http-browser';
 import { IToasts } from '@kbn/core-notifications-browser';
-import { GeneralConnectorFeatureId } from '@kbn/actions-plugin/common';
+import { GenerativeAIForSecurityConnectorFeatureId } from '@kbn/actions-plugin/common';
 import * as i18n from '../translations';
 
 /**
  * Cache expiration in ms -- 1 minute, useful if connector is deleted/access removed
  */
 const STALE_TIME = 1000 * 60;
-const QUERY_KEY = ['elastic-assistant, load-action-types'];
+export const QUERY_KEY = ['elastic-assistant, load-action-types'];
 
 export interface Props {
   http: HttpSetup;
@@ -37,9 +36,22 @@ export const useLoadActionTypes = ({
     QUERY_KEY,
 
     async () => {
-      const queryResult = await loadActionTypes({ http, featureId: GeneralConnectorFeatureId });
-      const sortedData = queryResult.sort((a, b) => a.name.localeCompare(b.name));
+      const queryResult = await loadActionTypes({
+        http,
+        featureId: GenerativeAIForSecurityConnectorFeatureId,
+      });
 
+      const actionTypeKey = {
+        bedrock: '.bedrock',
+        openai: '.gen-ai',
+        gemini: '.gemini',
+      };
+
+      const sortedData = queryResult
+        .filter((p) =>
+          [actionTypeKey.bedrock, actionTypeKey.openai, actionTypeKey.gemini].includes(p.id)
+        )
+        .sort((a, b) => a.name.localeCompare(b.name));
       return sortedData;
     },
     {
@@ -59,5 +71,3 @@ export const useLoadActionTypes = ({
     }
   );
 };
-
-export type UseSuggestUserProfiles = UseQueryResult<UserProfile[], ServerError>;

@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import React, { FC, VFC } from 'react';
+import React, { FC, VFC, PropsWithChildren } from 'react';
 import { useBlockListContext } from '../hooks/use_block_list_context';
 import { BlockListProvider } from '../containers/block_list_provider';
 import { BlockListFlyout } from '../../block_list/containers/flyout';
@@ -24,7 +24,7 @@ import { IndicatorsFilters } from '../containers/filters';
 import { UpdateStatus } from '../../../components/update_status';
 import { QueryBar } from '../../query_bar/components/query_bar';
 
-const IndicatorsPageProviders: FC = ({ children }) => (
+const IndicatorsPageProviders: FC<PropsWithChildren<unknown>> = ({ children }) => (
   <IndicatorsFilters>
     <FieldTypesProvider>
       <InspectorProvider>
@@ -37,7 +37,7 @@ const IndicatorsPageProviders: FC = ({ children }) => (
 const IndicatorsPageContent: VFC = () => {
   const { blockListIndicatorValue } = useBlockListContext();
 
-  const { browserFields, indexPattern } = useSourcererDataView();
+  const { browserFields, indexPattern, sourcererDataView } = useSourcererDataView();
 
   const columnSettings = useColumnSettings();
 
@@ -83,7 +83,7 @@ const IndicatorsPageContent: VFC = () => {
         <FiltersGlobal>
           <QueryBar
             queries={[indicatorChartQuery, indicatorListQuery]}
-            indexPattern={indexPattern}
+            sourcererDataView={sourcererDataView}
           />
         </FiltersGlobal>
 

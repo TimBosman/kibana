@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { schema, TypeOf } from '@kbn/config-schema';
@@ -19,7 +20,7 @@ export type {
 } from './types';
 
 import { PluginInitializerContext } from '@kbn/core/server';
-import { DataViewsServerPlugin } from './plugin';
+import type { DataViewsServerPlugin } from './plugin';
 import { DataViewsServerPluginSetup, DataViewsServerPluginStart } from './types';
 export type { dataViewsServiceFactory } from './data_views_service_factory';
 
@@ -28,7 +29,8 @@ export type { dataViewsServiceFactory } from './data_views_service_factory';
  * @public
  */
 
-export function plugin(initializerContext: PluginInitializerContext) {
+export async function plugin(initializerContext: PluginInitializerContext) {
+  const { DataViewsServerPlugin } = await import('./plugin');
   return new DataViewsServerPlugin(initializerContext);
 }
 
@@ -36,7 +38,7 @@ export type {
   DataViewsServerPluginSetup as PluginSetup,
   DataViewsServerPluginStart as PluginStart,
 };
-export { DataViewsServerPlugin as Plugin };
+export type { DataViewsServerPlugin as Plugin };
 
 const configSchema = schema.object({
   scriptedFieldsEnabled: schema.conditional(
@@ -44,6 +46,19 @@ const configSchema = schema.object({
     true,
     schema.boolean({ defaultValue: false }),
     schema.never()
+  ),
+
+  dataTiersExcludedForFields: schema.conditional(
+    schema.contextRef('serverless'),
+    true,
+    schema.never(),
+    schema.boolean({ defaultValue: true })
+  ),
+  fieldListCachingEnabled: schema.conditional(
+    schema.contextRef('serverless'),
+    true,
+    schema.boolean({ defaultValue: false }),
+    schema.boolean({ defaultValue: true })
   ),
 });
 

@@ -9,15 +9,21 @@
 import type { EuiContextMenuPanelDescriptor } from '@elastic/eui';
 import { EuiButton, EuiFlexGroup, EuiFlexItem, EuiTextColor } from '@elastic/eui';
 import type { Toast } from '@kbn/core/public';
-import { toMountPoint } from '@kbn/kibana-react-plugin/public';
+import { toMountPoint } from '@kbn/react-kibana-mount';
 import { euiThemeVars } from '@kbn/ui-theme';
 import React, { useCallback } from 'react';
+import { MAX_MANUAL_RULE_RUN_BULK_SIZE } from '../../../../../../common/constants';
+import type { TimeRange } from '../../../../rule_gaps/types';
+import { useKibana } from '../../../../../common/lib/kibana';
 import { convertRulesFilterToKQL } from '../../../../../../common/detection_engine/rule_management/rule_filtering';
 import { DuplicateOptions } from '../../../../../../common/detection_engine/rule_management/constants';
-import type { BulkActionEditPayload } from '../../../../../../common/api/detection_engine/rule_management';
-import {
-  BulkActionType,
+import type {
+  BulkActionEditPayload,
   BulkActionEditType,
+} from '../../../../../../common/api/detection_engine/rule_management';
+import {
+  BulkActionTypeEnum,
+  BulkActionEditTypeEnum,
 } from '../../../../../../common/api/detection_engine/rule_management';
 import { isMlRule } from '../../../../../../common/machine_learning/helpers';
 import { useAppToasts } from '../../../../../common/hooks/use_app_toasts';
@@ -48,6 +54,8 @@ interface UseBulkActionsArgs {
     action: BulkActionForConfirmation
   ) => Promise<boolean>;
   showBulkDuplicateConfirmation: () => Promise<string | null>;
+  showManualRuleRunConfirmation: () => Promise<TimeRange | null>;
+  showManualRuleRunLimitError: () => void;
   completeBulkEditForm: (
     bulkActionEditType: BulkActionEditType
   ) => Promise<BulkActionEditPayload | null>;
@@ -59,9 +67,12 @@ export const useBulkActions = ({
   confirmDeletion,
   showBulkActionConfirmation,
   showBulkDuplicateConfirmation,
+  showManualRuleRunConfirmation,
+  showManualRuleRunLimitError,
   completeBulkEditForm,
   executeBulkActionsDryRun,
 }: UseBulkActionsArgs) => {
+  const { services: startServices } = useKibana();
   const hasMlPermissions = useHasMlPermissions();
   const rulesTableContext = useRulesTableContext();
   const hasActionsPrivileges = useHasActionsPrivileges();
@@ -106,7 +117,7 @@ export const useBulkActions = ({
           : disabledRulesNoML.map(({ id }) => id);
 
         await executeBulkAction({
-          type: BulkActionType.enable,
+          type: BulkActionTypeEnum.enable,
           ...(isAllSelected ? { query: kql } : { ids: ruleIds }),
         });
       };
@@ -118,7 +129,7 @@ export const useBulkActions = ({
         const enabledIds = selectedRules.filter(({ enabled }) => enabled).map(({ id }) => id);
 
         await executeBulkAction({
-          type: BulkActionType.disable,
+          type: BulkActionTypeEnum.disable,
           ...(isAllSelected ? { query: kql } : { ids: enabledIds }),
         });
       };
@@ -132,7 +143,7 @@ export const useBulkActions = ({
           return;
         }
         await executeBulkAction({
-          type: BulkActionType.duplicate,
+          type: BulkActionTypeEnum.duplicate,
           duplicatePayload: {
             include_exceptions:
               modalDuplicationConfirmationResult === DuplicateOptions.withExceptions ||
@@ -159,7 +170,7 @@ export const useBulkActions = ({
         startTransaction({ name: BULK_RULE_ACTIONS.DELETE });
 
         await executeBulkAction({
-          type: BulkActionType.delete,
+          type: BulkActionTypeEnum.delete,
           ...(isAllSelected ? { query: kql } : { ids: selectedRuleIds }),
         });
       };
@@ -183,13 +194,71 @@ export const useBulkActions = ({
         // they can either cancel action or proceed with export of succeeded rules
         const hasActionBeenConfirmed = await showBulkActionConfirmation(
           transformExportDetailsToDryRunResult(details),
-          BulkActionType.export
+          BulkActionTypeEnum.export
         );
         if (hasActionBeenConfirmed === false) {
           return;
         }
 
         await downloadExportedRules(response);
+      };
+
+      const handleScheduleRuleRunAction = async () => {
+        startTransaction({ name: BULK_RULE_ACTIONS.MANUAL_RULE_RUN });
+        closePopover();
+
+        setIsPreflightInProgress(true);
+
+        const dryRunResult = await executeBulkActionsDryRun({
+          type: BulkActionTypeEnum.run,
+          ...(isAllSelected
+            ? { query: convertRulesFilterToKQL(filterOptions) }
+            : { ids: selectedRuleIds }),
+          runPayload: { start_date: new Date().toISOString() },
+        });
+
+        setIsPreflightInProgress(false);
+
+        if ((dryRunResult?.succeededRulesCount ?? 0) > MAX_MANUAL_RULE_RUN_BULK_SIZE) {
+          showManualRuleRunLimitError();
+          return;
+        }
+
+        // User has cancelled edit action or there are no custom rules to proceed
+        const hasActionBeenConfirmed = await showBulkActionConfirmation(
+          dryRunResult,
+          BulkActionTypeEnum.run
+        );
+        if (hasActionBeenConfirmed === false) {
+          return;
+        }
+
+        const modalManualRuleRunConfirmationResult = await showManualRuleRunConfirmation();
+        startServices.telemetry.reportManualRuleRunOpenModal({
+          type: 'bulk',
+        });
+        if (modalManualRuleRunConfirmationResult === null) {
+          return;
+        }
+
+        const enabledIds = selectedRules.filter(({ enabled }) => enabled).map(({ id }) => id);
+
+        await executeBulkAction({
+          type: BulkActionTypeEnum.run,
+          ...(isAllSelected ? { query: kql } : { ids: enabledIds }),
+          runPayload: {
+            start_date: modalManualRuleRunConfirmationResult.startDate.toISOString(),
+            end_date: modalManualRuleRunConfirmationResult.endDate.toISOString(),
+          },
+        });
+
+        startServices.telemetry.reportManualRuleRunExecute({
+          rangeInMs: modalManualRuleRunConfirmationResult.endDate.diff(
+            modalManualRuleRunConfirmationResult.startDate
+          ),
+          status: 'success',
+          rulesCount: enabledIds.length,
+        });
       };
 
       const handleBulkEdit = (bulkEditActionType: BulkActionEditType) => async () => {
@@ -201,7 +270,7 @@ export const useBulkActions = ({
         setIsPreflightInProgress(true);
 
         const dryRunResult = await executeBulkActionsDryRun({
-          type: BulkActionType.edit,
+          type: BulkActionTypeEnum.edit,
           ...(isAllSelected
             ? { query: convertRulesFilterToKQL(filterOptions) }
             : { ids: selectedRuleIds }),
@@ -213,7 +282,7 @@ export const useBulkActions = ({
         // User has cancelled edit action or there are no custom rules to proceed
         const hasActionBeenConfirmed = await showBulkActionConfirmation(
           dryRunResult,
-          BulkActionType.edit
+          BulkActionTypeEnum.edit
         );
         if (hasActionBeenConfirmed === false) {
           return;
@@ -255,7 +324,8 @@ export const useBulkActions = ({
                       </EuiButton>
                     </EuiFlexItem>
                   </EuiFlexGroup>
-                </>
+                </>,
+                startServices
               ),
               iconType: undefined,
             },
@@ -264,7 +334,7 @@ export const useBulkActions = ({
         }, 5 * 1000);
 
         await executeBulkAction({
-          type: BulkActionType.edit,
+          type: BulkActionTypeEnum.edit,
           ...prepareSearchParams({
             ...(isAllSelected ? { filterOptions } : { selectedRuleIds }),
             dryRunResult,
@@ -296,7 +366,7 @@ export const useBulkActions = ({
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
               icon: undefined,
             },
             {
@@ -308,7 +378,7 @@ export const useBulkActions = ({
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
               icon: undefined,
             },
             {
@@ -326,15 +396,22 @@ export const useBulkActions = ({
               panel: 1,
             },
             {
+              key: i18n.BULK_ACTION_INVESTIGATION_FIELDS,
+              name: i18n.BULK_ACTION_INVESTIGATION_FIELDS,
+              'data-test-subj': 'investigationFieldsBulkEditRule',
+              disabled: isEditDisabled,
+              panel: 3,
+            },
+            {
               key: i18n.BULK_ACTION_ADD_RULE_ACTIONS,
               name: i18n.BULK_ACTION_ADD_RULE_ACTIONS,
               'data-test-subj': 'addRuleActionsBulk',
               disabled: !hasActionsPrivileges || isEditDisabled,
-              onClick: handleBulkEdit(BulkActionEditType.add_rule_actions),
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.add_rule_actions),
               toolTipContent: !hasActionsPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
               icon: undefined,
             },
             {
@@ -342,11 +419,11 @@ export const useBulkActions = ({
               name: i18n.BULK_ACTION_SET_SCHEDULE,
               'data-test-subj': 'setScheduleBulk',
               disabled: isEditDisabled,
-              onClick: handleBulkEdit(BulkActionEditType.set_schedule),
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.set_schedule),
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
               icon: undefined,
             },
             {
@@ -354,11 +431,11 @@ export const useBulkActions = ({
               name: i18n.BULK_ACTION_APPLY_TIMELINE_TEMPLATE,
               'data-test-subj': 'applyTimelineTemplateBulk',
               disabled: isEditDisabled,
-              onClick: handleBulkEdit(BulkActionEditType.set_timeline),
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.set_timeline),
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
               icon: undefined,
             },
             {
@@ -367,6 +444,14 @@ export const useBulkActions = ({
               'data-test-subj': 'exportRuleBulk',
               disabled: containsLoading || selectedRuleIds.length === 0,
               onClick: handleExportAction,
+              icon: undefined,
+            },
+            {
+              key: i18n.BULK_ACTION_MANUAL_RULE_RUN,
+              name: i18n.BULK_ACTION_MANUAL_RULE_RUN,
+              'data-test-subj': 'scheduleRuleRunBulk',
+              disabled: containsLoading || (!containsEnabled && !isAllSelected),
+              onClick: handleScheduleRuleRunAction,
               icon: undefined,
             },
             {
@@ -379,7 +464,7 @@ export const useBulkActions = ({
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
               icon: undefined,
             },
             {
@@ -394,7 +479,7 @@ export const useBulkActions = ({
               'data-test-subj': 'deleteRuleBulk',
               disabled: isDeleteDisabled,
               onClick: handleDeleteAction,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
               icon: undefined,
             },
           ],
@@ -407,23 +492,23 @@ export const useBulkActions = ({
               key: i18n.BULK_ACTION_ADD_TAGS,
               name: i18n.BULK_ACTION_ADD_TAGS,
               'data-test-subj': 'addTagsBulkEditRule',
-              onClick: handleBulkEdit(BulkActionEditType.add_tags),
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.add_tags),
               disabled: isEditDisabled,
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
             },
             {
               key: i18n.BULK_ACTION_DELETE_TAGS,
               name: i18n.BULK_ACTION_DELETE_TAGS,
               'data-test-subj': 'deleteTagsBulkEditRule',
-              onClick: handleBulkEdit(BulkActionEditType.delete_tags),
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.delete_tags),
               disabled: isEditDisabled,
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
             },
           ],
         },
@@ -435,23 +520,51 @@ export const useBulkActions = ({
               key: i18n.BULK_ACTION_ADD_INDEX_PATTERNS,
               name: i18n.BULK_ACTION_ADD_INDEX_PATTERNS,
               'data-test-subj': 'addIndexPatternsBulkEditRule',
-              onClick: handleBulkEdit(BulkActionEditType.add_index_patterns),
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.add_index_patterns),
               disabled: isEditDisabled,
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
             },
             {
               key: i18n.BULK_ACTION_DELETE_INDEX_PATTERNS,
               name: i18n.BULK_ACTION_DELETE_INDEX_PATTERNS,
               'data-test-subj': 'deleteIndexPatternsBulkEditRule',
-              onClick: handleBulkEdit(BulkActionEditType.delete_index_patterns),
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.delete_index_patterns),
               disabled: isEditDisabled,
               toolTipContent: missingActionPrivileges
                 ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
                 : undefined,
-              toolTipPosition: 'right',
+              toolTipProps: { position: 'right' },
+            },
+          ],
+        },
+        {
+          id: 3,
+          title: i18n.BULK_ACTION_MENU_TITLE,
+          items: [
+            {
+              key: i18n.BULK_ACTION_ADD_INVESTIGATION_FIELDS,
+              name: i18n.BULK_ACTION_ADD_INVESTIGATION_FIELDS,
+              'data-test-subj': 'addInvestigationFieldsBulkEditRule',
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.add_investigation_fields),
+              disabled: isEditDisabled,
+              toolTipContent: missingActionPrivileges
+                ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
+                : undefined,
+              toolTipProps: { position: 'right' },
+            },
+            {
+              key: i18n.BULK_ACTION_DELETE_INVESTIGATION_FIELDS,
+              name: i18n.BULK_ACTION_DELETE_INVESTIGATION_FIELDS,
+              'data-test-subj': 'deleteInvestigationFieldsBulkEditRule',
+              onClick: handleBulkEdit(BulkActionEditTypeEnum.delete_investigation_fields),
+              disabled: isEditDisabled,
+              toolTipContent: missingActionPrivileges
+                ? i18n.LACK_OF_KIBANA_ACTIONS_FEATURE_PRIVILEGES
+                : undefined,
+              toolTipProps: { position: 'right' },
             },
           ],
         },
@@ -469,6 +582,8 @@ export const useBulkActions = ({
       kql,
       toasts,
       showBulkDuplicateConfirmation,
+      showManualRuleRunConfirmation,
+      showManualRuleRunLimitError,
       clearRulesSelection,
       confirmDeletion,
       bulkExport,
@@ -478,6 +593,7 @@ export const useBulkActions = ({
       executeBulkActionsDryRun,
       filterOptions,
       completeBulkEditForm,
+      startServices,
     ]
   );
 

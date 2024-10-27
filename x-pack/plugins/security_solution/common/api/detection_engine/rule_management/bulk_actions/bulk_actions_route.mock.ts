@@ -5,18 +5,18 @@
  * 2.0.
  */
 
-import { BulkActionType, BulkActionEditType } from './bulk_actions_route';
-import type { PerformBulkActionRequestBody } from './bulk_actions_route';
+import type { PerformRulesBulkActionRequestBody } from './bulk_actions_route.gen';
+import { BulkActionEditTypeEnum, BulkActionTypeEnum } from './bulk_actions_route.gen';
 
-export const getPerformBulkActionSchemaMock = (): PerformBulkActionRequestBody => ({
+export const getBulkDisableRuleActionSchemaMock = (): PerformRulesBulkActionRequestBody => ({
   query: '',
   ids: undefined,
-  action: BulkActionType.disable,
+  action: BulkActionTypeEnum.disable,
 });
 
-export const getPerformBulkActionEditSchemaMock = (): PerformBulkActionRequestBody => ({
+export const getPerformBulkActionEditSchemaMock = (): PerformRulesBulkActionRequestBody => ({
   query: '',
   ids: undefined,
-  action: BulkActionType.edit,
-  [BulkActionType.edit]: [{ type: BulkActionEditType.add_tags, value: ['tag1'] }],
+  action: BulkActionTypeEnum.edit,
+  [BulkActionTypeEnum.edit]: [{ type: BulkActionEditTypeEnum.add_tags, value: ['tag1'] }],
 });

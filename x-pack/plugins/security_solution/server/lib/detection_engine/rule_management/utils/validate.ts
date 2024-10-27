@@ -5,62 +5,43 @@
  * 2.0.
  */
 
-import { validateNonExact } from '@kbn/securitysolution-io-ts-utils';
-
 import type { PartialRule } from '@kbn/alerting-plugin/server';
-import type { Rule } from '@kbn/alerting-plugin/common';
 import { isEqual, xorWith } from 'lodash';
+import { stringifyZodError } from '@kbn/zod-helpers';
 import {
-  RESPONSE_ACTION_API_COMMANDS_TO_CONSOLE_COMMAND_MAP,
+  type ResponseAction,
+  type RuleCreateProps,
+  RuleResponse,
+  type RuleResponseAction,
+  type RuleUpdateProps,
+  type RulePatchProps,
+} from '../../../../../common/api/detection_engine';
+import {
+  RESPONSE_ACTION_API_COMMAND_TO_CONSOLE_COMMAND_MAP,
   RESPONSE_CONSOLE_ACTION_COMMANDS_TO_REQUIRED_AUTHZ,
 } from '../../../../../common/endpoint/service/response_actions/constants';
-import { isQueryRule } from '../../../../../common/detection_engine/utils';
 import type { SecuritySolutionApiRequestHandlerContext } from '../../../..';
 import { CustomHttpRequestError } from '../../../../utils/custom_http_request_error';
-import type {
-  QueryRule,
-  RuleCreateProps,
-  RuleUpdateProps,
-} from '../../../../../common/api/detection_engine/model/rule_schema';
-import { RuleResponse } from '../../../../../common/api/detection_engine/model/rule_schema';
-import type { RuleParams, RuleAlertType, UnifiedQueryRuleParams } from '../../rule_schema';
-import { isAlertType } from '../../rule_schema';
-import type { BulkError } from '../../routes/utils';
-import { createBulkErrorObject } from '../../routes/utils';
-import { transform } from './utils';
-import { internalRuleToAPIResponse } from '../normalization/rule_converters';
-import type {
-  ResponseAction,
-  RuleResponseAction,
-} from '../../../../../common/api/detection_engine/model/rule_response_actions';
-
-export const transformValidate = (
-  rule: PartialRule<RuleParams>
-): [RuleResponse, null] | [null, string] => {
-  const transformed = transform(rule);
-  if (transformed == null) {
-    return [null, 'Internal error transforming'];
-  } else {
-    return validateNonExact(transformed, RuleResponse);
-  }
-};
+import { hasValidRuleType, type RuleAlertType, type RuleParams } from '../../rule_schema';
+import { type BulkError, createBulkErrorObject } from '../../routes/utils';
+import { internalRuleToAPIResponse } from '../logic/detection_rules_client/converters/internal_rule_to_api_response';
+import { ClientError } from '../logic/detection_rules_client/utils';
 
 export const transformValidateBulkError = (
   ruleId: string,
   rule: PartialRule<RuleParams>
 ): RuleResponse | BulkError => {
-  if (isAlertType(rule)) {
+  if (hasValidRuleType(rule)) {
     const transformed = internalRuleToAPIResponse(rule);
-    const [validated, errors] = validateNonExact(transformed, RuleResponse);
-    if (errors != null || validated == null) {
+    const result = RuleResponse.safeParse(transformed);
+    if (!result.success) {
       return createBulkErrorObject({
         ruleId,
         statusCode: 500,
-        message: errors ?? 'Internal error transforming',
+        message: stringifyZodError(result.error),
       });
-    } else {
-      return validated;
     }
+    return result.data;
   } else {
     return createBulkErrorObject({
       ruleId,
@@ -77,13 +58,10 @@ export const validateResponseActionsPermissions = async (
   ruleUpdate: RuleCreateProps | RuleUpdateProps,
   existingRule?: RuleAlertType | null
 ): Promise<void> => {
-  const { experimentalFeatures } = await securitySolution.getConfig();
-
-  if (!experimentalFeatures.endpointResponseActionsEnabled || !isQueryRule(ruleUpdate.type)) {
-    return;
-  }
-
-  if (!isQueryRulePayload(ruleUpdate) || (existingRule && !isQueryRuleObject(existingRule))) {
+  if (
+    !rulePayloadContainsResponseActions(ruleUpdate) ||
+    (existingRule && !ruleObjectContainsResponseActions(existingRule))
+  ) {
     return;
   }
 
@@ -109,7 +87,7 @@ export const validateResponseActionsPermissions = async (
     }
     const authzPropName =
       RESPONSE_CONSOLE_ACTION_COMMANDS_TO_REQUIRED_AUTHZ[
-        RESPONSE_ACTION_API_COMMANDS_TO_CONSOLE_COMMAND_MAP[action.params.command]
+        RESPONSE_ACTION_API_COMMAND_TO_CONSOLE_COMMAND_MAP[action.params.command]
       ];
 
     const isValid = endpointAuthz[authzPropName];
@@ -123,10 +101,38 @@ export const validateResponseActionsPermissions = async (
   });
 };
 
-function isQueryRulePayload(rule: RuleCreateProps | RuleUpdateProps): rule is QueryRule {
+function rulePayloadContainsResponseActions(rule: RuleCreateProps | RuleUpdateProps) {
   return 'response_actions' in rule;
 }
 
-function isQueryRuleObject(rule?: RuleAlertType): rule is Rule<UnifiedQueryRuleParams> {
+function ruleObjectContainsResponseActions(rule?: RuleAlertType) {
   return rule != null && 'params' in rule && 'responseActions' in rule?.params;
 }
+
+export const validateNonCustomizableUpdateFields = (
+  ruleUpdate: RuleUpdateProps,
+  existingRule: RuleResponse
+) => {
+  // We don't allow non-customizable fields to be changed for prebuilt rules
+  if (existingRule.rule_source && existingRule.rule_source.type === 'external') {
+    if (!isEqual(ruleUpdate.author, existingRule.author)) {
+      throw new ClientError(`Cannot update "author" field for prebuilt rules`, 400);
+    } else if (ruleUpdate.license !== existingRule.license) {
+      throw new ClientError(`Cannot update "license" field for prebuilt rules`, 400);
+    }
+  }
+};
+
+export const validateNonCustomizablePatchFields = (
+  rulePatch: RulePatchProps,
+  existingRule: RuleResponse
+) => {
+  // We don't allow non-customizable fields to be changed for prebuilt rules
+  if (existingRule.rule_source && existingRule.rule_source.type === 'external') {
+    if (rulePatch.author && !isEqual(rulePatch.author, existingRule.author)) {
+      throw new ClientError(`Cannot update "author" field for prebuilt rules`, 400);
+    } else if (rulePatch.license != null && rulePatch.license !== existingRule.license) {
+      throw new ClientError(`Cannot update "license" field for prebuilt rules`, 400);
+    }
+  }
+};

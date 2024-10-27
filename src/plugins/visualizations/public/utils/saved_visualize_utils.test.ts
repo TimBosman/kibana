@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { ISearchSource } from '@kbn/data-plugin/common';
@@ -73,13 +74,14 @@ jest.mock('../services', () => ({
       update: mockUpdateContent,
       get: mockGetContent,
       search: mockFindContent,
+      mSearch: mockFindContent,
     },
   })),
 }));
 
 const mockParseSearchSourceJSON = jest.fn();
 const mockInjectSearchSourceReferences = jest.fn();
-const mockExtractSearchSourceReferences = jest.fn((...args) => [{}, []]);
+const mockExtractSearchSourceReferences = jest.fn((..._args) => [{}, []]);
 
 jest.mock('@kbn/data-plugin/public', () => ({
   extractSearchSourceReferences: jest.fn((...args) => mockExtractSearchSourceReferences(...args)),
@@ -109,7 +111,7 @@ jest.mock('./saved_objects_utils/save_with_confirmation', () => ({
 }));
 
 describe('saved_visualize_utils', () => {
-  const { overlays } = coreMock.createStart();
+  const coreStart = coreMock.createStart();
   const { dataViews, search } = dataPluginMock.createStartContract();
 
   describe('getSavedVisualization', () => {
@@ -120,6 +122,7 @@ describe('saved_visualize_utils', () => {
     });
     it('should return object with defaults if was not provided id', async () => {
       const savedVis = await getSavedVisualization({
+        ...coreStart,
         search,
         dataViews,
         spaces: Promise.resolve({
@@ -136,6 +139,7 @@ describe('saved_visualize_utils', () => {
     it('should create search source if saved object has searchSourceJSON', async () => {
       await getSavedVisualization(
         {
+          ...coreStart,
           search,
           dataViews,
           spaces: Promise.resolve({
@@ -154,6 +158,7 @@ describe('saved_visualize_utils', () => {
     it('should inject references if saved object has references', async () => {
       await getSavedVisualization(
         {
+          ...coreStart,
           search,
           dataViews,
           spaces: Promise.resolve({
@@ -176,6 +181,7 @@ describe('saved_visualize_utils', () => {
       const mockGetTagIdsFromReferences = jest.fn(() => ['test']);
       await getSavedVisualization(
         {
+          ...coreStart,
           search,
           dataViews,
           spaces: Promise.resolve({
@@ -219,7 +225,7 @@ describe('saved_visualize_utils', () => {
     });
 
     it('should return id after save', async () => {
-      const savedVisId = await saveVisualization(vis, {}, { overlays });
+      const savedVisId = await saveVisualization(vis, {}, coreStart);
       expect(mockCreateContent).toHaveBeenCalled();
       expect(mockExtractReferences).toHaveBeenCalled();
       expect(savedVisId).toBe('test');
@@ -227,7 +233,7 @@ describe('saved_visualize_utils', () => {
 
     it('should call extractSearchSourceReferences if we new vis has searchSourceFields', async () => {
       vis.searchSourceFields = { fields: [] };
-      await saveVisualization(vis, {}, { overlays });
+      await saveVisualization(vis, {}, coreStart);
       expect(mockExtractSearchSourceReferences).toHaveBeenCalledWith(vis.searchSourceFields);
     });
 
@@ -235,7 +241,7 @@ describe('saved_visualize_utils', () => {
       vis.searchSource = {
         serialize: jest.fn(() => ({ searchSourceJSON: '{}', references: [] })),
       } as unknown as ISearchSource;
-      await saveVisualization(vis, {}, { overlays });
+      await saveVisualization(vis, {}, coreStart);
       expect(vis.searchSource?.serialize).toHaveBeenCalled();
     });
 
@@ -245,7 +251,7 @@ describe('saved_visualize_utils', () => {
         vis,
         {},
         {
-          overlays,
+          ...coreStart,
           savedObjectsTagging: {
             ui: {
               updateTagsReferences: mockUpdateTagsReferences,
@@ -258,7 +264,7 @@ describe('saved_visualize_utils', () => {
 
     describe('confirmOverwrite', () => {
       it('as false we should not call saveWithConfirmation and just do create', async () => {
-        const savedVisId = await saveVisualization(vis, { confirmOverwrite: false }, { overlays });
+        const savedVisId = await saveVisualization(vis, { confirmOverwrite: false }, coreStart);
         expect(mockCreateContent).toHaveBeenCalled();
         expect(mockExtractReferences).toHaveBeenCalled();
         expect(mockSaveWithConfirmation).not.toHaveBeenCalled();
@@ -266,7 +272,7 @@ describe('saved_visualize_utils', () => {
       });
 
       it('as true we should call saveWithConfirmation', async () => {
-        const savedVisId = await saveVisualization(vis, { confirmOverwrite: true }, { overlays });
+        const savedVisId = await saveVisualization(vis, { confirmOverwrite: true }, coreStart);
         expect(mockCreateContent).not.toHaveBeenCalled();
         expect(mockSaveWithConfirmation).toHaveBeenCalled();
         expect(savedVisId).toBe('test-after-confirm');
@@ -277,11 +283,7 @@ describe('saved_visualize_utils', () => {
       it('as false we should not save vis with duplicated title', async () => {
         isTitleDuplicateConfirmed = false;
         try {
-          const savedVisId = await saveVisualization(
-            vis,
-            { isTitleDuplicateConfirmed },
-            { overlays }
-          );
+          const savedVisId = await saveVisualization(vis, { isTitleDuplicateConfirmed }, coreStart);
           expect(savedVisId).toBe('');
         } catch {
           // ignore
@@ -294,11 +296,7 @@ describe('saved_visualize_utils', () => {
 
       it('as true we should save vis with duplicated title', async () => {
         isTitleDuplicateConfirmed = true;
-        const savedVisId = await saveVisualization(
-          vis,
-          { isTitleDuplicateConfirmed },
-          { overlays }
-        );
+        const savedVisId = await saveVisualization(vis, { isTitleDuplicateConfirmed }, coreStart);
         expect(mockCheckForDuplicateTitle).toHaveBeenCalled();
         expect(mockCreateContent).toHaveBeenCalled();
         expect(savedVisId).toBe('test');
@@ -358,10 +356,11 @@ describe('saved_visualize_utils', () => {
       expect(mockFindContent.mock.calls).toMatchObject([
         [
           {
-            options: {
-              types: ['bazdoc', 'etc', 'visualization'],
-              searchFields: ['baz', 'bing', 'title^3', 'description'],
-            },
+            contentTypes: [
+              { contentTypeId: 'bazdoc' },
+              { contentTypeId: 'etc' },
+              { contentTypeId: 'visualization' },
+            ],
           },
         ],
       ]);
@@ -395,10 +394,12 @@ describe('saved_visualize_utils', () => {
       expect(mockFindContent.mock.calls).toMatchObject([
         [
           {
-            options: {
-              types: ['bazdoc', 'bar', 'visualization', 'foo'],
-              searchFields: ['baz', 'bing', 'barfield', 'foofield', 'title^3', 'description'],
-            },
+            contentTypes: [
+              { contentTypeId: 'bazdoc' },
+              { contentTypeId: 'bar' },
+              { contentTypeId: 'visualization' },
+              { contentTypeId: 'foo' },
+            ],
           },
         ],
       ]);
@@ -500,11 +501,13 @@ describe('saved_visualize_utils', () => {
           {
             id: 'wat',
             image: undefined,
+            editor: {
+              editUrl: '/edit/wat',
+            },
             readOnly: false,
             references: undefined,
             icon: undefined,
             savedObjectType: 'visualization',
-            editUrl: '/edit/wat',
             type: 'test',
             typeName: 'test',
             typeTitle: undefined,

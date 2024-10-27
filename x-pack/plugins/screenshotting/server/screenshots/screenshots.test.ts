@@ -11,12 +11,12 @@ import type { PackageInfo } from '@kbn/core/server';
 import type { Logger } from '@kbn/logging';
 import { loggerMock } from '@kbn/logging-mocks';
 import type { ScreenshotModePluginSetup } from '@kbn/screenshot-mode-plugin/server';
+import type { ConfigType } from '@kbn/screenshotting-server';
 import puppeteer from 'puppeteer';
 import * as Rx from 'rxjs';
 import { firstValueFrom } from 'rxjs';
 import type { PngScreenshotOptions } from '..';
 import { HeadlessChromiumDriverFactory } from '../browsers';
-import type { ConfigType } from '../config';
 import { Screenshots } from './screenshots';
 
 jest.mock('puppeteer');
@@ -37,6 +37,7 @@ describe('class Screenshots', () => {
     mockLogger = loggerMock.create();
 
     mockConfig = {
+      enabled: true,
       networkPolicy: {
         enabled: false,
         rules: [],
@@ -117,6 +118,7 @@ describe('class Screenshots', () => {
         format: 'png',
         layout: { id: 'preserve_layout' },
         urls: ['/app/home/test'],
+        taskInstanceFields: { startedAt: null, retryAt: null },
       };
 
       const observe = screenshotsInstance.getScreenshots(options);
@@ -150,6 +152,7 @@ describe('class Screenshots', () => {
         format: 'png',
         layout: { id: 'preserve_layout' },
         urls: ['/app/home/test'],
+        taskInstanceFields: { startedAt: null, retryAt: null },
       };
 
       const observe = screenshotsInstance.getScreenshots(options);

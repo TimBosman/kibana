@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { chain, fromEither, tryCatch } from 'fp-ts/lib/TaskEither';
@@ -43,6 +44,8 @@ import {
 } from '@kbn/securitysolution-list-constants';
 import { toError, toPromise } from '../fp_utils';
 
+const version = '2023-10-31';
+
 /**
  * Add new ExceptionList
  *
@@ -62,6 +65,7 @@ const addExceptionList = async ({
     body: JSON.stringify(list),
     method: 'POST',
     signal,
+    version,
   });
 
 const addExceptionListWithValidation = async ({
@@ -105,6 +109,7 @@ const addExceptionListItem = async ({
     body: JSON.stringify(listItem),
     method: 'POST',
     signal,
+    version,
   });
 
 const addExceptionListItemWithValidation = async ({
@@ -148,6 +153,7 @@ const updateExceptionList = async ({
     body: JSON.stringify(list),
     method: 'PUT',
     signal,
+    version,
   });
 
 const updateExceptionListWithValidation = async ({
@@ -191,6 +197,7 @@ const updateExceptionListItem = async ({
     body: JSON.stringify(listItem),
     method: 'PUT',
     signal,
+    version,
   });
 
 const updateExceptionListItemWithValidation = async ({
@@ -247,6 +254,7 @@ const fetchExceptionLists = async ({
     method: 'GET',
     query,
     signal,
+    version,
   });
 };
 
@@ -298,6 +306,7 @@ const fetchExceptionListById = async ({
     method: 'GET',
     query: { id, namespace_type: namespaceType },
     signal,
+    version,
   });
 
 const fetchExceptionListByIdWithValidation = async ({
@@ -361,6 +370,7 @@ const fetchExceptionListsItemsByListIds = async ({
     method: 'GET',
     query,
     signal,
+    version,
   });
 };
 
@@ -414,6 +424,7 @@ const fetchExceptionListItemById = async ({
     method: 'GET',
     query: { id, namespace_type: namespaceType },
     signal,
+    version,
   });
 
 const fetchExceptionListItemByIdWithValidation = async ({
@@ -450,6 +461,7 @@ const deleteExceptionListById = async ({
     method: 'DELETE',
     query: { id, namespace_type: namespaceType },
     signal,
+    version,
   });
 
 const deleteExceptionListByIdWithValidation = async ({
@@ -486,6 +498,7 @@ const deleteExceptionListItemById = async ({
     method: 'DELETE',
     query: { id, namespace_type: namespaceType },
     signal,
+    version,
   });
 
 const deleteExceptionListItemByIdWithValidation = async ({
@@ -518,6 +531,7 @@ const addEndpointExceptionList = async ({
   http.fetch<ExceptionListItemSchema>(ENDPOINT_LIST_URL, {
     method: 'POST',
     signal,
+    version,
   });
 
 const addEndpointExceptionListWithValidation = async ({
@@ -561,6 +575,7 @@ export const exportExceptionList = async ({
       include_expired_exceptions: includeExpiredExceptions,
     },
     signal,
+    version,
   });
 
 /**
@@ -647,4 +662,5 @@ export const duplicateExceptionList = async ({
       include_expired_exceptions: includeExpiredExceptions,
     },
     signal,
+    version,
   });

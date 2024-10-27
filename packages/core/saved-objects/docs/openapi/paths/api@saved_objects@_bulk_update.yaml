@@ -1,6 +1,7 @@
 post:
-  summary: Update the attributes for multiple Kibana saved objects.
+  summary: Update saved objects
   operationId: bulkUpdateSavedObjects
+  description: Update the attributes for multiple Kibana saved objects.
   deprecated: true
   tags:
     - saved objects
@@ -30,7 +31,3 @@ post:
           application/json:
             schema:
               $ref: '../components/schemas/400_response.yaml'
-  servers:
-     - url: https://localhost:5601
-servers:
-      - url: https://localhost:5601

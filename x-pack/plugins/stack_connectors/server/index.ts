@@ -5,8 +5,16 @@
  * 2.0.
  */
 import { PluginConfigDescriptor, PluginInitializerContext } from '@kbn/core/server';
-import { StackConnectorsPlugin } from './plugin';
 import { configSchema, ConfigSchema } from './config';
+import { SlackApiParamsSchema } from '../common/slack_api/schema';
+
+export { ParamsSchema as SlackParamsSchema } from './connector_types/slack';
+export { ParamsSchema as EmailParamsSchema } from './connector_types/email';
+export { ParamsSchema as WebhookParamsSchema } from './connector_types/webhook/schema';
+export { ExecutorParamsSchema as JiraParamsSchema } from './connector_types/jira/schema';
+export { ParamsSchema as PagerdutyParamsSchema } from './connector_types/pagerduty';
+
+export { SlackApiParamsSchema };
 
 export const config: PluginConfigDescriptor<ConfigSchema> = {
   exposeToBrowser: {
@@ -15,5 +23,7 @@ export const config: PluginConfigDescriptor<ConfigSchema> = {
   schema: configSchema,
 };
 
-export const plugin = (initContext: PluginInitializerContext) =>
-  new StackConnectorsPlugin(initContext);
+export const plugin = async (initContext: PluginInitializerContext) => {
+  const { StackConnectorsPlugin } = await import('./plugin');
+  return new StackConnectorsPlugin(initContext);
+};

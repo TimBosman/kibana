@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import type { IEsSearchResponse } from '@kbn/data-plugin/common';
+import type { IEsSearchResponse } from '@kbn/search-types';
 import type { IScopedClusterClient } from '@kbn/core/server';
 import { getOr } from 'lodash/fp';
 import type { RiskSeverity } from '../../../../../../common/search_strategy/security_solution/risk_score/all';
@@ -13,7 +13,6 @@ import type { SecuritySolutionFactory } from '../../types';
 import type { EndpointAppContext } from '../../../../../endpoint/types';
 import type { RelatedEntitiesQueries } from '../../../../../../common/search_strategy/security_solution/related_entities';
 import type {
-  UsersRelatedHostsRequestOptions,
   UsersRelatedHostsStrategyResponse,
   RelatedHostBucket,
   RelatedHost,
@@ -23,9 +22,9 @@ import { getHostRiskData } from '../../hosts/all';
 import { inspectStringifyObject } from '../../../../../utils/build_query';
 
 export const usersRelatedHosts: SecuritySolutionFactory<RelatedEntitiesQueries.relatedHosts> = {
-  buildDsl: (options: UsersRelatedHostsRequestOptions) => buildRelatedHostsQuery(options),
+  buildDsl: (options) => buildRelatedHostsQuery(options),
   parse: async (
-    options: UsersRelatedHostsRequestOptions,
+    options,
     response: IEsSearchResponse<unknown>,
     deps?: {
       esClient: IScopedClusterClient;
@@ -62,7 +61,7 @@ export const usersRelatedHosts: SecuritySolutionFactory<RelatedEntitiesQueries.r
           relatedHosts,
           deps.spaceId,
           deps.esClient,
-          options.isNewRiskScoreModuleAvailable
+          options.isNewRiskScoreModuleInstalled
         )
       : relatedHosts;
 
@@ -79,14 +78,14 @@ async function addHostRiskData(
   relatedHosts: RelatedHost[],
   spaceId: string,
   esClient: IScopedClusterClient,
-  isNewRiskScoreModuleAvailable: boolean
+  isNewRiskScoreModuleInstalled: boolean
 ): Promise<RelatedHost[]> {
   const hostNames = relatedHosts.map((item) => item.host);
   const hostRiskData = await getHostRiskData(
     esClient,
     spaceId,
     hostNames,
-    isNewRiskScoreModuleAvailable
+    isNewRiskScoreModuleInstalled
   );
   const hostsRiskByHostName: Record<string, RiskSeverity> | undefined =
     hostRiskData?.hits.hits.reduce(

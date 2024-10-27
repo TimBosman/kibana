@@ -1,6 +1,6 @@
 {
   "type": "tcp",
-  "locations": [],
+  "locations": ["dev"],
   "enabled": true,
   "config_id": "",
   "schedule": {
@@ -38,5 +38,6 @@
   "mode": "any",
   "ipv4": true,
   "ipv6": true,
-  "params": ""
+  "params": "",
+  "max_attempts": 2
 }

@@ -13,10 +13,12 @@ import {
   PACKAGE_POLICY_SAVED_OBJECT_TYPE,
   SO_SEARCH_LIMIT,
 } from '@kbn/fleet-plugin/common';
+import { isBillablePolicy } from '@kbn/security-solution-plugin/common/endpoint/models/policy_config_helpers';
 
-// set all endpoint policies serverless flag to true
+// set all endpoint policies serverless flag to true and
+// billable flag depending on policy configuration
 // required so that endpoint will write heartbeats
-export async function setEndpointPackagePolicyServerlessFlag(
+export async function setEndpointPackagePolicyServerlessBillingFlags(
   soClient: SavedObjectsClientContract,
   esClient: ElasticsearchClient,
   packagePolicyService: PackagePolicyClient
@@ -60,30 +62,50 @@ async function processBatch(
     return;
   }
 
-  const updatedEndpointPackages = endpointPackagesResult.items.map((endpointPackage) => ({
-    ...endpointPackage,
-    inputs: endpointPackage.inputs.map((input) => {
-      const config = input?.config || {};
-      const policy = config.policy || {};
-      const policyValue = policy?.value || {};
-      const meta = policyValue?.meta || {};
-      return {
-        ...input,
-        config: {
-          ...config,
-          policy: {
-            ...policy,
-            value: {
-              ...policyValue,
-              meta: {
-                ...meta,
-                serverless: true,
+  const updatedEndpointPackages = endpointPackagesResult.items
+    .filter(
+      (endpointPackage) =>
+        endpointPackage?.inputs.some((input) => {
+          const configMeta = input.config?.policy?.value?.meta ?? {};
+          return !configMeta.serverless || configMeta.billable === undefined;
+        }) ?? false
+    )
+    .map((endpointPackage) => ({
+      ...endpointPackage,
+      inputs: endpointPackage.inputs.map((input) => {
+        const config = input?.config || {};
+        const policy = config.policy || {};
+        const policyValue = policy?.value || {};
+        const meta = policyValue?.meta || {};
+
+        const updatedInput = {
+          ...input,
+          config: {
+            ...config,
+            policy: {
+              ...policy,
+              value: {
+                ...policyValue,
+                meta: {
+                  ...meta,
+                  serverless: true,
+                  billable: false,
+                },
               },
             },
           },
-        },
-      };
-    }),
-  }));
+        };
+        updatedInput.config.policy.value.meta.billable = isBillablePolicy(
+          updatedInput.config.policy.value
+        );
+
+        return updatedInput;
+      }),
+    }));
+
+  if (updatedEndpointPackages.length === 0) {
+    return;
+  }
+
   await packagePolicyService.bulkUpdate(soClient, esClient, updatedEndpointPackages);
 }

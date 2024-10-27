@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { convertModelVersionBackwardConversionSchemaMock } from './model_version.test.mocks';
@@ -112,6 +113,7 @@ describe('convertModelVersionTransformFn', () => {
   };
 
   it('generates a transform function calling the model transform', () => {
+    const typeDefinition = createType({});
     const upTransform = createModelTransformFn();
 
     const definition: SavedObjectsModelVersion = {
@@ -127,13 +129,14 @@ describe('convertModelVersionTransformFn', () => {
       log,
       modelVersion: 1,
       virtualVersion: '10.1.0',
-      definition,
+      modelVersionDefinition: definition,
+      typeDefinition,
     });
 
     expect(upTransform).not.toHaveBeenCalled();
 
     const doc = createDoc();
-    const context = { log, modelVersion: 1 };
+    const context = { log, modelVersion: 1, namespaceType: typeDefinition.namespaceType };
 
     transform(doc);
 
@@ -142,6 +145,7 @@ describe('convertModelVersionTransformFn', () => {
   });
 
   it('generates a transform function calling all model transforms of the version', () => {
+    const typeDefinition = createType({});
     const upTransform1 = createModelTransformFn();
     const upTransform2 = createModelTransformFn();
 
@@ -162,11 +166,12 @@ describe('convertModelVersionTransformFn', () => {
       log,
       modelVersion: 1,
       virtualVersion: '10.1.0',
-      definition,
+      typeDefinition,
+      modelVersionDefinition: definition,
     });
 
     const doc = createDoc();
-    const context = { log, modelVersion: 1 };
+    const context = { log, modelVersion: 1, namespaceType: typeDefinition.namespaceType };
 
     transform(doc);
 

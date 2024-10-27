@@ -18,18 +18,22 @@ import type {
 import type {
   IndexPatternArray,
   InvestigationGuide,
+  InvestigationFields,
   RuleDescription,
   RuleFalsePositiveArray,
   RuleQuery,
   RuleName,
   RuleReferenceArray,
   RuleTagArray,
+  MaxSignals,
+  SetupGuide,
 } from '@kbn/security-solution-plugin/common/api/detection_engine';
 
 interface RuleFields {
   defaultIndexPatterns: IndexPatternArray;
   falsePositives: RuleFalsePositiveArray;
   investigationGuide: InvestigationGuide;
+  investigationFields: InvestigationFields;
   referenceUrls: RuleReferenceArray;
   riskScore: RiskScore;
   ruleDescription: RuleDescription;
@@ -42,6 +46,8 @@ interface RuleFields {
   threat: Threat;
   threatSubtechnique: ThreatSubtechnique;
   threatTechnique: ThreatTechnique;
+  maxSignals: MaxSignals;
+  setup: SetupGuide;
 }
 
 export const ruleFields: RuleFields = {
@@ -58,6 +64,10 @@ export const ruleFields: RuleFields = {
   ],
   falsePositives: ['False1', 'False2'],
   investigationGuide: '# test markdown',
+  setup: '# test setup markdown',
+  investigationFields: {
+    field_names: ['agent.hostname'],
+  },
   referenceUrls: ['http://example.com/', 'https://example.com/'],
   riskScore: 17,
   ruleDescription: 'The rule description',
@@ -85,4 +95,5 @@ export const ruleFields: RuleFields = {
     name: 'OS Credential Dumping',
     reference: 'https://attack.mitre.org/techniques/T1003',
   },
+  maxSignals: 100,
 };

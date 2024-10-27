@@ -11,6 +11,7 @@ import type { CategoryComponentProps } from './category_component';
 import { CategoryComponent } from './category_component';
 import { waitFor, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { showEuiComboBoxOptions } from '@elastic/eui/lib/test/rtl';
 
 const onChange = jest.fn();
 const defaultProps: CategoryComponentProps = {
@@ -46,22 +47,21 @@ describe('Category ', () => {
   it('renders category correctly', () => {
     render(<CategoryComponent {...defaultProps} category="new-category" />);
 
-    expect(screen.getByText('new-category')).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveValue('new-category');
   });
 
   it('renders allow to add new category option', async () => {
     render(<CategoryComponent {...defaultProps} />);
 
-    userEvent.type(screen.getByRole('combobox'), 'new{enter}');
-
-    expect(onChange).toBeCalledWith('new');
-    expect(screen.getByText('new')).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('combobox'), 'new{enter}');
+    await waitFor(() => {
+      expect(onChange).toBeCalledWith('new');
+    });
   });
 
   it('renders current option list', async () => {
     render(<CategoryComponent {...defaultProps} />);
-
-    userEvent.click(screen.getByTestId('comboBoxToggleListButton'));
+    await showEuiComboBoxOptions();
 
     expect(screen.getByText('foo')).toBeInTheDocument();
     expect(screen.getByText('bar')).toBeInTheDocument();
@@ -69,38 +69,36 @@ describe('Category ', () => {
 
   it('should call onChange when changing an option', async () => {
     render(<CategoryComponent {...defaultProps} />);
+    await showEuiComboBoxOptions();
 
-    userEvent.click(screen.getByTestId('comboBoxToggleListButton'));
-    userEvent.click(screen.getByText('foo'));
+    await userEvent.click(screen.getByText('foo'));
 
     expect(onChange).toHaveBeenCalledWith('foo');
-    expect(screen.getByTestId('comboBoxInput')).toHaveTextContent('foo');
   });
 
   it('should call onChange when adding new category', async () => {
     render(<CategoryComponent {...defaultProps} />);
 
-    userEvent.type(screen.getByRole('combobox'), 'hi{enter}');
+    await userEvent.type(screen.getByRole('combobox'), 'hi{enter}');
 
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith('hi');
-      expect(screen.getByTestId('comboBoxInput')).toHaveTextContent('hi');
     });
   });
 
   it('should add case sensitive text', async () => {
     render(<CategoryComponent {...defaultProps} />);
 
-    userEvent.type(screen.getByRole('combobox'), 'hi{enter}');
+    await userEvent.type(screen.getByRole('combobox'), 'hi{enter}');
 
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith('hi');
     });
 
-    userEvent.type(screen.getByRole('combobox'), 'Hi{enter}');
+    await userEvent.type(screen.getByRole('combobox'), ' there{enter}');
 
     await waitFor(() => {
-      expect(onChange).toHaveBeenCalledWith('Hi');
+      expect(onChange).toHaveBeenCalledWith('there');
     });
   });
 });

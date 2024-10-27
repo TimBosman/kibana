@@ -8,7 +8,12 @@
 import { schema } from '@kbn/config-schema';
 import moment from 'moment';
 import { ByteSizeValue } from '@kbn/config-schema';
-
+import { MockedLogger, loggerMock } from '@kbn/logging-mocks';
+import {
+  DEFAULT_MICROSOFT_EXCHANGE_URL,
+  DEFAULT_MICROSOFT_GRAPH_API_SCOPE,
+  DEFAULT_MICROSOFT_GRAPH_API_URL,
+} from '../../common';
 import { ActionTypeRegistry, ActionTypeRegistryOpts } from '../action_type_registry';
 import { ActionsClient } from './actions_client';
 import { ExecutorType, ActionType } from '../types';
@@ -37,13 +42,13 @@ import { ActionsAuthorization } from '../authorization/actions_authorization';
 import {
   getAuthorizationModeBySource,
   AuthorizationMode,
-  getBulkAuthorizationModeBySource,
+  bulkGetAuthorizationModeBySource,
 } from '../authorization/get_authorization_mode_by_source';
 import { actionsAuthorizationMock } from '../authorization/actions_authorization.mock';
 import { trackLegacyRBACExemption } from '../lib/track_legacy_rbac_exemption';
 import { ConnectorTokenClient } from '../lib/connector_token_client';
 import { encryptedSavedObjectsMock } from '@kbn/encrypted-saved-objects-plugin/server/mocks';
-import { Logger } from '@kbn/core/server';
+import { SavedObject } from '@kbn/core/server';
 import { connectorTokenClientMock } from '../lib/connector_token_client.mock';
 import { inMemoryMetricsMock } from '../monitoring/in_memory_metrics.mock';
 import { getOAuthJwtAccessToken } from '../lib/get_oauth_jwt_access_token';
@@ -51,6 +56,7 @@ import { getOAuthClientCredentialsAccessToken } from '../lib/get_oauth_client_cr
 import { OAuthParams } from '../routes/get_oauth_access_token';
 import { eventLogClientMock } from '@kbn/event-log-plugin/server/event_log_client.mock';
 import { GetGlobalExecutionKPIParams, GetGlobalExecutionLogParams } from '../../common';
+import { estypes } from '@elastic/elasticsearch';
 
 jest.mock('@kbn/core-saved-objects-utils-server', () => {
   const actual = jest.requireActual('@kbn/core-saved-objects-utils-server');
@@ -71,7 +77,7 @@ jest.mock('../authorization/get_authorization_mode_by_source', () => {
     getAuthorizationModeBySource: jest.fn(() => {
       return 1;
     }),
-    getBulkAuthorizationModeBySource: jest.fn(() => {
+    bulkGetAuthorizationModeBySource: jest.fn(() => {
       return 1;
     }),
     AuthorizationMode: {
@@ -103,11 +109,13 @@ const request = httpServerMock.createKibanaRequest();
 const auditLogger = auditLoggerMock.create();
 const mockUsageCountersSetup = usageCountersServiceMock.createSetupContract();
 const mockUsageCounter = mockUsageCountersSetup.createUsageCounter('test');
-const logger = loggingSystemMock.create().get() as jest.Mocked<Logger>;
 const mockTaskManager = taskManagerMock.createSetup();
 const configurationUtilities = actionsConfigMock.create();
 const eventLogClient = eventLogClientMock.create();
 const getEventLogClient = jest.fn();
+const preSaveHook = jest.fn();
+const postSaveHook = jest.fn();
+const postDeleteHook = jest.fn();
 
 let actionsClient: ActionsClient;
 let mockedLicenseState: jest.Mocked<ILicenseState>;
@@ -120,8 +128,19 @@ const executor: ExecutorType<{}, {}, {}, void> = async (options) => {
 const connectorTokenClient = connectorTokenClientMock.create();
 const inMemoryMetrics = inMemoryMetricsMock.create();
 
+const actionTypeIdFromSavedObjectMock = (actionTypeId: string = 'my-action-type') => {
+  return {
+    attributes: {
+      actionTypeId,
+    },
+  } as SavedObject;
+};
+
+let logger: MockedLogger;
+
 beforeEach(() => {
   jest.resetAllMocks();
+  logger = loggerMock.create();
   mockedLicenseState = licenseStateMock.create();
   actionTypeRegistryParams = {
     licensing: licensingMock.createSetup(),
@@ -376,6 +395,8 @@ describe('create()', () => {
         params: { schema: schema.object({}) },
       },
       executor,
+      preSaveHook,
+      postSaveHook,
     });
     unsecuredSavedObjectsClient.create.mockResolvedValueOnce(savedObjectCreateResult);
     const result = await actionsClient.create({
@@ -412,6 +433,8 @@ describe('create()', () => {
         },
       ]
     `);
+    expect(preSaveHook).toHaveBeenCalledTimes(1);
+    expect(postSaveHook).toHaveBeenCalledTimes(1);
   });
 
   test('validates config', async () => {
@@ -587,6 +610,9 @@ describe('create()', () => {
         proxyVerificationMode: 'full',
       },
       enableFooterInEmail: true,
+      microsoftGraphApiUrl: DEFAULT_MICROSOFT_GRAPH_API_URL,
+      microsoftGraphApiScope: DEFAULT_MICROSOFT_GRAPH_API_SCOPE,
+      microsoftExchangeUrl: DEFAULT_MICROSOFT_EXCHANGE_URL,
     });
 
     const localActionTypeRegistryParams = {
@@ -1837,9 +1863,13 @@ describe('getOAuthAccessToken()', () => {
       tokenUrl: 'https://testurl.service-now.com/oauth_token.do',
     });
     expect(getOAuthClientCredentialsAccessToken).not.toHaveBeenCalled();
-    expect(logger.debug).toHaveBeenCalledWith(
-      `Successfully retrieved access token using JWT OAuth with tokenUrl https://testurl.service-now.com/oauth_token.do and config {\"clientId\":\"abc\",\"jwtKeyId\":\"def\",\"userIdentifierValue\":\"userA\"}`
-    );
+    expect(loggingSystemMock.collect(logger).debug).toMatchInlineSnapshot(`
+      Array [
+        Array [
+          "Successfully retrieved access token using JWT OAuth with tokenUrl https://testurl.service-now.com/oauth_token.do and config {\\"clientId\\":\\"abc\\",\\"jwtKeyId\\":\\"def\\",\\"userIdentifierValue\\":\\"userA\\"}",
+        ],
+      ]
+    `);
   });
 
   test('calls getOAuthClientCredentialsAccessToken when type="client"', async () => {
@@ -1876,9 +1906,13 @@ describe('getOAuthAccessToken()', () => {
       oAuthScope: 'https://graph.microsoft.com/.default',
     });
     expect(getOAuthJwtAccessToken).not.toHaveBeenCalled();
-    expect(logger.debug).toHaveBeenCalledWith(
-      `Successfully retrieved access token using Client Credentials OAuth with tokenUrl https://login.microsoftonline.com/98765/oauth2/v2.0/token, scope https://graph.microsoft.com/.default and config {\"clientId\":\"abc\",\"tenantId\":\"def\"}`
-    );
+    expect(loggingSystemMock.collect(logger).debug).toMatchInlineSnapshot(`
+      Array [
+        Array [
+          "Successfully retrieved access token using Client Credentials OAuth with tokenUrl https://login.microsoftonline.com/98765/oauth2/v2.0/token, scope https://graph.microsoft.com/.default and config {\\"clientId\\":\\"abc\\",\\"tenantId\\":\\"def\\"}",
+        ],
+      ]
+    `);
   });
 
   test('throws when getOAuthJwtAccessToken throws error', async () => {
@@ -1903,9 +1937,13 @@ describe('getOAuthAccessToken()', () => {
     ).rejects.toMatchInlineSnapshot(`[Error: Failed to retrieve access token]`);
 
     expect(getOAuthJwtAccessToken as jest.Mock).toHaveBeenCalled();
-    expect(logger.debug).toHaveBeenCalledWith(
-      `Failed to retrieve access token using JWT OAuth with tokenUrl https://testurl.service-now.com/oauth_token.do and config {\"clientId\":\"abc\",\"jwtKeyId\":\"def\",\"userIdentifierValue\":\"userA\"} - Something went wrong!`
-    );
+    expect(loggingSystemMock.collect(logger).debug).toMatchInlineSnapshot(`
+      Array [
+        Array [
+          "Failed to retrieve access token using JWT OAuth with tokenUrl https://testurl.service-now.com/oauth_token.do and config {\\"clientId\\":\\"abc\\",\\"jwtKeyId\\":\\"def\\",\\"userIdentifierValue\\":\\"userA\\"} - Something went wrong!",
+        ],
+      ]
+    `);
   });
 
   test('throws when getOAuthClientCredentialsAccessToken throws error', async () => {
@@ -1931,13 +1969,44 @@ describe('getOAuthAccessToken()', () => {
     ).rejects.toMatchInlineSnapshot(`[Error: Failed to retrieve access token]`);
 
     expect(getOAuthClientCredentialsAccessToken as jest.Mock).toHaveBeenCalled();
-    expect(logger.debug).toHaveBeenCalledWith(
-      `Failed to retrieved access token using Client Credentials OAuth with tokenUrl https://login.microsoftonline.com/98765/oauth2/v2.0/token, scope https://graph.microsoft.com/.default and config {\"clientId\":\"abc\",\"tenantId\":\"def\"} - Something went wrong!`
-    );
+    expect(loggingSystemMock.collect(logger).debug).toMatchInlineSnapshot(`
+      Array [
+        Array [
+          "Failed to retrieved access token using Client Credentials OAuth with tokenUrl https://login.microsoftonline.com/98765/oauth2/v2.0/token, scope https://graph.microsoft.com/.default and config {\\"clientId\\":\\"abc\\",\\"tenantId\\":\\"def\\"} - Something went wrong!",
+        ],
+      ]
+    `);
   });
 });
 
 describe('delete()', () => {
+  beforeEach(() => {
+    actionTypeRegistry.register({
+      id: 'my-action-delete',
+      name: 'My action type',
+      minimumLicenseRequired: 'basic',
+      supportedFeatureIds: ['alerting'],
+      validate: {
+        config: { schema: schema.object({}) },
+        secrets: { schema: schema.object({}) },
+        params: { schema: schema.object({}) },
+      },
+      executor,
+      postDeleteHook: async (options) => postDeleteHook(options),
+    });
+    unsecuredSavedObjectsClient.get.mockResolvedValueOnce({
+      id: '1',
+      type: 'action',
+      attributes: {
+        actionTypeId: 'my-action-delete',
+        isMissingSecrets: false,
+        config: {},
+        secrets: {},
+      },
+      references: [],
+    });
+  });
+
   describe('authorization', () => {
     test('ensures user is authorised to delete actions', async () => {
       await actionsClient.delete({ id: '1' });
@@ -2015,6 +2084,16 @@ describe('delete()', () => {
         "1",
       ]
     `);
+  });
+
+  test('calls postDeleteHook', async () => {
+    const expectedResult = Symbol();
+    unsecuredSavedObjectsClient.delete.mockResolvedValueOnce(expectedResult);
+
+    const result = await actionsClient.delete({ id: '1' });
+    expect(result).toEqual(expectedResult);
+    expect(unsecuredSavedObjectsClient.delete).toHaveBeenCalledTimes(1);
+    expect(postDeleteHook).toHaveBeenCalledTimes(1);
   });
 
   it('throws when trying to delete a preconfigured connector', async () => {
@@ -2215,6 +2294,8 @@ describe('update()', () => {
         params: { schema: schema.object({}) },
       },
       executor,
+      preSaveHook,
+      postSaveHook,
     });
     unsecuredSavedObjectsClient.get.mockResolvedValueOnce({
       id: '1',
@@ -2280,6 +2361,9 @@ describe('update()', () => {
         "my-action",
       ]
     `);
+
+    expect(preSaveHook).toHaveBeenCalledTimes(1);
+    expect(postSaveHook).toHaveBeenCalledTimes(1);
   });
 
   test('updates an action with isMissingSecrets "true" (set true as the import result), to isMissingSecrets', async () => {
@@ -2664,6 +2748,7 @@ describe('execute()', () => {
       (getAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
         return AuthorizationMode.RBAC;
       });
+      unsecuredSavedObjectsClient.get.mockResolvedValueOnce(actionTypeIdFromSavedObjectMock());
       await actionsClient.execute({
         actionId: 'action-id',
         params: {
@@ -2672,6 +2757,7 @@ describe('execute()', () => {
         source: asHttpRequestExecutionSource(request),
       });
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith({
+        actionTypeId: 'my-action-type',
         operation: 'execute',
         additionalPrivileges: [],
       });
@@ -2685,6 +2771,8 @@ describe('execute()', () => {
         new Error(`Unauthorized to execute all actions`)
       );
 
+      unsecuredSavedObjectsClient.get.mockResolvedValueOnce(actionTypeIdFromSavedObjectMock());
+
       await expect(
         actionsClient.execute({
           actionId: 'action-id',
@@ -2696,6 +2784,7 @@ describe('execute()', () => {
       ).rejects.toMatchInlineSnapshot(`[Error: Unauthorized to execute all actions]`);
 
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith({
+        actionTypeId: 'my-action-type',
         operation: 'execute',
         additionalPrivileges: [],
       });
@@ -2768,12 +2857,15 @@ describe('execute()', () => {
         executor,
       });
 
+      unsecuredSavedObjectsClient.get.mockResolvedValueOnce(actionTypeIdFromSavedObjectMock());
+
       await actionsClient.execute({
         actionId: 'system-connector-.cases',
         params: {},
       });
 
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith({
+        actionTypeId: '.cases',
         operation: 'execute',
         additionalPrivileges: ['test/create'],
       });
@@ -2832,12 +2924,15 @@ describe('execute()', () => {
         executor,
       });
 
+      unsecuredSavedObjectsClient.get.mockResolvedValueOnce(actionTypeIdFromSavedObjectMock());
+
       await actionsClient.execute({
         actionId: 'testPreconfigured',
         params: {},
       });
 
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith({
+        actionTypeId: 'my-action-type',
         operation: 'execute',
         additionalPrivileges: [],
       });
@@ -2895,12 +2990,15 @@ describe('execute()', () => {
         executor,
       });
 
+      unsecuredSavedObjectsClient.get.mockResolvedValueOnce(actionTypeIdFromSavedObjectMock());
+
       await actionsClient.execute({
         actionId: 'system-connector-.cases',
         params: { foo: 'bar' },
       });
 
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith({
+        actionTypeId: '.cases',
         operation: 'execute',
         additionalPrivileges: ['test/create'],
       });
@@ -3007,8 +3105,8 @@ describe('execute()', () => {
 
 describe('bulkEnqueueExecution()', () => {
   describe('authorization', () => {
-    test('ensures user is authorised to excecute actions', async () => {
-      (getBulkAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
+    test('ensures user is authorised to execute actions', async () => {
+      (bulkGetAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
         return { [AuthorizationMode.RBAC]: 1, [AuthorizationMode.Legacy]: 0 };
       });
       await actionsClient.bulkEnqueueExecution([
@@ -3019,6 +3117,7 @@ describe('bulkEnqueueExecution()', () => {
           executionId: '123abc',
           apiKey: null,
           source: asHttpRequestExecutionSource(request),
+          actionTypeId: 'my-action-type',
         },
         {
           id: uuidv4(),
@@ -3027,15 +3126,17 @@ describe('bulkEnqueueExecution()', () => {
           executionId: '456def',
           apiKey: null,
           source: asHttpRequestExecutionSource(request),
+          actionTypeId: 'my-action-type',
         },
       ]);
       expect(authorization.ensureAuthorized).toHaveBeenCalledWith({
+        actionTypeId: 'my-action-type',
         operation: 'execute',
       });
     });
 
     test('throws when user is not authorised to create the type of action', async () => {
-      (getBulkAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
+      (bulkGetAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
         return { [AuthorizationMode.RBAC]: 1, [AuthorizationMode.Legacy]: 0 };
       });
       authorization.ensureAuthorized.mockRejectedValue(
@@ -3051,6 +3152,7 @@ describe('bulkEnqueueExecution()', () => {
             executionId: '123abc',
             apiKey: null,
             source: asHttpRequestExecutionSource(request),
+            actionTypeId: 'my-action-type',
           },
           {
             id: uuidv4(),
@@ -3059,6 +3161,7 @@ describe('bulkEnqueueExecution()', () => {
             executionId: '456def',
             apiKey: null,
             source: asHttpRequestExecutionSource(request),
+            actionTypeId: 'my-action-type',
           },
         ])
       ).rejects.toMatchInlineSnapshot(`[Error: Unauthorized to execute all actions]`);
@@ -3069,7 +3172,7 @@ describe('bulkEnqueueExecution()', () => {
     });
 
     test('tracks legacy RBAC', async () => {
-      (getBulkAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
+      (bulkGetAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
         return { [AuthorizationMode.RBAC]: 0, [AuthorizationMode.Legacy]: 2 };
       });
 
@@ -3081,6 +3184,7 @@ describe('bulkEnqueueExecution()', () => {
           executionId: '123abc',
           apiKey: null,
           source: asHttpRequestExecutionSource(request),
+          actionTypeId: 'my-action-type',
         },
         {
           id: uuidv4(),
@@ -3089,6 +3193,7 @@ describe('bulkEnqueueExecution()', () => {
           executionId: '456def',
           apiKey: null,
           source: asHttpRequestExecutionSource(request),
+          actionTypeId: 'my-action-type',
         },
       ]);
 
@@ -3101,7 +3206,7 @@ describe('bulkEnqueueExecution()', () => {
   });
 
   test('calls the bulkExecutionEnqueuer with the appropriate parameters', async () => {
-    (getBulkAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
+    (bulkGetAuthorizationModeBySource as jest.Mock).mockImplementationOnce(() => {
       return { [AuthorizationMode.RBAC]: 0, [AuthorizationMode.Legacy]: 0 };
     });
     const opts = [
@@ -3112,6 +3217,7 @@ describe('bulkEnqueueExecution()', () => {
         executionId: '123abc',
         apiKey: null,
         source: asHttpRequestExecutionSource(request),
+        actionTypeId: 'my-action-type',
       },
       {
         id: uuidv4(),
@@ -3120,6 +3226,7 @@ describe('bulkEnqueueExecution()', () => {
         executionId: '456def',
         apiKey: null,
         source: asHttpRequestExecutionSource(request),
+        actionTypeId: 'my-action-type',
       },
     ];
     await expect(actionsClient.bulkEnqueueExecution(opts)).resolves.toMatchInlineSnapshot(
@@ -3388,6 +3495,10 @@ describe('getGlobalExecutionLogWithAuth()', () => {
         executionUuidCardinality: { doc_count: 5, executionUuidCardinality: { value: 5 } },
       },
     },
+    hits: {
+      total: { value: 5, relation: 'eq' },
+      hits: [],
+    } as estypes.SearchHitsMetadata<unknown>,
   };
   describe('authorization', () => {
     test('ensures user is authorised to access logs', async () => {
@@ -3443,6 +3554,10 @@ describe('getGlobalExecutionKpiWithAuth()', () => {
         },
       },
     },
+    hits: {
+      total: { value: 5, relation: 'eq' },
+      hits: [],
+    } as estypes.SearchHitsMetadata<unknown>,
   };
   describe('authorization', () => {
     test('ensures user is authorised to access kpi', async () => {

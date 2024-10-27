@@ -10,11 +10,12 @@ import type { FtrProviderContext } from '../../../../ftr_provider_context';
 
 export default function ({ getService, getPageObjects }: FtrProviderContext) {
   const testSubjects = getService('testSubjects');
-  const PageObjects = getPageObjects(['common']);
+  const PageObjects = getPageObjects(['common', 'svlCommonPage']);
   const retry = getService('retry');
 
   describe('Partial results example', () => {
     before(async () => {
+      await PageObjects.svlCommonPage.loginAsAdmin();
       await PageObjects.common.navigateToApp('searchExamples');
       await testSubjects.click('/search');
     });
@@ -29,7 +30,7 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
       await testSubjects.click('requestFibonacci');
 
       await retry.waitFor('update progress bar', async () => {
-        const newValue = await progressBar.getAttribute('value');
+        const newValue = (await progressBar.getAttribute('value')) ?? '';
         return parseFloat(newValue) > 0;
       });
     });

@@ -1,11 +1,15 @@
 {
   "type": "plugin",
   "id": "@kbn/home-plugin",
-  "owner": "@elastic/kibana-core",
+  "owner": [
+    "@elastic/kibana-core"
+  ],
+  "group": "platform",
+  "visibility": "shared",
   "plugin": {
     "id": "home",
-    "server": true,
     "browser": true,
+    "server": true,
     "requiredPlugins": [
       "dataViews",
       "share",
@@ -15,8 +19,7 @@
       "usageCollection",
       "customIntegrations",
       "cloud",
-      "guidedOnboarding",
-      "cloudChatProvider"
+      "guidedOnboarding"
     ],
     "requiredBundles": [
       "kibanaReact"

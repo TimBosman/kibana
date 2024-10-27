@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { PluginConfigDescriptor, PluginInitializerContext } from '@kbn/core/server';
-import { ConfigSchema, configSchema } from '../config';
-import { DataServerPlugin, DataPluginSetup, DataPluginStart } from './plugin';
+import { ConfigSchema, configSchema } from './config';
+import type { DataServerPlugin, DataPluginSetup, DataPluginStart } from './plugin';
 
 export { getEsQueryConfig, DEFAULT_QUERY_LANGUAGE } from '../common';
 
@@ -54,12 +55,7 @@ import {
 } from '../common';
 import { configDeprecationProvider } from './config_deprecations';
 
-export type {
-  ParsedInterval,
-  ISearchOptions,
-  IEsSearchRequest,
-  IEsSearchResponse,
-} from '../common';
+export type { ParsedInterval } from '../common';
 export { METRIC_TYPES, ES_SEARCH_STRATEGY } from '../common';
 
 export type {
@@ -101,17 +97,19 @@ export { getTime, parseInterval } from '../common';
  * @public
  */
 
-export function plugin(initializerContext: PluginInitializerContext<ConfigSchema>) {
+export async function plugin(initializerContext: PluginInitializerContext<ConfigSchema>) {
+  const { DataServerPlugin } = await import('./plugin');
   return new DataServerPlugin(initializerContext);
 }
 
 export type { DataPluginSetup as PluginSetup, DataPluginStart as PluginStart };
-export { DataServerPlugin as Plugin };
+export type { DataServerPlugin as Plugin };
 
 export const config: PluginConfigDescriptor<ConfigSchema> = {
   deprecations: configDeprecationProvider,
   exposeToBrowser: {
     search: true,
+    query: true,
   },
   schema: configSchema,
 };

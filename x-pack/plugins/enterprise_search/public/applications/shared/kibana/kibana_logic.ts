@@ -10,22 +10,32 @@ import { FC } from 'react';
 import { kea, MakeLogicType } from 'kea';
 
 import { ChartsPluginStart } from '@kbn/charts-plugin/public';
-import { CloudSetup } from '@kbn/cloud-plugin/public';
+import { CloudSetup, CloudStart } from '@kbn/cloud-plugin/public';
+import { ConsolePluginStart } from '@kbn/console-plugin/public';
 import {
   ApplicationStart,
   Capabilities,
   ChromeBreadcrumb,
   ScopedHistory,
   IUiSettingsClient,
+  ChromeStart,
+  SecurityServiceStart,
 } from '@kbn/core/public';
 import { DataPublicPluginStart } from '@kbn/data-plugin/public';
+
 import { GuidedOnboardingPluginStart } from '@kbn/guided-onboarding-plugin/public';
+import { IndexMappingProps } from '@kbn/index-management-shared-types';
 import { LensPublicStart } from '@kbn/lens-plugin/public';
-import { GetUserProfileResponse, UserProfileData } from '@kbn/security-plugin/common';
-import { SecurityPluginStart } from '@kbn/security-plugin/public';
+import { MlPluginStart } from '@kbn/ml-plugin/public';
+import { ELASTICSEARCH_URL_PLACEHOLDER } from '@kbn/search-api-panels/constants';
+import { ConnectorDefinition } from '@kbn/search-connectors-plugin/public';
+import { SearchInferenceEndpointsPluginStart } from '@kbn/search-inference-endpoints/public';
+import { SearchPlaygroundPluginStart } from '@kbn/search-playground/public';
+import { AuthenticatedUser, SecurityPluginStart } from '@kbn/security-plugin/public';
 import { SharePluginStart } from '@kbn/share-plugin/public';
 
 import { ClientConfigType, ProductAccess, ProductFeatures } from '../../../../common/types';
+import { ESConfig, UpdateSideNavDefinitionFn } from '../../../plugin';
 
 import { HttpLogic } from '../http';
 import { createHref, CreateHrefOptions } from '../react_router_helpers';
@@ -33,51 +43,95 @@ import { createHref, CreateHrefOptions } from '../react_router_helpers';
 type RequiredFieldsOnly<T> = {
   [K in keyof T as T[K] extends Required<T>[K] ? K : never]: T[K];
 };
-interface KibanaLogicProps {
+export interface KibanaLogicProps {
   application: ApplicationStart;
   capabilities: Capabilities;
-  charts: ChartsPluginStart;
-  cloud?: CloudSetup;
+  charts?: ChartsPluginStart;
+  cloud?: CloudSetup & CloudStart;
   config: ClientConfigType;
-  data: DataPublicPluginStart;
-  guidedOnboarding: GuidedOnboardingPluginStart;
+  connectorTypes?: ConnectorDefinition[];
+  console?: ConsolePluginStart;
+  coreSecurity?: SecurityServiceStart;
+  data?: DataPublicPluginStart;
+  esConfig: ESConfig;
+  getChromeStyle$: ChromeStart['getChromeStyle$'];
+  guidedOnboarding?: GuidedOnboardingPluginStart;
   history: ScopedHistory;
+  indexMappingComponent?: React.FC<IndexMappingProps>;
   isSidebarEnabled: boolean;
-  lens: LensPublicStart;
+  lens?: LensPublicStart;
+  ml?: MlPluginStart;
   navigateToUrl: RequiredFieldsOnly<ApplicationStart['navigateToUrl']>;
   productAccess: ProductAccess;
   productFeatures: ProductFeatures;
   renderHeaderActions(HeaderActions?: FC): void;
-  security: SecurityPluginStart;
+  searchInferenceEndpoints?: SearchInferenceEndpointsPluginStart;
+  searchPlayground?: SearchPlaygroundPluginStart;
+  security?: SecurityPluginStart;
   setBreadcrumbs(crumbs: ChromeBreadcrumb[]): void;
   setChromeIsVisible(isVisible: boolean): void;
   setDocTitle(title: string): void;
-  share: SharePluginStart;
-  uiSettings: IUiSettingsClient;
-  userProfile: GetUserProfileResponse<UserProfileData>;
+  share?: SharePluginStart;
+  uiSettings?: IUiSettingsClient;
+  updateSideNavDefinition: UpdateSideNavDefinitionFn;
 }
 
-export interface KibanaValues extends Omit<KibanaLogicProps, 'cloud'> {
-  cloud: Partial<CloudSetup>;
-  data: DataPublicPluginStart;
+export interface KibanaValues {
+  application: ApplicationStart;
+  capabilities: Capabilities;
+  charts: ChartsPluginStart | null;
+  cloud: (CloudSetup & CloudStart) | null;
+  config: ClientConfigType;
+  connectorTypes: ConnectorDefinition[];
+  consolePlugin: ConsolePluginStart | null;
+  data: DataPublicPluginStart | null;
+  esConfig: ESConfig;
+  getChromeStyle$: ChromeStart['getChromeStyle$'];
+  guidedOnboarding: GuidedOnboardingPluginStart | null;
+  history: ScopedHistory;
+  indexMappingComponent: React.FC<IndexMappingProps> | null;
   isCloud: boolean;
-  lens: LensPublicStart;
+  isSidebarEnabled: boolean;
+  lens: LensPublicStart | null;
+  ml: MlPluginStart | null;
   navigateToUrl(path: string, options?: CreateHrefOptions): Promise<void>;
+  productAccess: ProductAccess;
+  productFeatures: ProductFeatures;
+  renderHeaderActions(HeaderActions?: FC): void;
+  searchInferenceEndpoints: SearchInferenceEndpointsPluginStart | null;
+  searchPlayground: SearchPlaygroundPluginStart | null;
+  security: SecurityPluginStart | null;
+  setBreadcrumbs(crumbs: ChromeBreadcrumb[]): void;
+  setChromeIsVisible(isVisible: boolean): void;
+  setDocTitle(title: string): void;
+  share: SharePluginStart | null;
+  uiSettings: IUiSettingsClient | null;
+  updateSideNavDefinition: UpdateSideNavDefinitionFn;
+  user: AuthenticatedUser | null;
 }
 
 export const KibanaLogic = kea<MakeLogicType<KibanaValues>>({
+  actions: {
+    setUser: (user: AuthenticatedUser | null) => ({ user }),
+  },
   path: ['enterprise_search', 'kibana_logic'],
   reducers: ({ props }) => ({
-    application: [props.application || {}, {}],
-    capabilities: [props.capabilities || {}, {}],
-    charts: [props.charts, {}],
-    cloud: [props.cloud || {}, {}],
-    config: [props.config || {}, {}],
-    data: [props.data, {}],
-    guidedOnboarding: [props.guidedOnboarding, {}],
+    application: [props.application, {}],
+    capabilities: [props.capabilities, {}],
+    charts: [props.charts || null, {}],
+    cloud: [props.cloud || null, {}],
+    config: [props.config || null, {}],
+    connectorTypes: [props.connectorTypes || [], {}],
+    consolePlugin: [props.console || null, {}],
+    data: [props.data || null, {}],
+    esConfig: [props.esConfig || { elasticsearch_host: ELASTICSEARCH_URL_PLACEHOLDER }, {}],
+    getChromeStyle$: [props.getChromeStyle$, {}],
+    guidedOnboarding: [props.guidedOnboarding || null, {}],
     history: [props.history, {}],
+    indexMappingComponent: [props.indexMappingComponent || null, {}],
     isSidebarEnabled: [props.isSidebarEnabled, {}],
-    lens: [props.lens, {}],
+    lens: [props.lens || null, {}],
+    ml: [props.ml || null, {}],
     navigateToUrl: [
       (url: string, options?: CreateHrefOptions) => {
         const deps = { history: props.history, http: HttpLogic.values.http };
@@ -89,21 +143,36 @@ export const KibanaLogic = kea<MakeLogicType<KibanaValues>>({
     productAccess: [props.productAccess, {}],
     productFeatures: [props.productFeatures, {}],
     renderHeaderActions: [props.renderHeaderActions, {}],
-    security: [props.security, {}],
+    searchInferenceEndpoints: [props.searchInferenceEndpoints || null, {}],
+    searchPlayground: [props.searchPlayground || null, {}],
+    security: [props.security || null, {}],
     setBreadcrumbs: [props.setBreadcrumbs, {}],
     setChromeIsVisible: [props.setChromeIsVisible, {}],
     setDocTitle: [props.setDocTitle, {}],
-    share: [props.share, {}],
+    share: [props.share || null, {}],
     uiSettings: [props.uiSettings, {}],
-    userProfile: [props.userProfile, {}],
+    updateSideNavDefinition: [props.updateSideNavDefinition, {}],
+    user: [
+      props.user || null,
+      {
+        // @ts-expect-error upgrade typescript v5.1.6
+        setUser: (_, { user }) => user || null,
+      },
+    ],
   }),
   selectors: ({ selectors }) => ({
-    isCloud: [() => [selectors.cloud], (cloud?: Partial<CloudSetup>) => !!cloud?.isCloudEnabled],
+    isCloud: [
+      () => [selectors.cloud],
+      (cloud?: CloudSetup & CloudStart) => Boolean(cloud?.isCloudEnabled),
+    ],
   }),
 });
 
 export const mountKibanaLogic = (props: KibanaLogicProps) => {
   KibanaLogic(props);
   const unmount = KibanaLogic.mount();
+  props.coreSecurity?.authc.getCurrentUser()?.then((user) => {
+    KibanaLogic.actions.setUser(user);
+  });
   return unmount;
 };

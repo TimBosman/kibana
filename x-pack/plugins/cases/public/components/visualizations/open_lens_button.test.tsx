@@ -5,6 +5,7 @@
  * 2.0.
  */
 
+import { set } from '@kbn/safer-lodash-set';
 import React from 'react';
 import { screen } from '@testing-library/react';
 import type { AppMockRenderer } from '../../common/mock';
@@ -36,13 +37,13 @@ describe('OpenLensButton', () => {
     expect(screen.getByText('Open visualization')).toBeInTheDocument();
   });
 
-  it('calls navigateToPrefilledEditor correctly', () => {
+  it('calls navigateToPrefilledEditor correctly', async () => {
     const navigateToPrefilledEditor = jest.fn();
     appMockRender.coreStart.lens.navigateToPrefilledEditor = navigateToPrefilledEditor;
     // @ts-expect-error: props are correct
     appMockRender.render(<OpenLensButton {...props} />);
 
-    userEvent.click(screen.getByTestId('cases-open-in-visualization-btn'));
+    await userEvent.click(screen.getByTestId('cases-open-in-visualization-btn'));
 
     expect(navigateToPrefilledEditor).toBeCalledWith(
       {
@@ -57,6 +58,20 @@ describe('OpenLensButton', () => {
     appMockRender.coreStart.lens.canUseEditor = () => false;
     // @ts-expect-error: props are correct
     appMockRender.render(<OpenLensButton {...props} />);
+
+    expect(screen.queryByText('Open visualization')).not.toBeInTheDocument();
+  });
+
+  it('does not show the button if the query is an ESQL', () => {
+    const esqlProps = {
+      attachmentId: 'test',
+      ...lensVisualization,
+    };
+
+    set(esqlProps, 'attributes.state.query', { esql: '' });
+
+    // @ts-expect-error: props are correct
+    appMockRender.render(<OpenLensButton {...esqlProps} />);
 
     expect(screen.queryByText('Open visualization')).not.toBeInTheDocument();
   });

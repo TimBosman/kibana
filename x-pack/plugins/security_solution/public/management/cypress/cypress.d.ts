@@ -10,6 +10,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { CasePostRequest } from '@kbn/cases-plugin/common/api';
+import type { UsageRecord } from '@kbn/security-solution-serverless/server/types';
+import type {
+  DeletedEndpointHeartbeats,
+  IndexedEndpointHeartbeats,
+} from '../../../common/endpoint/data_loaders/index_endpoint_hearbeats';
 import type { SecuritySolutionDescribeBlockFtrConfig } from '../../../scripts/run_cypress/utils';
 import type { DeleteAllEndpointDataResponse } from '../../../scripts/endpoint/common/delete_all_endpoint_data';
 import type { IndexedEndpointPolicyResponse } from '../../../common/endpoint/data_loaders/index_endpoint_policy_response';
@@ -17,7 +22,15 @@ import type {
   HostPolicyResponse,
   LogsEndpointActionResponse,
 } from '../../../common/endpoint/types';
-import type { IndexEndpointHostsCyTaskOptions, HostActionResponse } from './types';
+import type {
+  HostActionResponse,
+  IndexEndpointHostsCyTaskOptions,
+  LoadUserAndRoleCyTaskOptions,
+  CreateUserAndRoleCyTaskOptions,
+  UninstallAgentFromHostTaskOptions,
+  IsAgentAndEndpointUninstalledFromHostTaskOptions,
+  LogItTaskOptions,
+} from './types';
 import type {
   DeleteIndexedFleetEndpointPoliciesResponse,
   IndexedFleetEndpointPolicyResponse,
@@ -32,6 +45,7 @@ import type {
   DeletedIndexedEndpointRuleAlerts,
   IndexedEndpointRuleAlerts,
 } from '../../../common/endpoint/data_loaders/index_endpoint_rule_alerts';
+import type { LoadedRoleAndUser } from '../../../scripts/endpoint/common/role_and_user_loader';
 
 declare global {
   namespace Cypress {
@@ -78,13 +92,15 @@ declare global {
        * or fail if `timeout` is reached.
        * @param fn
        * @param options
+       * @param message
        */
       waitUntil(
         fn: (subject?: any) => boolean | Promise<boolean> | Chainable<boolean>,
         options?: Partial<{
           interval: number;
           timeout: number;
-        }>
+        }>,
+        message?: string
       ): Chainable<Subject>;
 
       task(
@@ -107,6 +123,36 @@ declare global {
         arg?: Partial<CasePostRequest>,
         options?: Partial<Loggable & Timeoutable>
       ): Chainable<IndexedCase['data']>;
+
+      task(
+        name: 'indexEndpointHeartbeats',
+        arg?: { count?: number },
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<IndexedEndpointHeartbeats['data']>;
+
+      task(
+        name: 'deleteIndexedEndpointHeartbeats',
+        arg: IndexedEndpointHeartbeats['data'],
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<DeletedEndpointHeartbeats>;
+
+      task(
+        name: 'startTransparentApiProxy',
+        arg?: { port?: number },
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<null>;
+
+      task(
+        name: 'getInterceptedRequestsFromTransparentApiProxy',
+        arg?: {},
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<UsageRecord[][]>;
+
+      task(
+        name: 'stopTransparentProxyApi',
+        arg?: {},
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<null>;
 
       task(
         name: 'deleteIndexedCase',
@@ -185,6 +231,42 @@ declare global {
         arg: { hostname: string; path: string; password?: string },
         options?: Partial<Loggable & Timeoutable>
       ): Chainable<string>;
+
+      task(
+        name: 'getSessionCookie',
+        arg: string,
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<{ cookie: string; username: string; password: string }>;
+
+      task(
+        name: 'loadUserAndRole',
+        arg: LoadUserAndRoleCyTaskOptions,
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<LoadedRoleAndUser>;
+
+      task(
+        name: 'createUserAndRole',
+        arg: CreateUserAndRoleCyTaskOptions,
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<LoadedRoleAndUser>;
+
+      task(
+        name: 'uninstallAgentFromHost',
+        arg: UninstallAgentFromHostTaskOptions,
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<string>;
+
+      task(
+        name: 'isAgentAndEndpointUninstalledFromHost',
+        arg: IsAgentAndEndpointUninstalledFromHostTaskOptions,
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<boolean>;
+
+      task(
+        name: 'logIt',
+        arg: LogItTaskOptions,
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<null>;
     }
   }
 }

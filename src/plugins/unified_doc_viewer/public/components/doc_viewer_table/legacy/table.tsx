@@ -1,15 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import '../table.scss';
 import React, { useCallback, useMemo } from 'react';
 import { EuiInMemoryTable } from '@elastic/eui';
-import { getFieldIconType } from '@kbn/unified-field-list/src/utils/field_types/get_field_icon_type';
+import { getFieldIconType } from '@kbn/field-utils/src/utils/get_field_icon_type';
 import {
   SHOW_MULTIFIELDS,
   formatFieldValue,
@@ -18,37 +19,38 @@ import {
   isNestedFieldParent,
 } from '@kbn/discover-utils';
 import type { DocViewRenderProps, FieldRecordLegacy } from '@kbn/unified-doc-viewer/types';
-import { useUnifiedDocViewerServices } from '../../../hooks';
+import { getUnifiedDocViewerServices } from '../../../plugin';
 import { ACTIONS_COLUMN, MAIN_COLUMNS } from './table_columns';
 
 export const DocViewerLegacyTable = ({
   columns,
   hit,
   dataView,
+  hideActionsColumn,
   filter,
   onAddColumn,
   onRemoveColumn,
 }: DocViewRenderProps) => {
-  const { fieldFormats, uiSettings } = useUnifiedDocViewerServices();
+  const { fieldFormats, uiSettings } = getUnifiedDocViewerServices();
   const showMultiFields = useMemo(() => uiSettings.get(SHOW_MULTIFIELDS), [uiSettings]);
 
   const mapping = useCallback((name: string) => dataView.fields.getByName(name), [dataView.fields]);
   const tableColumns = useMemo(() => {
-    return filter ? [ACTIONS_COLUMN, ...MAIN_COLUMNS] : MAIN_COLUMNS;
-  }, [filter]);
-  const onToggleColumn = useCallback(
-    (field: string) => {
-      if (!onRemoveColumn || !onAddColumn || !columns) {
-        return;
-      }
+    return !hideActionsColumn ? [ACTIONS_COLUMN, ...MAIN_COLUMNS] : MAIN_COLUMNS;
+  }, [hideActionsColumn]);
+
+  const onToggleColumn = useMemo(() => {
+    if (!onRemoveColumn || !onAddColumn || !columns) {
+      return undefined;
+    }
+    return (field: string) => {
       if (columns.includes(field)) {
         onRemoveColumn(field);
       } else {
         onAddColumn(field);
       }
-    },
-    [onRemoveColumn, onAddColumn, columns]
-  );
+    };
+  }, [onRemoveColumn, onAddColumn, columns]);
 
   const onSetRowProps = useCallback(({ field: { field } }: FieldRecordLegacy) => {
     return {
@@ -115,8 +117,7 @@ export const DocViewerLegacyTable = ({
       items={items}
       columns={tableColumns}
       rowProps={onSetRowProps}
-      pagination={false}
-      responsive={false}
+      responsiveBreakpoint={false}
     />
   );
 };

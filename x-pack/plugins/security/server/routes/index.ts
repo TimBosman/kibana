@@ -10,6 +10,7 @@ import type { Observable } from 'rxjs';
 import type { BuildFlavor } from '@kbn/config/src/types';
 import type { HttpResources, IBasePath, Logger } from '@kbn/core/server';
 import type { KibanaFeature } from '@kbn/features-plugin/server';
+import type { SubFeaturePrivilegeIterator } from '@kbn/features-plugin/server/feature_privilege_iterator';
 import type { PublicMethodsOf } from '@kbn/utility-types';
 
 import { defineAnalyticsRoutes } from './analytics';
@@ -18,6 +19,7 @@ import { defineApiKeysRoutes } from './api_keys';
 import { defineAuthenticationRoutes } from './authentication';
 import { defineAuthorizationRoutes } from './authorization';
 import { defineDeprecationsRoutes } from './deprecations';
+import { defineSecurityFeatureRoutes } from './feature_check';
 import { defineIndicesRoutes } from './indices';
 import { defineRoleMappingRoutes } from './role_mapping';
 import { defineSecurityCheckupGetStateRoutes } from './security_checkup';
@@ -50,6 +52,7 @@ export interface RouteDefinitionParams {
   getSession: () => PublicMethodsOf<Session>;
   license: SecurityLicense;
   getFeatures: () => Promise<KibanaFeature[]>;
+  subFeaturePrivilegeIterator: SubFeaturePrivilegeIterator;
   getFeatureUsageService: () => SecurityFeatureUsageServiceStart;
   getAuthenticationService: () => InternalAuthenticationServiceStart;
   getUserProfileService: () => UserProfileServiceStartInternal;
@@ -74,6 +77,7 @@ export function defineRoutes(params: RouteDefinitionParams) {
     defineDeprecationsRoutes(params); // deprecated kibana user roles are not applicable, these HTTP APIs are not needed
     defineIndicesRoutes(params); // the ES privileges form used to help define roles (only consumer) is disabled, so there is no need for these HTTP APIs
     defineRoleMappingRoutes(params); // role mappings are managed internally, based on configurations in control plane, these HTTP APIs are not needed
+    defineSecurityFeatureRoutes(params);
     defineSecurityCheckupGetStateRoutes(params); // security checkup is not applicable, these HTTP APIs are not needed
     // defineUsersRoutes(params); // the native realm is not enabled (there is only Elastic cloud SAML), no user HTTP API routes are needed
   }

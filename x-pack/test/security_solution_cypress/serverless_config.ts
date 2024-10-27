@@ -10,7 +10,7 @@ import { SecuritySolutionConfigurableCypressTestRunner } from './runner';
 
 export default async function ({ readConfigFile }: FtrConfigProviderContext) {
   const svlSharedConfig = await readConfigFile(
-    require.resolve('../../test_serverless/shared/config.base.ts')
+    require.resolve('@kbn/test-suites-serverless/shared/config.base')
   );
 
   return {
@@ -27,8 +27,6 @@ export default async function ({ readConfigFile }: FtrConfigProviderContext) {
       ...svlSharedConfig.get('kbnTestServer'),
       serverArgs: [
         ...svlSharedConfig.get('kbnTestServer.serverArgs'),
-        '--csp.strict=false',
-        '--csp.warnLegacyBrowsers=false',
         '--serverless=security',
         '--xpack.encryptedSavedObjects.encryptionKey="abcdefghijklmnopqrstuvwxyz123456"',
         `--xpack.securitySolutionServerless.productTypes=${JSON.stringify([
@@ -36,6 +34,8 @@ export default async function ({ readConfigFile }: FtrConfigProviderContext) {
           { product_line: 'endpoint', product_tier: 'complete' },
           { product_line: 'cloud', product_tier: 'complete' },
         ])}`,
+        '--csp.strict=false',
+        '--csp.warnLegacyBrowsers=false',
       ],
     },
     testRunner: SecuritySolutionConfigurableCypressTestRunner,

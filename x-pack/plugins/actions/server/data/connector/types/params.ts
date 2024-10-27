@@ -5,16 +5,24 @@
  * 2.0.
  */
 
-import { IScopedClusterClient } from '@kbn/core-elasticsearch-server';
+import { ElasticsearchClient } from '@kbn/core-elasticsearch-server';
 import * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { SavedObjectsClientContract } from '@kbn/core-saved-objects-api-server';
+import { SavedObjectsClient } from '@kbn/core/server';
 
+export type SavedObjectClientForFind = Pick<SavedObjectsClient, 'find'>;
 export interface SearchConnectorsSoParams {
   kibanaIndices: string[];
-  scopedClusterClient: IScopedClusterClient;
+  esClient: ElasticsearchClient;
   aggs: Record<string, estypes.AggregationsAggregationContainer>;
 }
 
 export interface FindConnectorsSoParams {
+  savedObjectsClient: SavedObjectClientForFind;
+  namespace?: string;
+}
+
+export interface GetConnectorSoParams {
   unsecuredSavedObjectsClient: SavedObjectsClientContract;
+  id: string;
 }

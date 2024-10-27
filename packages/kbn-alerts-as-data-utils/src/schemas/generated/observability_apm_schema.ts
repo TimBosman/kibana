@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 // ---------------------------------- WARNING ----------------------------------
 // this file was generated, and should not be edited by hand
@@ -26,19 +27,19 @@ export const IsoDateString = new rt.Type<string, string, unknown>(
   rt.identity
 );
 export type IsoDateStringC = typeof IsoDateString;
-export const schemaDate = IsoDateString;
-export const schemaDateArray = rt.array(IsoDateString);
-export const schemaDateRange = rt.partial({
-  gte: schemaDate,
-  lte: schemaDate,
-});
-export const schemaDateRangeArray = rt.array(schemaDateRange);
 export const schemaUnknown = rt.unknown;
 export const schemaUnknownArray = rt.array(rt.unknown);
 export const schemaString = rt.string;
 export const schemaStringArray = rt.array(schemaString);
 export const schemaNumber = rt.number;
 export const schemaNumberArray = rt.array(schemaNumber);
+export const schemaDate = rt.union([IsoDateString, schemaNumber]);
+export const schemaDateArray = rt.array(schemaDate);
+export const schemaDateRange = rt.partial({
+  gte: schemaDate,
+  lte: schemaDate,
+});
+export const schemaDateRangeArray = rt.array(schemaDateRange);
 export const schemaStringOrNumber = rt.union([schemaString, schemaNumber]);
 export const schemaStringOrNumberArray = rt.array(schemaStringOrNumber);
 export const schemaBoolean = rt.boolean;
@@ -69,37 +70,30 @@ export const schemaGeoPointArray = rt.array(schemaGeoPoint);
 // prettier-ignore
 const ObservabilityApmAlertRequired = rt.type({
 });
+// prettier-ignore
 const ObservabilityApmAlertOptional = rt.partial({
-  agent: rt.partial({
-    name: schemaString,
-  }),
-  error: rt.partial({
-    grouping_key: schemaString,
-    grouping_name: schemaString,
-  }),
-  kibana: rt.partial({
-    alert: rt.partial({
-      evaluation: rt.partial({
-        threshold: schemaStringOrNumber,
-        value: schemaStringOrNumber,
-        values: schemaStringOrNumberArray,
-      }),
-    }),
-  }),
-  processor: rt.partial({
-    event: schemaString,
-  }),
-  service: rt.partial({
-    environment: schemaString,
-    language: rt.partial({
-      name: schemaString,
-    }),
-    name: schemaString,
-  }),
-  transaction: rt.partial({
-    name: schemaString,
-    type: schemaString,
-  }),
+  'agent.name': schemaString,
+  'container.id': schemaString,
+  'error.grouping_key': schemaString,
+  'error.grouping_name': schemaString,
+  'host.name': schemaString,
+  'kibana.alert.context': schemaUnknown,
+  'kibana.alert.evaluation.threshold': schemaStringOrNumber,
+  'kibana.alert.evaluation.value': schemaStringOrNumber,
+  'kibana.alert.evaluation.values': schemaStringOrNumberArray,
+  'kibana.alert.group': rt.array(
+    rt.partial({
+      field: schemaStringArray,
+      value: schemaStringArray,
+    })
+  ),
+  labels: schemaUnknown,
+  'processor.event': schemaString,
+  'service.environment': schemaString,
+  'service.language.name': schemaString,
+  'service.name': schemaString,
+  'transaction.name': schemaString,
+  'transaction.type': schemaString,
 });
 
 // prettier-ignore

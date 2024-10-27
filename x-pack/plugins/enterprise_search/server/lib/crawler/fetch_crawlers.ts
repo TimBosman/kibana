@@ -7,9 +7,8 @@
 
 import { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/types';
 import { IScopedClusterClient } from '@kbn/core/server';
+import { Connector, CONNECTORS_INDEX } from '@kbn/search-connectors';
 
-import { CONNECTORS_INDEX } from '../..';
-import { Connector } from '../../../common/types/connectors';
 import { Crawler, CrawlRequest } from '../../../common/types/crawler';
 import { fetchAll } from '../fetch_all';
 
@@ -112,6 +111,6 @@ export const fetchCrawlerDocumentIdByIndexName = async (
     query: { term: { index_name: indexName } },
     _source: '_id',
   });
-  const crawlerId = crawlerResult.hits.hits[0]?._id;
+  const crawlerId = crawlerResult.hits.hits[0]?._id!;
   return crawlerId;
 };

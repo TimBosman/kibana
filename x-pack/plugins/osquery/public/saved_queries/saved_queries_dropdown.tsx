@@ -25,7 +25,7 @@ export interface SavedQueriesDropdownProps {
   disabled?: boolean;
   onChange: (
     value:
-      | (Pick<SavedQuerySO, 'id' | 'description' | 'query' | 'ecs_mapping'> & {
+      | (Pick<SavedQuerySO, 'id' | 'description' | 'query' | 'ecs_mapping' | 'timeout'> & {
           savedQueryId: string;
         })
       | null
@@ -67,7 +67,7 @@ const SavedQueriesDropdownComponent: React.FC<SavedQueriesDropdownProps> = ({
   );
 
   const handleSavedQueryChange = useCallback(
-    (newSelectedOptions) => {
+    (newSelectedOptions: any) => {
       if (!newSelectedOptions.length) {
         onChange(null);
         setSelectedOptions(newSelectedOptions);
@@ -87,7 +87,7 @@ const SavedQueriesDropdownComponent: React.FC<SavedQueriesDropdownProps> = ({
   );
 
   const renderOption = useCallback(
-    ({ value }) => (
+    ({ value }: any) => (
       <>
         <strong>{value.id}</strong>
         <div className="eui-textTruncate">
@@ -120,7 +120,7 @@ const SavedQueriesDropdownComponent: React.FC<SavedQueriesDropdownProps> = ({
   return (
     <EuiFormRow
       isInvalid={!!queryFieldError}
-      error={queryFieldError}
+      error={queryFieldError as React.ReactNode}
       label={QUERIES_DROPDOWN_SEARCH_FIELD_LABEL}
       labelAppend={<OsquerySchemaLink />}
       fullWidth

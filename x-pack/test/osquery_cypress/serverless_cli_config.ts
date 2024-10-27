@@ -7,13 +7,12 @@
 
 import { FtrConfigProviderContext } from '@kbn/test';
 
+import { SERVERLESS_NODES } from '@kbn/es';
 import { startOsqueryCypress } from './runner';
 
 export default async function ({ readConfigFile }: FtrConfigProviderContext) {
   const securitySolutionCypressConfig = await readConfigFile(
-    require.resolve(
-      '../../test_serverless/functional/test_suites/security/cypress/security_config.base.ts'
-    )
+    require.resolve('./serverless_config.base.ts')
   );
 
   return {
@@ -32,12 +31,11 @@ export default async function ({ readConfigFile }: FtrConfigProviderContext) {
       serverArgs: [
         ...securitySolutionCypressConfig.get('kbnTestServer.serverArgs'),
         `--xpack.fleet.agents.fleet_server.hosts=["https://host.docker.internal:8220"]`,
-        `--xpack.fleet.agents.elasticsearch.host=http://host.docker.internal:${securitySolutionCypressConfig.get(
-          'servers.elasticsearch.port'
-        )}`,
+        `--xpack.fleet.agents.elasticsearch.host=http://${
+          SERVERLESS_NODES[0].name
+        }:${securitySolutionCypressConfig.get('servers.elasticsearch.port')}`,
         `--xpack.fleet.packages.0.name=osquery_manager`,
         `--xpack.fleet.packages.0.version=latest`,
-        `--xpack.fleet.internal.fleetServerStandalone=false`,
       ],
     },
 

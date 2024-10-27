@@ -12,7 +12,7 @@ import { i18n } from '@kbn/i18n';
 import { EuiComboBoxOptionOption, EuiComboBoxProps } from '@elastic/eui';
 import { useExistingFieldsReader } from '@kbn/unified-field-list/src/hooks/use_existing_fields';
 import { FieldOption, FieldOptionValue, FieldPicker } from '@kbn/visualization-ui-components';
-import { getFieldIconType } from '@kbn/unified-field-list';
+import { getFieldIconType } from '@kbn/field-utils';
 import type { OperationType } from '../form_based';
 import type { OperationSupportMatrix } from './operation_support';
 import { fieldContainsData } from '../../../shared_components';
@@ -184,19 +184,17 @@ export function FieldSelect({
 
   return (
     <FieldPicker<FieldChoiceWithOperationType>
-      selectedOptions={
+      activeField={
         (selectedOperationType && selectedField
-          ? [
-              {
-                label:
-                  (selectedOperationType &&
-                    selectedField &&
-                    currentIndexPattern.getFieldByName(selectedField)?.displayName) ??
-                  selectedField,
-                value: { type: 'field', field: selectedField },
-              },
-            ]
-          : []) as unknown as Array<FieldOption<FieldChoiceWithOperationType>>
+          ? {
+              label:
+                (selectedOperationType &&
+                  selectedField &&
+                  currentIndexPattern.getFieldByName(selectedField)?.displayName) ??
+                selectedField,
+              value: { type: 'field', field: selectedField },
+            }
+          : undefined) as unknown as FieldOption<FieldChoiceWithOperationType>
       }
       options={memoizedFieldOptions as Array<FieldOption<FieldChoiceWithOperationType>>}
       onChoose={(choice) => {

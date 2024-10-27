@@ -5,68 +5,181 @@
  * 2.0.
  */
 
-import { IRouter } from '@kbn/core/server';
+import { IRouter, Logger } from '@kbn/core/server';
 import { transformError } from '@kbn/securitysolution-es-utils';
+import { getRequestAbortedSignal } from '@kbn/data-plugin/server';
 
+import { schema } from '@kbn/config-schema';
+import {
+  API_VERSIONS,
+  ExecuteConnectorRequestBody,
+  Message,
+  Replacements,
+} from '@kbn/elastic-assistant-common';
+import { buildRouteValidationWithZod } from '@kbn/elastic-assistant-common/impl/schemas/common';
+import { INVOKE_ASSISTANT_ERROR_EVENT } from '../lib/telemetry/event_based_telemetry';
 import { POST_ACTIONS_CONNECTOR_EXECUTE } from '../../common/constants';
-import {
-  getLangChainMessages,
-  unsafeGetAssistantMessagesFromRequest,
-} from '../lib/langchain/helpers';
 import { buildResponse } from '../lib/build_response';
-import { buildRouteValidation } from '../schemas/common';
+import { ElasticAssistantRequestHandlerContext, GetElser } from '../types';
 import {
-  PostActionsConnectorExecuteBody,
-  PostActionsConnectorExecutePathParams,
-} from '../schemas/post_actions_connector_execute';
-import { ElasticAssistantRequestHandlerContext } from '../types';
-import { executeCustomLlmChain } from '../lib/langchain/execute_custom_llm_chain';
+  appendAssistantMessageToConversation,
+  DEFAULT_PLUGIN_NAME,
+  getIsKnowledgeBaseEnabled,
+  getPluginNameFromRequest,
+  getSystemPromptFromUserConversation,
+  langChainExecute,
+} from './helpers';
+import { isOpenSourceModel } from './utils';
 
 export const postActionsConnectorExecuteRoute = (
-  router: IRouter<ElasticAssistantRequestHandlerContext>
+  router: IRouter<ElasticAssistantRequestHandlerContext>,
+  getElser: GetElser
 ) => {
-  router.post(
-    {
+  router.versioned
+    .post({
+      access: 'internal',
       path: POST_ACTIONS_CONNECTOR_EXECUTE,
-      validate: {
-        body: buildRouteValidation(PostActionsConnectorExecuteBody),
-        params: buildRouteValidation(PostActionsConnectorExecutePathParams),
+      options: {
+        tags: ['access:elasticAssistant'],
       },
-    },
-    async (context, request, response) => {
-      const resp = buildResponse(response);
+    })
+    .addVersion(
+      {
+        version: API_VERSIONS.internal.v1,
+        validate: {
+          request: {
+            body: buildRouteValidationWithZod(ExecuteConnectorRequestBody),
+            params: schema.object({
+              connectorId: schema.string(),
+            }),
+          },
+        },
+      },
+      async (context, request, response) => {
+        const abortSignal = getRequestAbortedSignal(request.events.aborted$);
 
-      try {
-        const connectorId = decodeURIComponent(request.params.connectorId);
-        const rawSubActionParamsBody = request.body.params.subActionParams.body;
+        const resp = buildResponse(response);
+        const ctx = await context.resolve(['core', 'elasticAssistant', 'licensing']);
+        const assistantContext = ctx.elasticAssistant;
+        const logger: Logger = assistantContext.logger;
+        const telemetry = assistantContext.telemetry;
+        let onLlmResponse;
 
-        // get the actions plugin start contract from the request context:
-        const actions = (await context.elasticAssistant).actions;
+        try {
+          const authenticatedUser = assistantContext.getCurrentUser();
+          if (authenticatedUser == null) {
+            return response.unauthorized({
+              body: `Authenticated user not found`,
+            });
+          }
+          let latestReplacements: Replacements = request.body.replacements;
+          const onNewReplacements = (newReplacements: Replacements) => {
+            latestReplacements = { ...latestReplacements, ...newReplacements };
+          };
 
-        // get the assistant messages from the request body:
-        const assistantMessages = unsafeGetAssistantMessagesFromRequest(rawSubActionParamsBody);
+          let messages;
+          let newMessage: Pick<Message, 'content' | 'role'> | undefined;
+          const conversationId = request.body.conversationId;
+          const actionTypeId = request.body.actionTypeId;
+          const connectorId = decodeURIComponent(request.params.connectorId);
 
-        // convert the assistant messages to LangChain messages:
-        const langChainMessages = getLangChainMessages(assistantMessages);
+          // if message is undefined, it means the user is regenerating a message from the stored conversation
+          if (request.body.message) {
+            newMessage = {
+              content: request.body.message,
+              role: 'user',
+            };
+          }
 
-        const langChainResponseBody = await executeCustomLlmChain({
-          actions,
-          connectorId,
-          langChainMessages,
-          request,
-        });
+          // get the actions plugin start contract from the request context:
+          const actions = ctx.elasticAssistant.actions;
+          const inference = ctx.elasticAssistant.inference;
+          const actionsClient = await actions.getActionsClientWithRequest(request);
+          const connectors = await actionsClient.getBulk({ ids: [connectorId] });
+          const connector = connectors.length > 0 ? connectors[0] : undefined;
+          const isOssModel = isOpenSourceModel(connector);
 
-        return response.ok({
-          body: langChainResponseBody,
-        });
-      } catch (err) {
-        const error = transformError(err);
+          const conversationsDataClient =
+            await assistantContext.getAIAssistantConversationsDataClient();
+          const promptsDataClient = await assistantContext.getAIAssistantPromptsDataClient();
 
-        return resp.error({
-          body: error.message,
-          statusCode: error.statusCode,
-        });
+          onLlmResponse = async (
+            content: string,
+            traceData: Message['traceData'] = {},
+            isError = false
+          ): Promise<void> => {
+            if (conversationsDataClient && conversationId) {
+              await appendAssistantMessageToConversation({
+                conversationId,
+                conversationsDataClient,
+                messageContent: content,
+                replacements: latestReplacements,
+                isError,
+                traceData,
+              });
+            }
+          };
+          let systemPrompt;
+          if (conversationsDataClient && promptsDataClient && conversationId) {
+            systemPrompt = await getSystemPromptFromUserConversation({
+              conversationsDataClient,
+              conversationId,
+              promptsDataClient,
+            });
+          }
+          return await langChainExecute({
+            abortSignal,
+            isStream: request.body.subAction !== 'invokeAI',
+            actionsClient,
+            actionTypeId,
+            connectorId,
+            isOssModel,
+            conversationId,
+            context: ctx,
+            getElser,
+            logger,
+            inference,
+            messages: (newMessage ? [newMessage] : messages) ?? [],
+            onLlmResponse,
+            onNewReplacements,
+            replacements: latestReplacements,
+            request,
+            response,
+            telemetry,
+            systemPrompt,
+          });
+        } catch (err) {
+          logger.error(err);
+          const error = transformError(err);
+          if (onLlmResponse) {
+            await onLlmResponse(error.message, {}, true);
+          }
+          const pluginName = getPluginNameFromRequest({
+            request,
+            defaultPluginName: DEFAULT_PLUGIN_NAME,
+            logger,
+          });
+          const v2KnowledgeBaseEnabled =
+            assistantContext.getRegisteredFeatures(pluginName).assistantKnowledgeBaseByDefault;
+          const kbDataClient =
+            (await assistantContext.getAIAssistantKnowledgeBaseDataClient({
+              v2KnowledgeBaseEnabled,
+            })) ?? undefined;
+          const isEnabledKnowledgeBase = await getIsKnowledgeBaseEnabled(kbDataClient);
+
+          telemetry.reportEvent(INVOKE_ASSISTANT_ERROR_EVENT.eventType, {
+            actionTypeId: request.body.actionTypeId,
+            model: request.body.model,
+            errorMessage: error.message,
+            assistantStreamingEnabled: request.body.subAction !== 'invokeAI',
+            isEnabledKnowledgeBase,
+          });
+
+          return resp.error({
+            body: error.message,
+            statusCode: error.statusCode,
+          });
+        }
       }
-    }
-  );
+    );
 };

@@ -9,33 +9,37 @@ import { CoreStart } from '@kbn/core-lifecycle-browser';
 
 import { I18nProvider } from '@kbn/i18n-react';
 import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
-import { KibanaThemeProvider } from '@kbn/react-kibana-context-theme';
+import { KibanaRenderContextProvider } from '@kbn/react-kibana-context-render';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import ReactDOM from 'react-dom';
 import React from 'react';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Router } from '@kbn/shared-ux-router';
 import { ServerlessSearchContext } from './hooks/use_kibana';
 
 export async function renderApp(
   element: HTMLElement,
   core: CoreStart,
-  services: ServerlessSearchContext
+  services: ServerlessSearchContext,
+  queryClient: QueryClient
 ) {
-  const { ConnectorsOverview } = await import('./components/connectors_overview');
-  const queryClient = new QueryClient();
+  const { ConnectorsRouter } = await import('./components/connectors_router');
+
   ReactDOM.render(
-    <KibanaThemeProvider theme={core.theme}>
+    <KibanaRenderContextProvider {...core}>
       <KibanaContextProvider services={{ ...core, ...services }}>
         <QueryClientProvider client={queryClient}>
           <ReactQueryDevtools initialIsOpen={false} />
           <I18nProvider>
-            <ConnectorsOverview />
+            <Router history={services.history}>
+              <ConnectorsRouter />
+            </Router>
           </I18nProvider>
         </QueryClientProvider>
       </KibanaContextProvider>
-    </KibanaThemeProvider>,
+    </KibanaRenderContextProvider>,
     element
   );
   return () => ReactDOM.unmountComponentAtNode(element);

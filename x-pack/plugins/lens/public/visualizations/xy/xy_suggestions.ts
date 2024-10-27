@@ -8,8 +8,8 @@
 import { i18n } from '@kbn/i18n';
 import { partition } from 'lodash';
 import { Position } from '@elastic/charts';
-import type { PaletteOutput } from '@kbn/coloring';
-import { LayerTypes } from '@kbn/expression-xy-plugin/public';
+import { FittingFunctions, LayerTypes } from '@kbn/expression-xy-plugin/public';
+
 import type {
   SuggestionRequest,
   VisualizationSuggestion,
@@ -17,15 +17,17 @@ import type {
   TableSuggestion,
   TableChangeType,
 } from '../../types';
+import { getColorMappingDefaults } from '../../utils';
 import {
   State,
   XYState,
-  visualizationTypes,
+  visualizationSubtypes,
   XYLayerConfig,
   XYDataLayerConfig,
   SeriesType,
+  defaultSeriesType,
 } from './types';
-import { getIconForSeries } from './state_helpers';
+import { flipSeriesType, getIconForSeries } from './state_helpers';
 import { getDataLayers, isDataLayer } from './visualization_helpers';
 
 const columnSortOrder = {
@@ -61,7 +63,7 @@ export function getSuggestions({
     !table.isMultiRow ||
     table.columns.length <= 1 ||
     table.columns.every((col) => col.operation.dataType !== 'number') ||
-    table.columns.some((col) => !columnSortOrder.hasOwnProperty(col.operation.dataType));
+    table.columns.some((col) => !Object.hasOwn(columnSortOrder, col.operation.dataType));
 
   if (
     (incompleteTable && state && !subVisualizationId) ||
@@ -96,25 +98,28 @@ function getSuggestionForColumns(
   keptLayerIds: string[],
   currentState?: State,
   seriesType?: SeriesType,
-  mainPalette?: PaletteOutput,
+  mainPalette?: SuggestionRequest['mainPalette'],
   allowMixed?: boolean
 ): VisualizationSuggestion<State> | Array<VisualizationSuggestion<State>> | undefined {
   const [buckets, values] = partition(table.columns, (col) => col.operation.isBucketed);
+  const sharedArgs = {
+    layerId: table.layerId,
+    changeType: table.changeType,
+    currentState,
+    tableLabel: table.label,
+    keptLayerIds,
+    requestedSeriesType: seriesType,
+    mainPalette,
+    allowMixed,
+  };
 
   if (buckets.length === 1 || buckets.length === 2) {
-    const [x, splitBy] = getBucketMappings(table, currentState);
+    const [xValue, splitBy] = getBucketMappings(table, currentState);
     return getSuggestionsForLayer({
-      layerId: table.layerId,
-      changeType: table.changeType,
-      xValue: x,
+      ...sharedArgs,
+      xValue,
       yValues: values,
       splitBy,
-      currentState,
-      tableLabel: table.label,
-      keptLayerIds,
-      requestedSeriesType: seriesType,
-      mainPalette,
-      allowMixed,
     });
   } else if (buckets.length === 0) {
     const [yValues, [xValue, splitBy]] = partition(
@@ -122,35 +127,11 @@ function getSuggestionForColumns(
       (col) => col.operation.dataType === 'number' && !col.operation.isBucketed
     );
     return getSuggestionsForLayer({
-      layerId: table.layerId,
-      changeType: table.changeType,
+      ...sharedArgs,
       xValue,
       yValues,
       splitBy,
-      currentState,
-      tableLabel: table.label,
-      keptLayerIds,
-      requestedSeriesType: seriesType,
-      mainPalette,
-      allowMixed,
     });
-  }
-}
-
-function flipSeriesType(seriesType: SeriesType) {
-  switch (seriesType) {
-    case 'bar_horizontal':
-      return 'bar';
-    case 'bar_horizontal_stacked':
-      return 'bar_stacked';
-    case 'bar':
-      return 'bar_horizontal';
-    case 'bar_horizontal_percentage_stacked':
-      return 'bar_percentage_stacked';
-    case 'bar_percentage_stacked':
-      return 'bar_horizontal_percentage_stacked';
-    default:
-      return 'bar_horizontal';
   }
 }
 
@@ -230,7 +211,7 @@ function getSuggestionsForLayer({
   tableLabel?: string;
   keptLayerIds: string[];
   requestedSeriesType?: SeriesType;
-  mainPalette?: PaletteOutput;
+  mainPalette?: SuggestionRequest['mainPalette'];
   allowMixed?: boolean;
 }): VisualizationSuggestion<State> | Array<VisualizationSuggestion<State>> {
   const title = getSuggestionTitle(yValues, xValue, tableLabel);
@@ -252,10 +233,13 @@ function getSuggestionsForLayer({
     allowMixed,
   };
 
+  if (changeType === 'initial' && xValue?.operation.dataType === 'date') {
+    return buildSuggestion({ ...options, seriesType: 'line' });
+  }
   // handles the simplest cases, acting as a chart switcher
   if (!currentState && changeType === 'unchanged') {
     // Chart switcher needs to include every chart type
-    return visualizationTypes
+    return visualizationSubtypes
       .map((visType) => {
         return {
           ...buildSuggestion({
@@ -295,30 +279,19 @@ function getSuggestionsForLayer({
       buildSuggestion({
         ...options,
         seriesType: newSeriesType,
-        title: newSeriesType.startsWith('bar')
-          ? i18n.translate('xpack.lens.xySuggestions.barChartTitle', {
-              defaultMessage: 'Bar chart',
-            })
-          : i18n.translate('xpack.lens.xySuggestions.lineChartTitle', {
-              defaultMessage: 'Line chart',
-            }),
+        title: seriesTypeLabels(newSeriesType),
       })
     );
   }
 
   if (seriesType !== 'line' && splitBy && !seriesType.includes('percentage')) {
     // flip between stacked/unstacked
+    const suggestedSeriesType = toggleStackSeriesType(seriesType);
     sameStateSuggestions.push(
       buildSuggestion({
         ...options,
-        seriesType: toggleStackSeriesType(seriesType),
-        title: seriesType.endsWith('stacked')
-          ? i18n.translate('xpack.lens.xySuggestions.unstackedChartTitle', {
-              defaultMessage: 'Unstacked',
-            })
-          : i18n.translate('xpack.lens.xySuggestions.stackedChartTitle', {
-              defaultMessage: 'Stacked',
-            }),
+        seriesType: suggestedSeriesType,
+        title: seriesTypeLabels(suggestedSeriesType),
       })
     );
   }
@@ -333,23 +306,22 @@ function getSuggestionsForLayer({
       percentageOptions.splitBy = percentageOptions.xValue;
       delete percentageOptions.xValue;
     }
+    const suggestedSeriesType = asPercentageSeriesType(seriesType);
     // percentage suggestion
     sameStateSuggestions.push(
       buildSuggestion({
         ...options,
         // hide the suggestion if split by is missing
         hide: !percentageOptions.splitBy,
-        seriesType: asPercentageSeriesType(seriesType),
-        title: i18n.translate('xpack.lens.xySuggestions.asPercentageTitle', {
-          defaultMessage: 'Percentage',
-        }),
+        seriesType: suggestedSeriesType,
+        title: seriesTypeLabels(suggestedSeriesType),
       })
     );
   }
 
   // Combine all pre-built suggestions with hidden suggestions for remaining chart types
   return sameStateSuggestions.concat(
-    visualizationTypes
+    visualizationSubtypes
       .filter((visType) => {
         return !sameStateSuggestions.find(
           (suggestion) => suggestion.state.preferredSeriesType === visType.id
@@ -362,6 +334,53 @@ function getSuggestionsForLayer({
         };
       })
   );
+}
+
+function seriesTypeLabels(seriesType: SeriesType) {
+  switch (seriesType) {
+    case 'line':
+      return i18n.translate('xpack.lens.xySuggestions.lineChartTitle', {
+        defaultMessage: 'Line chart',
+      });
+    case 'area':
+      return i18n.translate('xpack.lens.xySuggestions.areaChartTitle', {
+        defaultMessage: 'Area chart',
+      });
+    case 'area_stacked':
+      return i18n.translate('xpack.lens.xySuggestions.areaStackedChartTitle', {
+        defaultMessage: 'Area stacked',
+      });
+    case 'area_percentage_stacked':
+      return i18n.translate('xpack.lens.xySuggestions.areaPercentageStackedChartTitle', {
+        defaultMessage: 'Area percentage',
+      });
+    case 'bar':
+      return i18n.translate('xpack.lens.xySuggestions.verticalBarChartTitle', {
+        defaultMessage: 'Bar vertical',
+      });
+    case 'bar_horizontal':
+      return i18n.translate('xpack.lens.xySuggestions.horizontalBarChartTitle', {
+        defaultMessage: 'Bar horizontal',
+      });
+    case 'bar_stacked':
+      return i18n.translate('xpack.lens.xySuggestions.verticalBarStackedChartTitle', {
+        defaultMessage: 'Bar vertical stacked',
+      });
+    case 'bar_horizontal_stacked':
+      return i18n.translate('xpack.lens.xySuggestions.horizontalBarStackedChartTitle', {
+        defaultMessage: 'Bar horizontal stacked',
+      });
+    case 'bar_percentage_stacked':
+      return i18n.translate('xpack.lens.xySuggestions.verticalBarPercentageChartTitle', {
+        defaultMessage: 'Bar percentage',
+      });
+    case 'bar_horizontal_percentage_stacked':
+      return i18n.translate('xpack.lens.xySuggestions.horizontalBarPercentageChartTitle', {
+        defaultMessage: 'Bar horizontal percentage',
+      });
+    default:
+      return seriesType;
+  }
 }
 
 function toggleStackSeriesType(oldSeriesType: SeriesType) {
@@ -415,18 +434,16 @@ function getSeriesType(
   layerId: string,
   xValue?: TableSuggestionColumn
 ): SeriesType {
-  const defaultType = 'bar_stacked';
-
   const oldLayer = getExistingLayer(currentState, layerId);
   const oldLayerSeriesType = oldLayer && isDataLayer(oldLayer) ? oldLayer.seriesType : false;
 
   const closestSeriesType =
-    oldLayerSeriesType || (currentState && currentState.preferredSeriesType) || defaultType;
+    oldLayerSeriesType || (currentState && currentState.preferredSeriesType) || defaultSeriesType;
 
   // Attempt to keep the seriesType consistent on initial add of a layer
   // Ordinal scales should always use a bar because there is no interpolation between buckets
   if (xValue && xValue.operation.scale && xValue.operation.scale === 'ordinal') {
-    return closestSeriesType.startsWith('bar') ? closestSeriesType : defaultType;
+    return closestSeriesType.startsWith('bar') ? closestSeriesType : defaultSeriesType;
   }
 
   return closestSeriesType;
@@ -493,7 +510,7 @@ function buildSuggestion({
   changeType: TableChangeType;
   keptLayerIds: string[];
   hide?: boolean;
-  mainPalette?: PaletteOutput;
+  mainPalette?: SuggestionRequest['mainPalette'];
   allowMixed?: boolean;
 }) {
   if (seriesType.includes('percentage') && xValue?.operation.scale === 'ordinal' && !splitBy) {
@@ -505,10 +522,11 @@ function buildSuggestion({
   const newLayer: XYDataLayerConfig = {
     ...(existingLayer || {}),
     palette:
-      mainPalette ||
-      (existingLayer && 'palette' in existingLayer
+      mainPalette?.type === 'legacyPalette'
+        ? mainPalette.value
+        : existingLayer && 'palette' in existingLayer
         ? (existingLayer as XYDataLayerConfig).palette
-        : undefined),
+        : undefined,
     layerId,
     seriesType,
     xAccessor: xValue?.columnId,
@@ -519,6 +537,11 @@ function buildSuggestion({
         ? existingLayer.yConfig.filter(({ forAccessor }) => accessors.indexOf(forAccessor) !== -1)
         : undefined,
     layerType: LayerTypes.DATA,
+    colorMapping: !mainPalette
+      ? getColorMappingDefaults()
+      : mainPalette?.type === 'colorMapping'
+      ? mainPalette.value
+      : undefined,
   };
 
   const hasDateHistogramDomain =
@@ -549,7 +572,7 @@ function buildSuggestion({
   const state: State = {
     legend: currentState ? currentState.legend : { isVisible: true, position: Position.Right },
     valueLabels: currentState?.valueLabels || 'hide',
-    fittingFunction: currentState?.fittingFunction || 'None',
+    fittingFunction: currentState?.fittingFunction ?? FittingFunctions.LINEAR,
     curveType: currentState?.curveType,
     fillOpacity: currentState?.fillOpacity,
     xTitle: currentState?.xTitle,
@@ -557,7 +580,6 @@ function buildSuggestion({
     yRightTitle: currentState?.yRightTitle,
     hideEndzones: currentState?.hideEndzones,
     showCurrentTimeMarker: currentState?.showCurrentTimeMarker,
-    valuesInLegend: currentState?.valuesInLegend,
     yLeftExtent: currentState?.yLeftExtent,
     yRightExtent: currentState?.yRightExtent,
     yLeftScale: currentState?.yLeftScale,
@@ -621,7 +643,7 @@ function getScore(
       ? 0.5
       : 1;
   // chart with multiple y values and split series will have a score of 1, single y value and no split series reduce score
-  return (((yValues.length > 1 ? 2 : 1) + (splitBy ? 1 : 0)) / 3) * changeFactor;
+  return (((yValues.length > 1 ? 3 : 2) + (splitBy ? 1 : 0)) / 4) * changeFactor;
 }
 
 function getExistingLayer(currentState: XYState | undefined, layerId: string) {

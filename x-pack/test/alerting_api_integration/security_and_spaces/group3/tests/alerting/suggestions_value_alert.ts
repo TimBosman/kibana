@@ -14,10 +14,9 @@ import { FtrProviderContext } from '../../../../common/ftr_provider_context';
 export default function createRuleSuggestionValuesTests({ getService }: FtrProviderContext) {
   const space1 = Spaces[0].id;
 
-  describe('alerts/suggestions/values', async () => {
+  describe('alerts/suggestions/values', () => {
     const esArchiver = getService('esArchiver');
     const supertest = getService('supertest');
-    const supertestWithoutAuth = getService('supertestWithoutAuth');
 
     before(async () => {
       await esArchiver.load('x-pack/test/functional/es_archives/observability/alerts');

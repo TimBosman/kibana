@@ -139,6 +139,7 @@ export const callEnterpriseSearchConfigAPI = async ({
       },
       appSearch: {
         accountId: data?.current_user?.app_search?.account?.id,
+        kibanaUIsEnabled: data?.current_user?.app_search?.account?.kibana_uis_enabled || false,
         onboardingComplete: !!data?.current_user?.app_search?.account?.onboarding_complete,
         role: {
           id: data?.current_user?.app_search?.role?.id,
@@ -158,6 +159,8 @@ export const callEnterpriseSearchConfigAPI = async ({
         organization: {
           name: data?.current_user?.workplace_search?.organization?.name,
           defaultOrgName: data?.current_user?.workplace_search?.organization?.default_org_name,
+          kibanaUIsEnabled:
+            data?.current_user?.workplace_search?.organization?.kibana_uis_enabled || false,
         },
         account: {
           id: data?.current_user?.workplace_search?.account?.id,

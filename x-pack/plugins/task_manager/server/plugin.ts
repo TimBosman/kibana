@@ -5,8 +5,8 @@
  * 2.0.
  */
 
-import { combineLatest, Observable, Subject } from 'rxjs';
-import { map, distinctUntilChanged } from 'rxjs/operators';
+import { combineLatest, Observable, Subject, BehaviorSubject } from 'rxjs';
+import { map, distinctUntilChanged } from 'rxjs';
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import { UsageCollectionSetup, UsageCounter } from '@kbn/usage-collection-plugin/server';
 import {
@@ -18,11 +18,17 @@ import {
   ServiceStatusLevels,
   CoreStatus,
 } from '@kbn/core/server';
+import type { CloudStart } from '@kbn/cloud-plugin/server';
+import {
+  registerDeleteInactiveNodesTaskDefinition,
+  scheduleDeleteInactiveNodesTaskDefinition,
+} from './kibana_discovery_service/delete_inactive_nodes_task';
+import { KibanaDiscoveryService } from './kibana_discovery_service';
 import { TaskPollingLifecycle } from './polling_lifecycle';
 import { TaskManagerConfig } from './config';
 import { createInitialMiddleware, addMiddlewareToChain, Middleware } from './lib/middleware';
 import { removeIfExists } from './lib/remove_if_exists';
-import { setupSavedObjects } from './saved_objects';
+import { setupSavedObjects, BACKGROUND_TASK_NODE_SO_NAME, TASK_SO_NAME } from './saved_objects';
 import { TaskDefinitionRegistry, TaskTypeDictionary, REMOVED_TYPES } from './task_type_dictionary';
 import { AggregationOpts, FetchResult, SearchOpts, TaskStore } from './task_store';
 import { createManagedConfiguration } from './lib/create_managed_configuration';
@@ -36,6 +42,9 @@ import { TASK_MANAGER_INDEX } from './constants';
 import { AdHocTaskCounter } from './lib/adhoc_task_counter';
 import { setupIntervalLogging } from './lib/log_health_metrics';
 import { metricsStream, Metrics } from './metrics';
+import { TaskManagerMetricsCollector } from './metrics/task_metrics_collector';
+import { TaskPartitioner } from './lib/task_partitioner';
+import { getDefaultCapacity } from './lib/get_default_capacity';
 
 export interface TaskManagerSetupContract {
   /**
@@ -60,6 +69,7 @@ export type TaskManagerStartContract = Pick<
   | 'bulkEnable'
   | 'bulkDisable'
   | 'bulkSchedule'
+  | 'bulkUpdateState'
 > &
   Pick<TaskStore, 'fetch' | 'aggregate' | 'get' | 'remove' | 'bulkRemove'> & {
     removeIfExists: TaskStore['remove'];
@@ -67,6 +77,10 @@ export type TaskManagerStartContract = Pick<
     supportsEphemeralTasks: () => boolean;
     getRegisteredTypes: () => string[];
   };
+
+export interface TaskManagerPluginStart {
+  cloud?: CloudStart;
+}
 
 const LogHealthForBackgroundTasksOnlyMinutes = 60;
 
@@ -88,7 +102,11 @@ export class TaskManagerPlugin
   private shouldRunBackgroundTasks: boolean;
   private readonly kibanaVersion: PluginInitializerContext['env']['packageInfo']['version'];
   private adHocTaskCounter: AdHocTaskCounter;
+  private taskManagerMetricsCollector?: TaskManagerMetricsCollector;
   private nodeRoles: PluginInitializerContext['node']['roles'];
+  private kibanaDiscoveryService?: KibanaDiscoveryService;
+  private heapSizeLimit: number = 0;
+  private numOfKibanaInstances$: Subject<number> = new BehaviorSubject(1);
 
   constructor(private readonly initContext: PluginInitializerContext) {
     this.initContext = initContext;
@@ -107,10 +125,17 @@ export class TaskManagerPlugin
   }
 
   public setup(
-    core: CoreSetup,
+    core: CoreSetup<TaskManagerStartContract, unknown>,
     plugins: { usageCollection?: UsageCollectionSetup }
   ): TaskManagerSetupContract {
     this.elasticsearchAndSOAvailability$ = getElasticsearchAndSOAvailability(core.status.core$);
+
+    core.metrics
+      .getOpsMetrics$()
+      .pipe(distinctUntilChanged())
+      .subscribe((metrics) => {
+        this.heapSizeLimit = metrics.process.memory.heap.size_limit;
+      });
 
     setupSavedObjects(core.savedObjects, this.config);
     this.taskManagerId = this.initContext.env.instanceUuid;
@@ -145,6 +170,7 @@ export class TaskManagerPlugin
         startServicesPromise.then(({ elasticsearch }) => elasticsearch.client),
       shouldRunTasks: this.shouldRunBackgroundTasks,
       docLinks: core.docLinks,
+      numOfKibanaInstances$: this.numOfKibanaInstances$,
     });
     const monitoredUtilization$ = backgroundTaskUtilizationRoute({
       router,
@@ -160,6 +186,7 @@ export class TaskManagerPlugin
     });
     metricsRoute({
       router,
+      logger: this.logger,
       metrics$: this.metrics$,
       resetMetrics$: this.resetMetrics$,
       taskManagerId: this.taskManagerId,
@@ -176,7 +203,7 @@ export class TaskManagerPlugin
     core.status.set(
       combineLatest([core.status.derivedStatus$, serviceStatus$]).pipe(
         map(([derivedStatus, serviceStatus]) =>
-          serviceStatus.level > derivedStatus.level ? serviceStatus : derivedStatus
+          serviceStatus.level >= derivedStatus.level ? serviceStatus : derivedStatus
         )
       )
     );
@@ -192,6 +219,8 @@ export class TaskManagerPlugin
         this.config.unsafe.exclude_task_types
       );
     }
+
+    registerDeleteInactiveNodesTaskDefinition(this.logger, core.getStartServices, this.definitions);
 
     if (this.config.unsafe.exclude_task_types.length) {
       this.logger.warn(
@@ -219,13 +248,26 @@ export class TaskManagerPlugin
     };
   }
 
-  public start({
-    savedObjects,
-    elasticsearch,
-    executionContext,
-    docLinks,
-  }: CoreStart): TaskManagerStartContract {
-    const savedObjectsRepository = savedObjects.createInternalRepository(['task']);
+  public start(
+    { savedObjects, elasticsearch, executionContext, docLinks }: CoreStart,
+    { cloud }: TaskManagerPluginStart
+  ): TaskManagerStartContract {
+    const savedObjectsRepository = savedObjects.createInternalRepository([
+      TASK_SO_NAME,
+      BACKGROUND_TASK_NODE_SO_NAME,
+    ]);
+
+    this.kibanaDiscoveryService = new KibanaDiscoveryService({
+      savedObjectsRepository,
+      logger: this.logger,
+      currentNode: this.taskManagerId!,
+      config: this.config.discovery,
+      onNodesCounted: (numOfNodes: number) => this.numOfKibanaInstances$.next(numOfNodes),
+    });
+
+    if (this.shouldRunBackgroundTasks) {
+      this.kibanaDiscoveryService.start().catch(() => {});
+    }
 
     const serializer = savedObjects.createSerializer();
     const taskStore = new TaskStore({
@@ -238,17 +280,55 @@ export class TaskManagerPlugin
       adHocTaskCounter: this.adHocTaskCounter,
       allowReadingInvalidState: this.config.allow_reading_invalid_state,
       logger: this.logger,
+      requestTimeouts: this.config.request_timeouts,
     });
 
+    const isServerless = this.initContext.env.packageInfo.buildFlavor === 'serverless';
+
+    const defaultCapacity = getDefaultCapacity({
+      autoCalculateDefaultEchCapacity: this.config.auto_calculate_default_ech_capacity,
+      claimStrategy: this.config?.claim_strategy,
+      heapSizeLimit: this.heapSizeLimit,
+      isCloud: cloud?.isCloudEnabled ?? false,
+      isServerless,
+      isBackgroundTaskNodeOnly: this.isNodeBackgroundTasksOnly(),
+    });
+
+    this.logger.info(
+      `Task manager isCloud=${
+        cloud?.isCloudEnabled ?? false
+      } isServerless=${isServerless} claimStrategy=${
+        this.config!.claim_strategy
+      } isBackgroundTaskNodeOnly=${this.isNodeBackgroundTasksOnly()} heapSizeLimit=${
+        this.heapSizeLimit
+      } defaultCapacity=${defaultCapacity} autoCalculateDefaultEchCapacity=${
+        this.config.auto_calculate_default_ech_capacity
+      }`
+    );
+
     const managedConfiguration = createManagedConfiguration({
-      logger: this.logger,
+      config: this.config!,
       errors$: taskStore.errors$,
-      startingMaxWorkers: this.config!.max_workers,
-      startingPollInterval: this.config!.poll_interval,
+      defaultCapacity,
+      logger: this.logger,
     });
 
     // Only poll for tasks if configured to run tasks
     if (this.shouldRunBackgroundTasks) {
+      this.taskManagerMetricsCollector = new TaskManagerMetricsCollector({
+        logger: this.logger,
+        store: taskStore,
+        taskTypes: new Set(this.definitions.getAllTypes()),
+        excludedTypes: new Set(this.config.unsafe.exclude_task_types),
+      });
+
+      const taskPartitioner = new TaskPartitioner({
+        logger: this.logger,
+        podName: this.taskManagerId!,
+        kibanaDiscoveryService: this.kibanaDiscoveryService,
+        kibanasPerPartition: this.config.kibanas_per_partition,
+      });
+
       this.taskPollingLifecycle = new TaskPollingLifecycle({
         config: this.config!,
         definitions: this.definitions,
@@ -260,6 +340,7 @@ export class TaskManagerPlugin
         middleware: this.middleware,
         elasticsearchAndSOAvailability$: this.elasticsearchAndSOAvailability$!,
         ...managedConfiguration,
+        taskPartitioner,
       });
 
       this.ephemeralTaskLifecycle = new EphemeralTaskLifecycle({
@@ -274,20 +355,25 @@ export class TaskManagerPlugin
       });
     }
 
-    createMonitoringStats(
+    createMonitoringStats({
       taskStore,
-      this.elasticsearchAndSOAvailability$!,
-      this.config!,
-      managedConfiguration,
-      this.logger,
-      this.adHocTaskCounter,
-      this.taskPollingLifecycle,
-      this.ephemeralTaskLifecycle
-    ).subscribe((stat) => this.monitoringStats$.next(stat));
+      elasticsearchAndSOAvailability$: this.elasticsearchAndSOAvailability$!,
+      config: this.config!,
+      managedConfig: managedConfiguration,
+      logger: this.logger,
+      adHocTaskCounter: this.adHocTaskCounter,
+      taskDefinitions: this.definitions,
+      taskPollingLifecycle: this.taskPollingLifecycle,
+      ephemeralTaskLifecycle: this.ephemeralTaskLifecycle,
+    }).subscribe((stat) => this.monitoringStats$.next(stat));
 
-    metricsStream(this.config!, this.resetMetrics$, this.taskPollingLifecycle).subscribe((metric) =>
-      this.metrics$.next(metric)
-    );
+    metricsStream({
+      config: this.config!,
+      logger: this.logger,
+      reset$: this.resetMetrics$,
+      taskPollingLifecycle: this.taskPollingLifecycle,
+      taskManagerMetricsCollector: this.taskManagerMetricsCollector,
+    }).subscribe((metric) => this.metrics$.next(metric));
 
     const taskScheduling = new TaskScheduling({
       logger: this.logger,
@@ -296,6 +382,8 @@ export class TaskManagerPlugin
       ephemeralTaskLifecycle: this.ephemeralTaskLifecycle,
       taskManagerId: taskStore.taskManagerId,
     });
+
+    scheduleDeleteInactiveNodesTaskDefinition(this.logger, taskScheduling).catch(() => {});
 
     return {
       fetch: (opts: SearchOpts): Promise<FetchResult> => taskStore.fetch(opts),
@@ -316,7 +404,24 @@ export class TaskManagerPlugin
       supportsEphemeralTasks: () =>
         this.config.ephemeral_tasks.enabled && this.shouldRunBackgroundTasks,
       getRegisteredTypes: () => this.definitions.getAllTypes(),
+      bulkUpdateState: (...args) => taskScheduling.bulkUpdateState(...args),
     };
+  }
+
+  public async stop() {
+    // Stop polling for tasks
+    if (this.taskPollingLifecycle) {
+      this.taskPollingLifecycle.stop();
+    }
+
+    if (this.kibanaDiscoveryService?.isStarted()) {
+      this.kibanaDiscoveryService.stop();
+      try {
+        await this.kibanaDiscoveryService.deleteCurrentNode();
+      } catch (e) {
+        this.logger.error(`Deleting current node has failed. error: ${e.message}`);
+      }
+    }
   }
 }
 

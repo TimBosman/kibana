@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { ITagsClient } from '../../../common/types';
+import type { ITagsClient } from '../../../common/types';
 
 const createClientMock = () => {
   const mock: jest.Mocked<ITagsClient> = {
@@ -14,6 +14,7 @@ const createClientMock = () => {
     getAll: jest.fn(),
     delete: jest.fn(),
     update: jest.fn(),
+    findByName: jest.fn(),
   };
 
   return mock;

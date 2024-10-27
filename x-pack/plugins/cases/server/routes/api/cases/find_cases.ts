@@ -13,13 +13,19 @@ import type { caseApiV1 } from '../../../../common/types/api';
 export const findCaseRoute = createCasesRoute({
   method: 'get',
   path: `${CASES_URL}/_find`,
+  routerOptions: {
+    access: 'public',
+    summary: `Search cases`,
+    tags: ['oas-tag:cases'],
+  },
   handler: async ({ context, request, response }) => {
     try {
       const caseContext = await context.cases;
       const casesClient = await caseContext.getCasesClient();
+
       const options = request.query as caseApiV1.CasesFindRequest;
 
-      const res: caseApiV1.CasesFindResponse = await casesClient.cases.find({ ...options });
+      const res: caseApiV1.CasesFindResponse = await casesClient.cases.search({ ...options });
 
       return response.ok({
         body: res,

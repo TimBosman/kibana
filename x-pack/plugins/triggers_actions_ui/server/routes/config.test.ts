@@ -31,6 +31,7 @@ const ruleTypes = [
       context: [],
       state: [],
     },
+    category: 'test',
     producer: 'test',
     enabledInLicense: true,
     minimumScheduleInterval: '1m',
@@ -39,7 +40,7 @@ const ruleTypes = [
 ];
 
 describe('createConfigRoute', () => {
-  it('registers the route and returns config if user is authorized', async () => {
+  it('registers the route and returns exposed config values if user is authorized', async () => {
     const router = httpServiceMock.createRouter();
     const logger = loggingSystemMock.create().get();
     const mockRulesClient = rulesClientMock.create();
@@ -51,9 +52,11 @@ describe('createConfigRoute', () => {
       baseRoute: `/internal/triggers_actions_ui`,
       alertingConfig: () => ({
         isUsingSecurity: true,
+        maxScheduledPerMinute: 10000,
         minimumScheduleInterval: { value: '1m', enforce: false },
+        run: { alerts: { max: 1000 }, actions: { max: 100000 } },
       }),
-      getRulesClientWithRequest: () => mockRulesClient,
+      getRulesClientWithRequest: async () => mockRulesClient,
     });
 
     const [config, handler] = router.get.mock.calls[0];
@@ -64,7 +67,11 @@ describe('createConfigRoute', () => {
 
     expect(mockResponse.ok).toBeCalled();
     expect(mockResponse.ok.mock.calls[0][0]).toEqual({
-      body: { isUsingSecurity: true, minimumScheduleInterval: { value: '1m', enforce: false } },
+      body: {
+        isUsingSecurity: true,
+        maxScheduledPerMinute: 10000,
+        minimumScheduleInterval: { value: '1m', enforce: false },
+      },
     });
   });
 
@@ -80,9 +87,11 @@ describe('createConfigRoute', () => {
       baseRoute: `/internal/triggers_actions_ui`,
       alertingConfig: () => ({
         isUsingSecurity: true,
+        maxScheduledPerMinute: 10000,
         minimumScheduleInterval: { value: '1m', enforce: false },
+        run: { alerts: { max: 1000 }, actions: { max: 100000 } },
       }),
-      getRulesClientWithRequest: () => mockRulesClient,
+      getRulesClientWithRequest: async () => mockRulesClient,
     });
 
     const [config, handler] = router.get.mock.calls[0];

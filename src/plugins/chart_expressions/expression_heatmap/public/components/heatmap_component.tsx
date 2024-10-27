@@ -1,12 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { memo, FC, useMemo, useState, useCallback, useRef } from 'react';
+import { ESQL_TABLE_TYPE } from '@kbn/data-plugin/common';
 import {
   Chart,
   ElementClickListener,
@@ -97,11 +99,7 @@ function shiftAndNormalizeStops(
       if (params.range === 'percent') {
         result = min + ((max - min) * value) / 100;
       }
-      // a division by zero safeguard
-      if (!Number.isFinite(result)) {
-        return 1;
-      }
-      return Number(result.toFixed(2));
+      return result;
     }
   );
 }
@@ -159,7 +157,6 @@ export const HeatmapComponent: FC<HeatmapRenderProps> = memo(
     overrides,
   }) => {
     const chartRef = useRef<Chart>(null);
-    const chartTheme = chartsThemeService.useChartsTheme();
     const isDarkTheme = chartsThemeService.useDarkMode();
     // legacy heatmap legend is handled by the uiState
     const [showLegend, setShowLegend] = useState<boolean>(() => {
@@ -199,10 +196,7 @@ export const HeatmapComponent: FC<HeatmapRenderProps> = memo(
     const onRenderChange = useCallback(
       (isRendered: boolean = true) => {
         if (isRendered) {
-          // this requestAnimationFrame call is a temporary fix for https://github.com/elastic/elastic-charts/issues/2124
-          window.requestAnimationFrame(() => {
-            renderComplete();
-          });
+          renderComplete();
         }
       },
       [renderComplete]
@@ -261,7 +255,9 @@ export const HeatmapComponent: FC<HeatmapRenderProps> = memo(
       datatables: [formattedTable.table],
     });
 
-    const hasTooltipActions = interactive;
+    const isEsqlMode = table?.meta?.type === ESQL_TABLE_TYPE;
+
+    const hasTooltipActions = interactive && !isEsqlMode;
 
     const onElementClick = useCallback(
       (e: HeatmapElementEvent[]) => {
@@ -502,25 +498,25 @@ export const HeatmapComponent: FC<HeatmapRenderProps> = memo(
     const overwriteColors = uiState?.get('vis.colors') ?? null;
     const hasSingleValue = max === min;
     const bands = ranges.map((start, index, array) => {
-      const isPenultimate = index === array.length - 1;
+      const isLastValue = index === array.length - 1;
       const nextValue = array[index + 1];
       // by default the last range is right-open
-      let endValue = isPenultimate ? Number.POSITIVE_INFINITY : nextValue;
-      const startValue = isPenultimate && hasSingleValue ? min : start;
+      let endValue = isLastValue ? Number.POSITIVE_INFINITY : nextValue;
+      const startValue =
+        isLastValue && hasSingleValue && paletteParams?.range !== 'number' ? min : start;
+
       // if the lastRangeIsRightOpen is set to false, we need to set the last range to the max value
       if (args.lastRangeIsRightOpen === false) {
         const lastBand = hasSingleValue ? Number.POSITIVE_INFINITY : endValueDistinctBounds;
-        endValue = isPenultimate ? lastBand : nextValue;
+        endValue = isLastValue ? lastBand : nextValue;
       }
 
       let overwriteArrayIdx;
 
       if (endValue === Number.POSITIVE_INFINITY) {
-        overwriteArrayIdx = `≥ ${metricFormatter.convert(startValue)}`;
+        overwriteArrayIdx = `≥ ${valueFormatter(startValue)}`;
       } else {
-        overwriteArrayIdx = `${metricFormatter.convert(start)} - ${metricFormatter.convert(
-          endValue
-        )}`;
+        overwriteArrayIdx = `${valueFormatter(start)} - ${valueFormatter(endValue)}`;
       }
 
       const overwriteColor = overwriteColors?.[overwriteArrayIdx];
@@ -548,13 +544,8 @@ export const HeatmapComponent: FC<HeatmapRenderProps> = memo(
         grid: {
           stroke: {
             width:
-              args.gridConfig.strokeWidth ??
-              chartTheme.axes?.gridLine?.horizontal?.strokeWidth ??
-              1,
-            color:
-              args.gridConfig.strokeColor ??
-              chartTheme.axes?.gridLine?.horizontal?.stroke ??
-              '#D3DAE6',
+              args.gridConfig.strokeWidth ?? chartBaseTheme.axes.gridLine.horizontal.strokeWidth,
+            color: args.gridConfig.strokeColor ?? chartBaseTheme.axes.gridLine.horizontal.stroke,
           },
         },
         cell: {
@@ -573,13 +564,13 @@ export const HeatmapComponent: FC<HeatmapRenderProps> = memo(
         yAxisLabel: {
           visible: !!yAxisColumn && args.gridConfig.isYAxisLabelVisible,
           // eui color subdued
-          textColor: chartTheme.axes?.tickLabel?.fill ?? '#6a717d',
+          textColor: chartBaseTheme.axes.tickLabel.fill,
           padding: yAxisColumn?.name ? 8 : 0,
         },
         xAxisLabel: {
           visible: Boolean(args.gridConfig.isXAxisLabelVisible && xAxisColumn),
           // eui color subdued
-          textColor: chartTheme.axes?.tickLabel?.fill ?? `#6a717d`,
+          textColor: chartBaseTheme.axes.tickLabel.fill,
           padding: xAxisColumn?.name ? 8 : 0,
         },
         brushMask: {
@@ -720,7 +711,6 @@ export const HeatmapComponent: FC<HeatmapRenderProps> = memo(
               debugState={window._echDebugStateFlag ?? false}
               theme={[
                 themeOverrides,
-                chartTheme,
                 ...(Array.isArray(settingsThemeOverrides)
                   ? settingsThemeOverrides
                   : [settingsThemeOverrides]),
@@ -739,6 +729,7 @@ export const HeatmapComponent: FC<HeatmapRenderProps> = memo(
               onBrushEnd={interactive ? (onBrushEnd as BrushEndListener) : undefined}
               ariaLabel={args.ariaLabel}
               ariaUseDefaultSummary={!args.ariaLabel}
+              locale={i18n.getLocale()}
               {...settingsOverrides}
             />
             <Heatmap

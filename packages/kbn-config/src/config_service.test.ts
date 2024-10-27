@@ -1,13 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { BehaviorSubject, firstValueFrom, Observable } from 'rxjs';
-import { first, map, take } from 'rxjs/operators';
+import { first, map, take } from 'rxjs';
 
 import {
   mockApplyDeprecations,
@@ -129,6 +130,23 @@ test("does not push new configs when reloading if config at path hasn't changed"
   rawConfig$.next({ key: 'value' });
 
   expect(valuesReceived).toEqual(['value']);
+});
+
+test("does push new configs when reloading when config at path hasn't changed if ignoreUnchanged is false", async () => {
+  const rawConfig$ = new BehaviorSubject<Record<string, any>>({ key: 'value' });
+  const rawConfigProvider = createRawConfigServiceMock({ rawConfig$ });
+
+  const configService = new ConfigService(rawConfigProvider, defaultEnv, logger);
+  await configService.setSchema('key', schema.string());
+
+  const valuesReceived: any[] = [];
+  configService.atPath('key', { ignoreUnchanged: false }).subscribe((value) => {
+    valuesReceived.push(value);
+  });
+
+  rawConfig$.next({ key: 'value' });
+
+  expect(valuesReceived).toEqual(['value', 'value']);
 });
 
 test('pushes new config when reloading and config at path has changed', async () => {
@@ -708,5 +726,20 @@ describe('Dynamic Overrides', () => {
     expect(
       await firstValueFrom(configService.getConfig$().pipe(map((cfg) => cfg.toRaw())))
     ).toStrictEqual({ namespace1: { key: 'another-value' } });
+  });
+
+  test('is able to remove a field when setting it to `null`', async () => {
+    configService.addDynamicConfigPaths('namespace1', ['key']);
+    configService.setDynamicConfigOverrides({ 'namespace1.key': 'another-value' });
+
+    expect(
+      await firstValueFrom(configService.getConfig$().pipe(map((cfg) => cfg.toRaw())))
+    ).toStrictEqual({ namespace1: { key: 'another-value' } });
+
+    configService.setDynamicConfigOverrides({ 'namespace1.key': null });
+
+    expect(
+      await firstValueFrom(configService.getConfig$().pipe(map((cfg) => cfg.toRaw())))
+    ).toStrictEqual({ namespace1: {} });
   });
 });

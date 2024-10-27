@@ -19,23 +19,27 @@ import {
   useEnterpriseSearchApplicationsBreadcrumbs,
   useAnalyticsBreadcrumbs,
   useEnterpriseSearchContentBreadcrumbs,
-  useEsreBreadcrumbs,
+  useEnterpriseSearchRelevanceBreadcrumbs,
+  useAiSearchBreadcrumbs,
   useElasticsearchBreadcrumbs,
   useAppSearchBreadcrumbs,
   useWorkplaceSearchBreadcrumbs,
   BreadcrumbTrail,
   useSearchExperiencesBreadcrumbs,
   useVectorSearchBreadcrumbs,
+  useSemanticSearchBreadcrumbs,
 } from './generate_breadcrumbs';
 import {
-  searchTitle,
+  aiSearchTitle,
   analyticsTitle,
-  elasticsearchTitle,
   appSearchTitle,
-  workplaceSearchTitle,
+  elasticsearchTitle,
+  enterpriseSearchContentTitle,
   searchExperiencesTitle,
-  esreTitle,
+  searchTitle,
+  semanticSearchTitle,
   vectorSearchTitle,
+  workplaceSearchTitle,
 } from './generate_title';
 
 /**
@@ -125,14 +129,14 @@ export const SetAppSearchChrome: React.FC<SetChromeProps> = ({ trail = [] }) => 
   return null;
 };
 
-export const SetEsreChrome: React.FC<SetChromeProps> = ({ trail = [] }) => {
+export const SetAiSearchChrome: React.FC<SetChromeProps> = ({ trail = [] }) => {
   const { setBreadcrumbs, setDocTitle } = useValues(KibanaLogic);
 
   const title = reverseArray(trail);
-  const docTitle = esreTitle(title);
+  const docTitle = aiSearchTitle(title);
 
   const crumbs = useGenerateBreadcrumbs(trail);
-  const breadcrumbs = useEsreBreadcrumbs(crumbs);
+  const breadcrumbs = useAiSearchBreadcrumbs(crumbs);
 
   useEffect(() => {
     setBreadcrumbs(breadcrumbs);
@@ -163,7 +167,7 @@ export const SetEnterpriseSearchContentChrome: React.FC<SetChromeProps> = ({ tra
   const { setBreadcrumbs, setDocTitle } = useValues(KibanaLogic);
 
   const title = reverseArray(trail);
-  const docTitle = appSearchTitle(title);
+  const docTitle = enterpriseSearchContentTitle(title);
 
   const crumbs = useGenerateBreadcrumbs(trail);
   const breadcrumbs = useEnterpriseSearchContentBreadcrumbs(crumbs);
@@ -171,6 +175,19 @@ export const SetEnterpriseSearchContentChrome: React.FC<SetChromeProps> = ({ tra
   useEffect(() => {
     setBreadcrumbs(breadcrumbs);
     setDocTitle(docTitle);
+  }, [trail]);
+
+  return null;
+};
+
+export const SetEnterpriseSearchRelevanceChrome: React.FC<SetChromeProps> = ({ trail = [] }) => {
+  const { setBreadcrumbs } = useValues(KibanaLogic);
+
+  const crumbs = useGenerateBreadcrumbs(trail);
+  const breadcrumbs = useEnterpriseSearchRelevanceBreadcrumbs(crumbs);
+
+  useEffect(() => {
+    setBreadcrumbs(breadcrumbs);
   }, [trail]);
 
   return null;
@@ -218,6 +235,22 @@ export const SetVectorSearchChrome: React.FC<SetChromeProps> = ({ trail = [] }) 
   const docTitle = vectorSearchTitle(title);
 
   const breadcrumbs = useVectorSearchBreadcrumbs(useGenerateBreadcrumbs(trail));
+
+  useEffect(() => {
+    setBreadcrumbs(breadcrumbs);
+    setDocTitle(docTitle);
+  }, [trail]);
+
+  return null;
+};
+
+export const SetSemanticSearchChrome: React.FC<SetChromeProps> = ({ trail = [] }) => {
+  const { setBreadcrumbs, setDocTitle } = useValues(KibanaLogic);
+
+  const title = reverseArray(trail);
+  const docTitle = semanticSearchTitle(title);
+
+  const breadcrumbs = useSemanticSearchBreadcrumbs(useGenerateBreadcrumbs(trail));
 
   useEffect(() => {
     setBreadcrumbs(breadcrumbs);

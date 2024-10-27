@@ -15,7 +15,7 @@ import {
 import { useKibana } from '../../common/lib/kibana';
 import { useFetchSecurityTags } from './use_fetch_security_tags';
 import { DEFAULT_TAGS_RESPONSE } from '../../common/containers/tags/__mocks__/api';
-import type { ITagsClient } from '@kbn/saved-objects-tagging-plugin/common';
+import type { ITagsClient } from '@kbn/saved-objects-tagging-oss-plugin/common';
 import type { SavedObjectsTaggingApi } from '@kbn/saved-objects-tagging-oss-plugin/public';
 
 jest.mock('../../common/lib/kibana');
@@ -56,10 +56,13 @@ describe('useFetchSecurityTags', () => {
     mockGet.mockResolvedValue([]);
     await asyncRenderUseCreateSecurityDashboardLink();
 
-    expect(mockGet).toHaveBeenCalledWith(INTERNAL_TAGS_URL, {
-      query: { name: SECURITY_TAG_NAME },
-      signal: mockAbortSignal,
-    });
+    expect(mockGet).toHaveBeenCalledWith(
+      INTERNAL_TAGS_URL,
+      expect.objectContaining({
+        query: { name: SECURITY_TAG_NAME },
+        signal: mockAbortSignal,
+      })
+    );
   });
 
   test('should create a Security Solution tag if no Security Solution tags were found', async () => {

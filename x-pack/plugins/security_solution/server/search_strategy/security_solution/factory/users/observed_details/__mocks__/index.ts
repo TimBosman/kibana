@@ -5,10 +5,9 @@
  * 2.0.
  */
 
-import type { IEsSearchResponse } from '@kbn/data-plugin/common';
+import type { IEsSearchResponse } from '@kbn/search-types';
+import type { ObservedUserDetailsRequestOptions } from '../../../../../../../common/api/search_strategy';
 import { UsersQueries } from '../../../../../../../common/search_strategy/security_solution/users';
-
-import type { ObservedUserDetailsRequestOptions } from '../../../../../../../common/search_strategy/security_solution/users/observed_details';
 
 export const mockOptions: ObservedUserDetailsRequestOptions = {
   defaultIndex: ['test_indices*'],

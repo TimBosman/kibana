@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
 
-import { EuiSpacer, EuiCallOut, EuiText, EuiPanelProps } from '@elastic/eui';
+import { EuiSpacer, EuiPanelProps } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import type { ApplicationStart } from '@kbn/core-application-browser';
 import type { SharePluginStart } from '@kbn/share-plugin/public';
@@ -70,41 +71,32 @@ export const InstallClientPanel: React.FC<InstallClientProps> = ({
         assetBasePath={assetBasePath}
         application={application}
         sharePlugin={sharePlugin}
+        consoleTitle={i18n.translate('searchApiPanels.welcomeBanner.installClient.title', {
+          defaultMessage: 'Install a client',
+        })}
       />
       <EuiSpacer />
       <Link language={language} assetBasePath={assetBasePath} />
-      <EuiSpacer />
-      <EuiCallOut
-        iconType="iInCircle"
-        title={i18n.translate('searchApiPanels.welcomeBanner.apiCallOut.title', {
-          defaultMessage: 'Call the API with Console',
-        })}
-        color="primary"
-      >
-        <EuiText size="s">
-          {i18n.translate('searchApiPanels.welcomeBanner.apiCallout.content', {
-            defaultMessage:
-              'Console enables you to call Elasticsearch and Kibana REST APIs directly, without needing to install a language client.',
-          })}
-        </EuiText>
-      </EuiCallOut>
     </>
   );
   return (
     <OverviewPanel
       description={i18n.translate('searchApiPanels.welcomeBanner.installClient.description', {
-        defaultMessage:
-          'Elastic builds and maintains clients in several popular languages and our community has contributed many more. Install your favorite language client to get started.',
+        defaultMessage: 'First you need to install your programming language client of choice.',
       })}
-      links={[
-        {
-          href: language.docLink,
-          label: i18n.translate('searchApiPanels.welcomeBanner.installClient.clientDocLink', {
-            defaultMessage: '{languageName} client documentation',
-            values: { languageName: language.name },
-          }),
-        },
-      ]}
+      links={
+        language.docLink
+          ? [
+              {
+                href: language.docLink,
+                label: i18n.translate('searchApiPanels.welcomeBanner.installClient.clientDocLink', {
+                  defaultMessage: '{languageName} client documentation',
+                  values: { languageName: language.name },
+                }),
+              },
+            ]
+          : []
+      }
       title={i18n.translate('searchApiPanels.welcomeBanner.installClient.title', {
         defaultMessage: 'Install a client',
       })}

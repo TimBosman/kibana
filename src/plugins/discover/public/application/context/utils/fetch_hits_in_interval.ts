@@ -1,23 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
+import { estypes } from '@elastic/elasticsearch';
 import { lastValueFrom } from 'rxjs';
 import { ISearchSource, EsQuerySortValue, SortDirection } from '@kbn/data-plugin/public';
-import { EsQuerySearchAfter } from '@kbn/data-plugin/common';
-import { buildDataTableRecord } from '@kbn/discover-utils';
+import { buildDataTableRecordList } from '@kbn/discover-utils';
 import type { DataTableRecord } from '@kbn/discover-utils/types';
-import {
-  getSearchResponseInterceptedWarnings,
-  type SearchResponseInterceptedWarning,
-} from '@kbn/search-response-warnings';
+import type { SearchResponseWarning } from '@kbn/search-response-warnings';
 import { RequestAdapter } from '@kbn/inspector-plugin/common';
 import { convertTimeValueToIso } from './date_conversion';
 import { IntervalValue } from './generate_intervals';
-import { DISABLE_SHARD_FAILURE_WARNING } from '../../../../common/constants';
 import type { SurrDocType } from '../services/context';
 import type { DiscoverServices } from '../../../build_services';
 
@@ -40,7 +38,7 @@ export async function fetchHitsInInterval(
   sort: [EsQuerySortValue, EsQuerySortValue],
   sortDir: SortDirection,
   interval: IntervalValue[],
-  searchAfter: EsQuerySearchAfter,
+  searchAfter: estypes.SortResults,
   maxCount: number,
   nanosValue: string,
   anchorId: string,
@@ -48,8 +46,9 @@ export async function fetchHitsInInterval(
   services: DiscoverServices
 ): Promise<{
   rows: DataTableRecord[];
-  interceptedWarnings: SearchResponseInterceptedWarning[] | undefined;
+  interceptedWarnings: SearchResponseWarning[];
 }> {
+  const { profilesManager } = services;
   const range: RangeQuery = {
     format: 'strict_date_optional_time',
   };
@@ -91,7 +90,7 @@ export async function fetchHitsInInterval(
     .setField('sort', sort)
     .setField('version', true)
     .fetch$({
-      disableShardFailureWarning: DISABLE_SHARD_FAILURE_WARNING,
+      disableWarningToasts: true,
       inspector: {
         adapter,
         title: type,
@@ -100,16 +99,19 @@ export async function fetchHitsInInterval(
 
   const { rawResponse } = await lastValueFrom(fetch$);
   const dataView = searchSource.getField('index');
-  const rows = rawResponse.hits?.hits.map((hit) => buildDataTableRecord(hit, dataView!));
+  const rows = buildDataTableRecordList({
+    records: rawResponse.hits?.hits,
+    dataView,
+    processRecord: (record) => profilesManager.resolveDocumentProfile({ record }),
+  });
+  const interceptedWarnings: SearchResponseWarning[] = [];
+  services.data.search.showWarnings(adapter, (warning) => {
+    interceptedWarnings.push(warning);
+    return true; // suppress the default behaviour
+  });
 
   return {
     rows: rows ?? [],
-    interceptedWarnings: getSearchResponseInterceptedWarnings({
-      services,
-      adapter,
-      options: {
-        disableShardFailureWarning: DISABLE_SHARD_FAILURE_WARNING,
-      },
-    }),
+    interceptedWarnings,
   };
 }

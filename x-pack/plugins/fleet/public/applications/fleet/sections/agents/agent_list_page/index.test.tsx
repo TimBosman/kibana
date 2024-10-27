@@ -10,8 +10,6 @@ import React from 'react';
 import type { RenderResult } from '@testing-library/react';
 import { act, fireEvent, waitFor } from '@testing-library/react';
 
-import { allowedExperimentalValues } from '../../../../../../common/experimental_features';
-import { ExperimentalFeaturesService } from '../../../../../services';
 import type { GetAgentPoliciesResponse } from '../../../../../../common';
 import { createFleetTestRendererMock } from '../../../../../mock';
 import { sendGetAgents, sendGetAgentStatus } from '../../../hooks';
@@ -21,6 +19,11 @@ import { AgentListPage } from '.';
 jest.mock('../../../../integrations/hooks/use_confirm_force_install', () => ({
   useConfirmForceInstall: () => <>confirmForceInstall</>,
 }));
+
+jest.mock('./hooks/use_missing_encryption_key_callout', () => ({
+  useMissingEncryptionKeyCallout: jest.fn().mockReturnValue([true, jest.fn()]),
+}));
+
 jest.mock('../../../hooks', () => ({
   ...jest.requireActual('../../../hooks'),
   UIExtensionsContext: {
@@ -44,8 +47,19 @@ jest.mock('../../../hooks', () => ({
   },
   useFleetStatus: jest.fn().mockReturnValue({}),
   sendGetAgentStatus: jest.fn(),
+  sendBulkGetAgentPolicies: jest.fn().mockResolvedValue({
+    data: {
+      items: [
+        { id: 'policy1', is_managed: false },
+        { id: 'managed_policy', is_managed: true },
+      ],
+    },
+  }),
+  sendGetAgentPolicies: jest.fn().mockResolvedValue({ data: { items: [] } }),
   sendGetAgentTags: jest.fn().mockReturnValue({ data: { items: ['tag1', 'tag2'] } }),
-  useAuthz: jest.fn().mockReturnValue({ fleet: { all: true } }),
+  useAuthz: jest
+    .fn()
+    .mockReturnValue({ fleet: { all: true, allAgents: true, readAgents: true }, integrations: {} }),
   useStartServices: jest.fn().mockReturnValue({
     notifications: {
       toasts: {
@@ -54,6 +68,7 @@ jest.mock('../../../hooks', () => ({
     },
     cloud: {},
     data: { dataViews: { getFieldsForWildcard: jest.fn() } },
+    docLinks: { links: { kibana: { secureSavedObject: 'my-link' } } },
   }),
   useBreadcrumbs: jest.fn(),
   useLink: jest.fn().mockReturnValue({ getHref: jest.fn() }),
@@ -282,13 +297,6 @@ describe('agent_list_page', () => {
       });
 
       const renderer = createFleetTestRendererMock();
-
-      // todo: this can be removed when agentTamperProtectionEnabled feature flag is enabled/deleted
-      ExperimentalFeaturesService.init({
-        ...allowedExperimentalValues,
-        // @ts-expect-error ts upgrade v4.7.4
-        agentTamperProtectionEnabled: true,
-      });
 
       renderResult = renderer.render(<AgentListPage />);
 

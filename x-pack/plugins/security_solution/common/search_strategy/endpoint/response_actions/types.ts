@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import type { IEsSearchRequest } from '@kbn/data-plugin/common';
+import type { IEsSearchRequest } from '@kbn/search-types';
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import type { LogsOsqueryAction } from '@kbn/osquery-plugin/common/types/osquery_action';
 import type { LogsEndpointActionWithHosts } from '../../../endpoint/types';
@@ -17,8 +17,7 @@ export enum SortOrder {
 }
 
 export interface RequestBasicOptions extends IEsSearchRequest {
-  factoryQueryType?: ResponseActionsQueries;
-  aggregations?: Record<string, estypes.AggregationsAggregationContainer>;
+  factoryQueryType: ResponseActionsQueries;
 }
 
 export type ResponseActionsSearchHit = estypes.SearchHit<

@@ -7,17 +7,17 @@
 
 import type { AggregationsAggregate, SearchResponse } from '@elastic/elasticsearch/lib/api/types';
 import type { ElasticsearchClient } from '@kbn/core/server';
-import { ENDPOINT_HEARTBEAT_INDEX } from '@kbn/security-solution-plugin/common/endpoint/constants';
 import type { EndpointHeartbeat } from '@kbn/security-solution-plugin/common/endpoint/types';
 
+import { ENDPOINT_HEARTBEAT_INDEX_PATTERN } from '@kbn/security-solution-plugin/common/endpoint/constants';
+
+import { METERING_SERVICE_BATCH_SIZE } from '../../constants';
 import { ProductLine, ProductTier } from '../../../common/product';
 
-import type { UsageRecord, MeteringCallbackInput } from '../../types';
+import type { UsageRecord, MeteringCallbackInput, MeteringCallBackResponse } from '../../types';
 import type { ServerlessSecurityConfig } from '../../config';
 
-// 1 hour
-const SAMPLE_PERIOD_SECONDS = 3600;
-const THRESHOLD_MINUTES = 30;
+import { METERING_TASK } from '../constants/metering';
 
 export class EndpointMeteringService {
   private type: ProductLine.endpoint | `${ProductLine.cloud}_${ProductLine.endpoint}` | undefined;
@@ -30,10 +30,11 @@ export class EndpointMeteringService {
     abortController,
     lastSuccessfulReport,
     config,
-  }: MeteringCallbackInput): Promise<UsageRecord[]> => {
+    logger,
+  }: MeteringCallbackInput): Promise<MeteringCallBackResponse> => {
     this.setType(config);
     if (!this.type) {
-      return [];
+      return { records: [] };
     }
 
     this.setTier(config);
@@ -44,11 +45,18 @@ export class EndpointMeteringService {
       lastSuccessfulReport
     );
 
-    if (!heartbeatsResponse?.hits?.hits) {
-      return [];
+    if (!heartbeatsResponse?.hits?.hits?.length) {
+      return { records: [] };
     }
 
-    return heartbeatsResponse.hits.hits.reduce((acc, { _source }) => {
+    const projectId = cloudSetup?.serverless?.projectId;
+    if (!projectId) {
+      logger.warn(
+        `project id missing for records starting from ${lastSuccessfulReport.toISOString()}`
+      );
+    }
+
+    const records = heartbeatsResponse.hits.hits.reduce((acc, { _source }) => {
       if (!_source) {
         return acc;
       }
@@ -58,34 +66,62 @@ export class EndpointMeteringService {
         agentId: agent.id,
         timestampStr: event.ingested,
         taskId,
-        projectId: cloudSetup?.serverless?.projectId,
+        projectId,
       });
 
       return [...acc, record];
     }, [] as UsageRecord[]);
+
+    const latestTimestamp = new Date(records[records.length - 1].usage_timestamp);
+    const shouldRunAgain = heartbeatsResponse.hits.hits.length === METERING_SERVICE_BATCH_SIZE;
+    return { latestTimestamp, records, shouldRunAgain };
   };
 
   private async getHeartbeatsSince(
     esClient: ElasticsearchClient,
     abortController: AbortController,
-    since?: Date
+    since: Date
   ): Promise<SearchResponse<EndpointHeartbeat, Record<string, AggregationsAggregate>>> {
-    const thresholdDate = new Date(Date.now() - THRESHOLD_MINUTES * 60 * 1000);
-    const searchFrom = since && since > thresholdDate ? since : thresholdDate;
-
     return esClient.search<EndpointHeartbeat>(
       {
-        index: ENDPOINT_HEARTBEAT_INDEX,
+        index: ENDPOINT_HEARTBEAT_INDEX_PATTERN,
         sort: 'event.ingested',
+        size: METERING_SERVICE_BATCH_SIZE,
         query: {
-          range: {
-            'event.ingested': {
-              gt: searchFrom.toISOString(),
+          bool: {
+            must: {
+              range: {
+                'event.ingested': {
+                  gt: since.toISOString(),
+                },
+              },
             },
+            should: [
+              {
+                term: {
+                  billable: true,
+                },
+              },
+              {
+                bool: {
+                  must_not: [
+                    {
+                      exists: {
+                        field: 'billable',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+            minimum_should_match: 1,
           },
         },
       },
-      { signal: abortController.signal, ignore: [404] }
+      {
+        signal: abortController.signal,
+        ignore: [404],
+      }
     );
   }
 
@@ -93,7 +129,7 @@ export class EndpointMeteringService {
     agentId,
     timestampStr,
     taskId,
-    projectId = '',
+    projectId,
   }: {
     agentId: string;
     timestampStr: string;
@@ -105,26 +141,28 @@ export class EndpointMeteringService {
     timestamp.setSeconds(0);
     timestamp.setMilliseconds(0);
 
-    return {
+    const usageRecord = {
       // keep endpoint instead of this.type as id prefix so
       // we don't double count in the event of add-on changes
-      id: `endpoint-${agentId}-${timestamp}`,
+      id: `endpoint-${agentId}-${timestamp.toISOString()}`,
       usage_timestamp: timestampStr,
       creation_timestamp: timestampStr,
       usage: {
         // type postfix is used to determine the PLI to bill
-        type: `security_solution_${this.type}`,
-        period_seconds: SAMPLE_PERIOD_SECONDS,
+        type: `${METERING_TASK.USAGE_TYPE_PREFIX}${this.type}`,
+        period_seconds: METERING_TASK.SAMPLE_PERIOD_SECONDS,
         quantity: 1,
       },
       source: {
         id: taskId,
-        instance_group_id: projectId,
+        instance_group_id: projectId || METERING_TASK.MISSING_PROJECT_ID,
         metadata: {
           tier: this.tier,
         },
       },
     };
+
+    return usageRecord;
   }
 
   private setType(config: ServerlessSecurityConfig) {

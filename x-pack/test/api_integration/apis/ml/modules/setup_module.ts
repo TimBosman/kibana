@@ -710,7 +710,7 @@ export default ({ getService }: FtrProviderContext) => {
       describe('sets up module data', function () {
         before(async () => {
           await esArchiver.loadIfNeeded(testData.sourceDataArchive);
-          await ml.testResources.createIndexPatternIfNeeded(
+          await ml.testResources.createDataViewIfNeeded(
             testData.indexPattern.name,
             testData.indexPattern.timeField
           );
@@ -730,7 +730,7 @@ export default ({ getService }: FtrProviderContext) => {
             await ml.api.deleteAnomalyDetectionJobES(job.jobId);
           }
           await ml.api.cleanMlIndices();
-          await ml.testResources.deleteIndexPatternByTitle(testData.indexPattern.name);
+          await ml.testResources.deleteDataViewByTitle(testData.indexPattern.name);
         });
 
         it(testData.testTitleSuffix, async () => {
@@ -860,11 +860,11 @@ export default ({ getService }: FtrProviderContext) => {
     for (const testData of testDataListNegative) {
       describe('rejects request', function () {
         before(async () => {
-          if (testData.hasOwnProperty('sourceDataArchive')) {
+          if (Object.hasOwn(testData, 'sourceDataArchive')) {
             await esArchiver.loadIfNeeded(testData.sourceDataArchive!);
           }
-          if (testData.hasOwnProperty('indexPattern')) {
-            await ml.testResources.createIndexPatternIfNeeded(
+          if (Object.hasOwn(testData, 'indexPattern')) {
+            await ml.testResources.createDataViewIfNeeded(
               testData.indexPattern!.name as string,
               testData.indexPattern!.timeField as string
             );
@@ -873,8 +873,8 @@ export default ({ getService }: FtrProviderContext) => {
 
         after(async () => {
           await ml.api.cleanMlIndices();
-          if (testData.hasOwnProperty('indexPattern')) {
-            await ml.testResources.deleteIndexPatternByTitle(testData.indexPattern!.name);
+          if (Object.hasOwn(testData, 'indexPattern')) {
+            await ml.testResources.deleteDataViewByTitle(testData.indexPattern!.name);
           }
         });
 

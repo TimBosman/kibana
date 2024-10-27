@@ -7,24 +7,11 @@
 
 import { schema } from '@kbn/config-schema';
 import { notifyWhenSchema } from './notify_when_schema';
+import { alertsFilterQuerySchema } from '../../alerts_filter_query/schemas';
 
 export const actionParamsSchema = schema.recordOf(schema.string(), schema.maybe(schema.any()));
 
-const actionAlertsFilterQueryFiltersSchema = schema.arrayOf(
-  schema.object({
-    query: schema.maybe(schema.recordOf(schema.string(), schema.any())),
-    meta: schema.recordOf(schema.string(), schema.any()),
-    state$: schema.maybe(schema.object({ store: schema.string() })),
-  })
-);
-
-const actionDomainAlertsFilterQuerySchema = schema.object({
-  kql: schema.string(),
-  filters: actionAlertsFilterQueryFiltersSchema,
-  dsl: schema.maybe(schema.string()),
-});
-
-const actionAlertsFilterTimeFrameSchema = schema.object({
+export const actionAlertsFilterTimeFrameSchema = schema.object({
   days: schema.arrayOf(
     schema.oneOf([
       schema.literal(1),
@@ -43,44 +30,20 @@ const actionAlertsFilterTimeFrameSchema = schema.object({
   timezone: schema.string(),
 });
 
-const actionDomainAlertsFilterSchema = schema.object({
-  query: schema.maybe(actionDomainAlertsFilterQuerySchema),
+export const actionAlertsFilterSchema = schema.object({
+  query: schema.maybe(alertsFilterQuerySchema),
   timeframe: schema.maybe(actionAlertsFilterTimeFrameSchema),
 });
 
-const actionFrequencySchema = schema.object({
+export const actionFrequencySchema = schema.object({
   summary: schema.boolean(),
   notifyWhen: notifyWhenSchema,
   throttle: schema.nullable(schema.string()),
 });
 
 /**
- * Unsanitized (domain) action schema, used by internal rules clients
+ * action schema, used by internal rules clients
  */
-export const actionDomainSchema = schema.object({
-  uuid: schema.maybe(schema.string()),
-  group: schema.string(),
-  id: schema.string(),
-  actionTypeId: schema.string(),
-  params: actionParamsSchema,
-  frequency: schema.maybe(actionFrequencySchema),
-  alertsFilter: schema.maybe(actionDomainAlertsFilterSchema),
-});
-
-/**
- * Sanitized (non-domain) action schema, returned by rules clients for other solutions
- */
-const actionAlertsFilterQuerySchema = schema.object({
-  kql: schema.string(),
-  filters: actionAlertsFilterQueryFiltersSchema,
-  dsl: schema.maybe(schema.string()),
-});
-
-export const actionAlertsFilterSchema = schema.object({
-  query: schema.maybe(actionAlertsFilterQuerySchema),
-  timeframe: schema.maybe(actionAlertsFilterTimeFrameSchema),
-});
-
 export const actionSchema = schema.object({
   uuid: schema.maybe(schema.string()),
   group: schema.string(),
@@ -89,4 +52,34 @@ export const actionSchema = schema.object({
   params: actionParamsSchema,
   frequency: schema.maybe(actionFrequencySchema),
   alertsFilter: schema.maybe(actionAlertsFilterSchema),
+  useAlertDataForTemplate: schema.maybe(schema.boolean()),
+});
+
+export const systemActionSchema = schema.object({
+  id: schema.string(),
+  actionTypeId: schema.string(),
+  params: actionParamsSchema,
+  uuid: schema.maybe(schema.string()),
+});
+
+/**
+ * request action schema, actionTypeId field is optional, it really should not be required at all but
+ * security solution is passing it in.
+ */
+export const actionRequestSchema = schema.object({
+  uuid: schema.maybe(schema.string()),
+  group: schema.string(),
+  id: schema.string(),
+  actionTypeId: schema.maybe(schema.string()),
+  params: actionParamsSchema,
+  frequency: schema.maybe(actionFrequencySchema),
+  alertsFilter: schema.maybe(actionAlertsFilterSchema),
+  useAlertDataForTemplate: schema.maybe(schema.boolean()),
+});
+
+export const systemActionRequestSchema = schema.object({
+  uuid: schema.maybe(schema.string()),
+  actionTypeId: schema.maybe(schema.string()),
+  id: schema.string(),
+  params: actionParamsSchema,
 });

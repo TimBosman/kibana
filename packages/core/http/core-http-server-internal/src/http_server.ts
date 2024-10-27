@@ -1,31 +1,24 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Server, Request } from '@hapi/hapi';
 import HapiStaticFiles from '@hapi/inert';
 import url from 'url';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  createServer,
-  getListenerOptions,
-  getServerOptions,
-  getRequestId,
-} from '@kbn/server-http-tools';
-
+import { createServer, getServerOptions, setTlsConfig, getRequestId } from '@kbn/server-http-tools';
 import type { Duration } from 'moment';
-import { firstValueFrom, Observable } from 'rxjs';
-import { take } from 'rxjs/operators';
+import { Observable, Subscription, firstValueFrom, pairwise, take } from 'rxjs';
 import apm from 'elastic-apm-node';
-// @ts-expect-error no type definition
 import Brok from 'brok';
 import type { Logger, LoggerFactory } from '@kbn/logging';
 import type { InternalExecutionContextSetup } from '@kbn/core-execution-context-server-internal';
-import { isSafeMethod } from '@kbn/core-http-router-server-internal';
+import { CoreVersionedRouter, isSafeMethod, Router } from '@kbn/core-http-router-server-internal';
 import type {
   IRouter,
   RouteConfigOptions,
@@ -42,11 +35,15 @@ import type {
   HttpServerInfo,
   HttpAuth,
   IAuthHeadersStorage,
+  RouterDeprecatedRouteDetails,
+  RouteMethod,
 } from '@kbn/core-http-server';
 import { performance } from 'perf_hooks';
 import { isBoom } from '@hapi/boom';
-import { identity } from 'lodash';
+import { identity, isObject } from 'lodash';
 import { IHttpEluMonitorConfig } from '@kbn/core-http-server/src/elu_monitor';
+import { Env } from '@kbn/config';
+import { CoreContext } from '@kbn/core-base-server-internal';
 import { HttpConfig } from './http_config';
 import { adoptToHapiAuthFormat } from './lifecycle/auth';
 import { adoptToHapiOnPreAuth } from './lifecycle/on_pre_auth';
@@ -58,6 +55,7 @@ import { AuthStateStorage } from './auth_state_storage';
 import { AuthHeadersStorage } from './auth_headers_storage';
 import { BasePath } from './base_path_service';
 import { getEcsResponseLog } from './logging';
+import { StaticAssets, type InternalStaticAssets } from './static_assets';
 
 /**
  * Adds ELU timings for the executed function to the current's context transaction
@@ -130,7 +128,12 @@ export interface HttpServerSetup {
    * @param router {@link IRouter} - a router with registered route handlers.
    */
   registerRouterAfterListening: (router: IRouter) => void;
+  /**
+   * Register a static directory to be served by the Kibana server
+   * @note Static assets may be served over CDN
+   */
   registerStaticDir: (path: string, dirPath: string) => void;
+  staticAssets: InternalStaticAssets;
   basePath: HttpServiceSetup['basePath'];
   csp: HttpServiceSetup['csp'];
   createCookieSessionStorageFactory: HttpServiceSetup['createCookieSessionStorageFactory'];
@@ -139,6 +142,7 @@ export interface HttpServerSetup {
   registerAuth: HttpServiceSetup['registerAuth'];
   registerOnPostAuth: HttpServiceSetup['registerOnPostAuth'];
   registerOnPreResponse: HttpServiceSetup['registerOnPreResponse'];
+  getDeprecatedRoutes: HttpServiceSetup['getDeprecatedRoutes'];
   authRequestHeaders: IAuthHeadersStorage;
   auth: HttpAuth;
   getServerInfo: () => HttpServerInfo;
@@ -154,9 +158,20 @@ export type LifecycleRegistrar = Pick<
   | 'registerOnPreResponse'
 >;
 
+export interface HttpServerSetupOptions {
+  config$: Observable<HttpConfig>;
+  executionContext?: InternalExecutionContextSetup;
+}
+
+/** @internal */
+export interface GetRoutersOptions {
+  pluginId?: string;
+}
+
 export class HttpServer {
   private server?: Server;
   private config?: HttpConfig;
+  private subscriptions: Subscription[] = [];
   private registeredRouters = new Set<IRouter>();
   private authRegistered = false;
   private cookieSessionStorageCreated = false;
@@ -165,15 +180,20 @@ export class HttpServer {
   private stopped = false;
 
   private readonly log: Logger;
+  private readonly logger: LoggerFactory;
   private readonly authState: AuthStateStorage;
   private readonly authRequestHeaders: AuthHeadersStorage;
   private readonly authResponseHeaders: AuthHeadersStorage;
+  private readonly env: Env;
 
   constructor(
-    private readonly logger: LoggerFactory,
+    private readonly coreContext: CoreContext,
     private readonly name: string,
     private readonly shutdownTimeout$: Observable<Duration>
   ) {
+    const { logger, env } = this.coreContext;
+    this.logger = logger;
+    this.env = env;
     this.authState = new AuthStateStorage(() => this.authRegistered);
     this.authRequestHeaders = new AuthHeadersStorage();
     this.authResponseHeaders = new AuthHeadersStorage();
@@ -203,14 +223,16 @@ export class HttpServer {
     }
   }
 
-  public async setup(
-    config: HttpConfig,
-    executionContext?: InternalExecutionContextSetup
-  ): Promise<HttpServerSetup> {
-    const serverOptions = getServerOptions(config);
-    const listenerOptions = getListenerOptions(config);
+  public async setup({
+    config$,
+    executionContext,
+  }: HttpServerSetupOptions): Promise<HttpServerSetup> {
+    const config = await firstValueFrom(config$);
     this.config = config;
-    this.server = createServer(serverOptions, listenerOptions);
+
+    const serverOptions = getServerOptions(config);
+
+    this.server = createServer(serverOptions);
     await this.server.register([HapiStaticFiles]);
     if (config.compression.brotli.enabled) {
       await this.server.register({
@@ -219,6 +241,29 @@ export class HttpServer {
           compress: { quality: config.compression.brotli.quality },
         },
       });
+    }
+
+    // only hot-reloading TLS config - don't need to subscribe if TLS is initially disabled,
+    // given we can't hot-switch from/to enabled/disabled.
+    if (config.ssl.enabled) {
+      const configSubscription = config$
+        .pipe(pairwise())
+        .subscribe(([{ ssl: prevSslConfig }, { ssl: newSslConfig }]) => {
+          if (prevSslConfig.enabled !== newSslConfig.enabled) {
+            this.log.warn(
+              'Incompatible TLS config change detected - TLS cannot be toggled without a full server reboot.'
+            );
+            return;
+          }
+
+          const sameConfig = newSslConfig.isEqualTo(prevSslConfig);
+
+          if (!sameConfig) {
+            this.log.info('TLS configuration change detected - reloading TLS configuration.');
+            setTlsConfig(this.server!, newSslConfig);
+          }
+        });
+      this.subscriptions.push(configSubscription);
     }
 
     // It's important to have setupRequestStateAssignment call the very first, otherwise context passing will be broken.
@@ -230,17 +275,31 @@ export class HttpServer {
     this.setupResponseLogging();
     this.setupGracefulShutdownHandlers();
 
+    const staticAssets = new StaticAssets({
+      basePath: basePathService,
+      cdnConfig: config.cdn,
+      shaDigest: this.env.packageInfo.buildShaShort,
+    });
+
     return {
       registerRouter: this.registerRouter.bind(this),
+      getDeprecatedRoutes: this.getDeprecatedRoutes.bind(this),
       registerRouterAfterListening: this.registerRouterAfterListening.bind(this),
       registerStaticDir: this.registerStaticDir.bind(this),
+      staticAssets,
       registerOnPreRouting: this.registerOnPreRouting.bind(this),
       registerOnPreAuth: this.registerOnPreAuth.bind(this),
       registerAuth: this.registerAuth.bind(this),
       registerOnPostAuth: this.registerOnPostAuth.bind(this),
       registerOnPreResponse: this.registerOnPreResponse.bind(this),
-      createCookieSessionStorageFactory: <T>(cookieOptions: SessionStorageCookieOptions<T>) =>
-        this.createCookieSessionStorageFactory(cookieOptions, config.basePath),
+      createCookieSessionStorageFactory: <T extends object>(
+        cookieOptions: SessionStorageCookieOptions<T>
+      ) =>
+        this.createCookieSessionStorageFactory(
+          cookieOptions,
+          config.csp.disableEmbedding,
+          config.basePath
+        ),
       basePath: basePathService,
       csp: config.csp,
       auth: {
@@ -328,6 +387,45 @@ export class HttpServer {
     if (authRequired === false) {
       return false;
     }
+  }
+
+  private getDeprecatedRoutes(): RouterDeprecatedRouteDetails[] {
+    const deprecatedRoutes: RouterDeprecatedRouteDetails[] = [];
+
+    for (const router of this.registeredRouters) {
+      const allRouterRoutes = [
+        // exclude so we dont get double entries.
+        // we need to call the versioned getRoutes to grab the full version options details
+        router.getRoutes({ excludeVersionedRoutes: true }),
+        router.versioned.getRoutes(),
+      ].flat();
+
+      deprecatedRoutes.push(
+        ...allRouterRoutes
+          .flat()
+          .map((route) => {
+            if (route.isVersioned === true) {
+              return [...route.handlers.entries()].map(([_, { options }]) => {
+                const deprecated = options.options?.deprecated;
+                return { route, version: `${options.version}`, deprecated };
+              });
+            }
+            return { route, version: undefined, deprecated: route.options.deprecated };
+          })
+          .flat()
+          .filter(({ deprecated }) => isObject(deprecated))
+          .flatMap(({ route, deprecated, version }) => {
+            return {
+              routeDeprecationOptions: deprecated!,
+              routeMethod: route.method as RouteMethod,
+              routePath: route.path,
+              routeVersion: version,
+            };
+          })
+      );
+    }
+
+    return deprecatedRoutes;
   }
 
   private setupGracefulShutdownHandlers() {
@@ -501,8 +599,9 @@ export class HttpServer {
     this.server.ext('onPreResponse', adoptToHapiOnPreResponseFormat(fn, this.log));
   }
 
-  private async createCookieSessionStorageFactory<T>(
+  private async createCookieSessionStorageFactory<T extends object>(
     cookieOptions: SessionStorageCookieOptions<T>,
+    disableEmbedding: boolean,
     basePath?: string
   ) {
     if (this.server === undefined) {
@@ -519,6 +618,7 @@ export class HttpServer {
       this.logger.get('http', 'server', this.name, 'cookie-session-storage'),
       this.server,
       cookieOptions,
+      disableEmbedding,
       basePath
     );
     return sessionStorageFactory;
@@ -570,6 +670,38 @@ export class HttpServer {
     });
   }
 
+  public getRouters({ pluginId }: GetRoutersOptions = {}): {
+    routers: Router[];
+    versionedRouters: CoreVersionedRouter[];
+  } {
+    const routers: {
+      routers: Router[];
+      versionedRouters: CoreVersionedRouter[];
+    } = {
+      routers: [],
+      versionedRouters: [],
+    };
+    const pluginIdFilter = pluginId ? Symbol(pluginId).toString() : undefined;
+
+    for (const router of this.registeredRouters) {
+      const matchesIdFilter =
+        !pluginIdFilter || (router as Router).pluginId?.toString() === pluginIdFilter;
+
+      if (
+        matchesIdFilter &&
+        (router as Router).getRoutes({ excludeVersionedRoutes: true }).length > 0
+      ) {
+        routers.routers.push(router as Router);
+      }
+
+      const versionedRouter = router.versioned as CoreVersionedRouter;
+      if (matchesIdFilter && versionedRouter.getRoutes().length > 0) {
+        routers.versionedRouters.push(versionedRouter);
+      }
+    }
+    return routers;
+  }
+
   private registerStaticDir(path: string, dirPath: string) {
     if (this.server === undefined) {
       throw new Error('Http server is not setup up yet');
@@ -604,12 +736,14 @@ export class HttpServer {
     this.log.debug(`registering route handler for [${route.path}]`);
     // Hapi does not allow payload validation to be specified for 'head' or 'get' requests
     const validate = isSafeMethod(route.method) ? undefined : { payload: true };
-    const { authRequired, tags, body = {}, timeout } = route.options;
-    const { accepts: allow, maxBytes, output, parse } = body;
+    const { authRequired, tags, body = {}, timeout, deprecated } = route.options;
+    const { accepts: allow, override, maxBytes, output, parse } = body;
 
     const kibanaRouteOptions: KibanaRouteOptions = {
       xsrfRequired: route.options.xsrfRequired ?? !isSafeMethod(route.method),
       access: route.options.access ?? 'internal',
+      deprecated,
+      security: route.security,
     };
     // Log HTTP API target consumer.
     optionsLogger.debug(
@@ -631,10 +765,12 @@ export class HttpServer {
         // validation applied in ./http_tools#getServerOptions
         // (All NP routes are already required to specify their own validation in order to access the payload)
         validate,
-        // @ts-expect-error Types are outdated and doesn't allow `payload.multipart` to be `true`
-        payload: [allow, maxBytes, output, parse, timeout?.payload].some((x) => x !== undefined)
+        payload: [allow, override, maxBytes, output, parse, timeout?.payload].some(
+          (x) => x !== undefined
+        )
           ? {
               allow,
+              override,
               maxBytes,
               output,
               parse,

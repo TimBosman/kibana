@@ -7,14 +7,12 @@
 
 import { i18n } from '@kbn/i18n';
 import SemVer from 'semver/classes/semver';
-import { CoreSetup, CoreStart } from '@kbn/core/public';
+import { CoreSetup, CoreStart, ScopedHistory } from '@kbn/core/public';
 import { ManagementAppMountParams } from '@kbn/management-plugin/public';
 import { UsageCollectionSetup } from '@kbn/usage-collection-plugin/public';
-
+import { CloudSetup } from '@kbn/cloud-plugin/public';
 import { UIM_APP_NAME } from '../../common/constants';
 import { PLUGIN } from '../../common/constants/plugin';
-import { ExtensionsService } from '../services';
-import { StartDependencies } from '../types';
 import { AppDependencies } from './app_context';
 import { breadcrumbService } from './services/breadcrumbs';
 import { documentationService } from './services/documentation';
@@ -24,6 +22,8 @@ import { renderApp } from '.';
 import { setUiMetricService } from './services/api';
 import { notificationService } from './services/notification';
 import { httpService } from './services/http';
+import { ExtensionsService } from '../services/extensions_service';
+import { StartDependencies } from '../types';
 
 function initSetup({
   usageCollection,
@@ -46,6 +46,63 @@ function initSetup({
   return { uiMetricService };
 }
 
+export function getIndexManagementDependencies({
+  core,
+  usageCollection,
+  extensionsService,
+  history,
+  isFleetEnabled,
+  kibanaVersion,
+  config,
+  cloud,
+  startDependencies,
+  uiMetricService,
+}: {
+  core: CoreStart;
+  usageCollection: UsageCollectionSetup;
+  extensionsService: ExtensionsService;
+  history: ScopedHistory<unknown>;
+  isFleetEnabled: boolean;
+  kibanaVersion: SemVer;
+  config: AppDependencies['config'];
+  cloud?: CloudSetup;
+  startDependencies: StartDependencies;
+  uiMetricService: UiMetricService;
+}): AppDependencies {
+  const { docLinks, application, uiSettings, settings } = core;
+  const { url } = startDependencies.share;
+  return {
+    core: {
+      getUrlForApp: application.getUrlForApp,
+      ...core,
+    },
+    plugins: {
+      usageCollection,
+      isFleetEnabled,
+      share: startDependencies.share,
+      cloud,
+      console: startDependencies.console,
+      ml: startDependencies.ml,
+      licensing: startDependencies.licensing,
+    },
+    services: {
+      httpService,
+      notificationService,
+      uiMetricService,
+      extensionsService,
+    },
+    config,
+    history,
+    setBreadcrumbs: breadcrumbService.setBreadcrumbs,
+    uiSettings,
+    settings,
+    url,
+    docLinks,
+    kibanaVersion,
+    overlays: core.overlays,
+  };
+}
+
 export async function mountManagementSection({
   coreSetup,
   usageCollection,
@@ -53,10 +110,8 @@ export async function mountManagementSection({
   extensionsService,
   isFleetEnabled,
   kibanaVersion,
-  enableIndexActions = true,
-  enableLegacyTemplates = true,
-  enableIndexDetailsPage = false,
-  enableIndexStats = true,
+  config,
+  cloud,
 }: {
   coreSetup: CoreSetup<StartDependencies>;
   usageCollection: UsageCollectionSetup;
@@ -64,24 +119,15 @@ export async function mountManagementSection({
   extensionsService: ExtensionsService;
   isFleetEnabled: boolean;
   kibanaVersion: SemVer;
-  enableIndexActions?: boolean;
-  enableLegacyTemplates?: boolean;
-  enableIndexDetailsPage?: boolean;
-  enableIndexStats?: boolean;
+  config: AppDependencies['config'];
+  cloud?: CloudSetup;
 }) {
-  const { element, setBreadcrumbs, history, theme$ } = params;
+  const { element, setBreadcrumbs, history } = params;
   const [core, startDependencies] = await coreSetup.getStartServices();
   const {
     docLinks,
-    fatalErrors,
-    application,
     chrome: { docTitle },
-    uiSettings,
-    executionContext,
-    settings,
   } = core;
-
-  const { url } = startDependencies.share;
   docTitle.change(PLUGIN.getI18nName(i18n));
 
   breadcrumbService.setup(setBreadcrumbs);
@@ -91,39 +137,18 @@ export async function mountManagementSection({
     usageCollection,
     core,
   });
-
-  const appDependencies: AppDependencies = {
-    core: {
-      fatalErrors,
-      getUrlForApp: application.getUrlForApp,
-      executionContext,
-      application,
-    },
-    plugins: {
-      usageCollection,
-      isFleetEnabled,
-    },
-    services: {
-      httpService,
-      notificationService,
-      uiMetricService,
-      extensionsService,
-    },
-    config: {
-      enableIndexActions,
-      enableLegacyTemplates,
-      enableIndexDetailsPage,
-      enableIndexStats,
-    },
+  const appDependencies = getIndexManagementDependencies({
+    cloud,
+    config,
+    core,
+    extensionsService,
     history,
-    setBreadcrumbs,
-    uiSettings,
-    settings,
-    url,
-    docLinks,
+    isFleetEnabled,
     kibanaVersion,
-    theme$,
-  };
+    startDependencies,
+    uiMetricService,
+    usageCollection,
+  });
 
   const unmountAppCallback = renderApp(element, { core, dependencies: appDependencies });
 

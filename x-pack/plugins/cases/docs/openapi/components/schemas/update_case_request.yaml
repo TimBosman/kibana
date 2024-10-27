@@ -18,6 +18,8 @@ properties:
       properties:
         assignees:
           $ref: 'assignees.yaml'
+        category:
+          $ref: 'case_category.yaml'
         connector:
           oneOf:
             - $ref: 'connector_properties_none.yaml'
@@ -27,9 +29,23 @@ properties:
             - $ref: 'connector_properties_servicenow.yaml'
             - $ref: 'connector_properties_servicenow_sir.yaml'
             - $ref: 'connector_properties_swimlane.yaml'
+        customFields:
+          type: array
+          description: >
+            Custom field values for a case.
+            Any optional custom fields that are not specified in the request are set to null.
+          minItems: 0
+          maxItems: 10
+          items:
+            type: object
+            required:
+              - key
+              - type
+              - value
+            properties:
+              $ref: 'case_customfields.yaml'
         description:
-          description: An updated description for the case.
-          type: string
+          $ref: 'case_description.yaml'
         id:
           description: The identifier for the case.
           type: string
@@ -37,24 +53,13 @@ properties:
         settings:
           $ref: 'settings.yaml'
         severity:
-          $ref: 'severity_property.yaml'
+          $ref: 'case_severity.yaml'
         status:
-          $ref: 'status.yaml'
+          $ref: 'case_status.yaml'
         tags:
-          description: The words and phrases that help categorize cases.
-          type: array
-          maxItems: 200
-          items:
-            type: string
-            maxLength: 256
-        category:
-          description: Category for the case. It could be a word or a phrase to categorize the case.
-          type: string
-          maxLength: 50
+          $ref: 'case_tags.yaml'
         title:
-          description: A title for the case.
-          type: string
-          maxLength: 160
+          $ref: 'case_title.yaml'
         version:
           description: The current version of the case. To determine this value, use the get case or find cases APIs.
           type: string

@@ -30,9 +30,11 @@ import {
   TIMESTAMP,
 } from '@kbn/rule-data-utils';
 
+import type { Type as RuleType } from '@kbn/securitysolution-io-ts-alerting-types';
 import { lastValueFrom } from 'rxjs';
 import type { EcsSecurityExtension as Ecs } from '@kbn/securitysolution-ecs';
 import type { DataTableModel } from '@kbn/securitysolution-data-table';
+import type { TimelineEventsDetailsRequestOptionsInput } from '@kbn/timelines-plugin/common';
 import {
   ALERT_ORIGINAL_TIME,
   ALERT_GROUP_ID,
@@ -41,9 +43,16 @@ import {
   ALERT_NEW_TERMS,
   ALERT_RULE_INDICES,
 } from '../../../../common/field_maps/field_names';
-import type { TimelineResult } from '../../../../common/api/timeline';
+import {
+  isEqlRule,
+  isEsqlRule,
+  isMlRule,
+  isNewTermsRule,
+  isThresholdRule,
+} from '../../../../common/detection_engine/utils';
 import { TimelineId } from '../../../../common/types/timeline';
-import { TimelineStatus, TimelineType } from '../../../../common/api/timeline';
+import type { TimelineResponse } from '../../../../common/api/timeline';
+import { TimelineStatusEnum, TimelineTypeEnum } from '../../../../common/api/timeline';
 import type {
   SendAlertToTimelineActionProps,
   ThresholdAggregationData,
@@ -54,14 +63,13 @@ import type {
 } from './types';
 import type {
   TimelineEventsDetailsItem,
-  TimelineEventsDetailsRequestOptions,
   TimelineEventsDetailsStrategyResponse,
 } from '../../../../common/search_strategy/timeline';
 import { TimelineEventsQueries } from '../../../../common/search_strategy/timeline';
-import { timelineDefaults } from '../../../timelines/store/timeline/defaults';
+import { timelineDefaults } from '../../../timelines/store/defaults';
 import {
   omitTypenameInTimeline,
-  formatTimelineResultToModel,
+  formatTimelineResponseToModel,
 } from '../../../timelines/components/open_timeline/helpers';
 import { convertKueryToElasticSearchQuery } from '../../../common/lib/kuery';
 import { getField, getFieldKey } from '../../../helpers';
@@ -102,7 +110,6 @@ export const updateAlertStatusAction = async ({
       signalIds: alertIds,
     });
 
-    // TODO: Only delete those that were successfully updated from updatedRules
     setEventsDeleted({ eventIds: alertIds, isDeleted: true });
 
     if (response.version_conflicts && alertIds.length === 1) {
@@ -266,21 +273,16 @@ export const isEqlAlertWithGroupId = (ecsData: Ecs): boolean => {
   return isEql && groupId?.length > 0;
 };
 
-export const isThresholdAlert = (ecsData: Ecs): boolean => {
+const getRuleType = (ecsData: Ecs): RuleType | undefined => {
   const ruleType = getField(ecsData, ALERT_RULE_TYPE);
-  return (
-    ruleType === 'threshold' ||
-    (Array.isArray(ruleType) && ruleType.length > 0 && ruleType[0] === 'threshold')
-  );
+  return Array.isArray(ruleType) ? ruleType[0] : ruleType;
 };
 
-export const isNewTermsAlert = (ecsData: Ecs): boolean => {
-  const ruleType = getField(ecsData, ALERT_RULE_TYPE);
-  return (
-    ruleType === 'new_terms' ||
-    (Array.isArray(ruleType) && ruleType.length > 0 && ruleType[0] === 'new_terms')
-  );
-};
+const isNewTermsAlert = (ecsData: Ecs): boolean => isNewTermsRule(getRuleType(ecsData));
+const isEsqlAlert = (ecsData: Ecs): boolean => isEsqlRule(getRuleType(ecsData));
+const isEqlAlert = (ecsData: Ecs): boolean => isEqlRule(getRuleType(ecsData));
+const isThresholdAlert = (ecsData: Ecs): boolean => isThresholdRule(getRuleType(ecsData));
+const isMlAlert = (ecsData: Ecs): boolean => isMlRule(getRuleType(ecsData));
 
 const isSuppressedAlert = (ecsData: Ecs): boolean => {
   return getField(ecsData, ALERT_SUPPRESSION_DOCS_COUNT) != null;
@@ -451,6 +453,7 @@ const createThresholdTimeline = async (
     const alertResponse = await KibanaServices.get().http.fetch<
       estypes.SearchResponse<{ '@timestamp': string; [key: string]: unknown }>
     >(DETECTION_ENGINE_QUERY_SIGNALS_URL, {
+      version: '2023-10-31',
       method: 'POST',
       body: JSON.stringify(buildAlertsQuery([ecsData._id])),
     });
@@ -460,7 +463,8 @@ const createThresholdTimeline = async (
           ...acc,
           {
             ...formatAlertToEcsSignal(_source),
-            _id,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            _id: _id!,
             _index,
             timestamp: _source['@timestamp'],
           },
@@ -495,6 +499,7 @@ const createThresholdTimeline = async (
       notes: null,
       timeline: {
         ...timelineDefaults,
+        excludedRowRendererIds: [],
         columns: templateValues.columns ?? timelineDefaults.columns,
         description: `_id: ${alertDoc._id}`,
         filters: allFilters,
@@ -608,6 +613,7 @@ const createNewTermsTimeline = async (
     const alertResponse = await KibanaServices.get().http.fetch<
       estypes.SearchResponse<{ '@timestamp': string; [key: string]: unknown }>
     >(DETECTION_ENGINE_QUERY_SIGNALS_URL, {
+      version: '2023-10-31',
       method: 'POST',
       body: JSON.stringify(buildAlertsQuery([ecsData._id])),
     });
@@ -617,7 +623,8 @@ const createNewTermsTimeline = async (
           ...acc,
           {
             ...formatAlertToEcsSignal(_source),
-            _id,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            _id: _id!,
             _index,
             timestamp: _source['@timestamp'],
           },
@@ -649,6 +656,7 @@ const createNewTermsTimeline = async (
       timeline: {
         ...timelineDefaults,
         columns: templateValues.columns ?? timelineDefaults.columns,
+        excludedRowRendererIds: [],
         description: `_id: ${alertDoc._id}`,
         filters: allFilters,
         dataProviders: templateValues.dataProviders ?? dataProviders,
@@ -773,6 +781,7 @@ const createSuppressedTimeline = async (
     const alertResponse = await KibanaServices.get().http.fetch<
       estypes.SearchResponse<{ '@timestamp': string; [key: string]: unknown }>
     >(DETECTION_ENGINE_QUERY_SIGNALS_URL, {
+      version: '2023-10-31',
       method: 'POST',
       body: JSON.stringify(buildAlertsQuery([ecsData._id])),
     });
@@ -782,7 +791,8 @@ const createSuppressedTimeline = async (
           ...acc,
           {
             ...formatAlertToEcsSignal(_source),
-            _id,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            _id: _id!,
             _index,
             timestamp: _source['@timestamp'],
           },
@@ -816,6 +826,7 @@ const createSuppressedTimeline = async (
       notes: null,
       timeline: {
         ...timelineDefaults,
+        excludedRowRendererIds: [],
         columns: templateValues.columns ?? timelineDefaults.columns,
         description: `_id: ${alertDoc._id}`,
         filters: allFilters,
@@ -877,7 +888,7 @@ const createSuppressedTimeline = async (
   }
 };
 
-export const sendBulkEventsToTimelineAction = (
+export const sendBulkEventsToTimelineAction = async (
   createTimeline: CreateTimeline,
   ecs: Ecs[],
   prefer: 'dataProvider' | 'KqlFilter' = 'dataProvider',
@@ -893,11 +904,12 @@ export const sendBulkEventsToTimelineAction = (
     label || `${ecs.length} event IDs`
   );
 
-  createTimeline({
+  await createTimeline({
     from,
     notes: null,
     timeline: {
       ...timelineDefaults,
+      excludedRowRendererIds: [],
       dataProviders,
       id: TimelineId.active,
       indexNames: [],
@@ -947,7 +959,6 @@ export const sendAlertToTimelineAction = async ({
       : ruleTimelineId
     : '';
   const { to, from } = determineToAndFrom({ ecs });
-
   // For now we do not want to populate the template timeline if we have alertIds
   if (!isEmpty(timelineId)) {
     try {
@@ -956,7 +967,7 @@ export const sendAlertToTimelineAction = async ({
         getTimelineTemplate(timelineId),
         lastValueFrom(
           searchStrategyClient.search<
-            TimelineEventsDetailsRequestOptions,
+            TimelineEventsDetailsRequestOptionsInput,
             TimelineEventsDetailsStrategyResponse
           >(
             {
@@ -971,14 +982,19 @@ export const sendAlertToTimelineAction = async ({
           )
         ),
       ]);
-      const resultingTimeline: TimelineResult = getOr({}, 'data.getOneTimeline', responseTimeline);
+
+      const resultingTimeline: TimelineResponse = getOr(
+        {},
+        'data.getOneTimeline',
+        responseTimeline
+      );
       const eventData: TimelineEventsDetailsItem[] = eventDataResp.data ?? [];
       if (!isEmpty(resultingTimeline)) {
-        const timelineTemplate: TimelineResult = omitTypenameInTimeline(resultingTimeline);
-        const { timeline, notes } = formatTimelineResultToModel(
+        const timelineTemplate = omitTypenameInTimeline(resultingTimeline);
+        const { timeline, notes } = formatTimelineResponseToModel(
           timelineTemplate,
           true,
-          timelineTemplate.timelineType ?? TimelineType.default
+          timelineTemplate.timelineType ?? TimelineTypeEnum.default
         );
         const query = replaceTemplateFieldFromQuery(
           timeline.kqlQuery?.filterQuery?.kuery?.expression ?? '',
@@ -1018,7 +1034,13 @@ export const sendAlertToTimelineAction = async ({
             },
             getExceptionFilter
           );
-        } else if (isSuppressedAlert(ecsData)) {
+          // The Query field should remain unpopulated with the suppressed EQL/ES|QL alert.
+        } else if (
+          isSuppressedAlert(ecsData) &&
+          !isEqlAlert(ecsData) &&
+          !isEsqlAlert(ecsData) &&
+          !isMlAlert(ecsData)
+        ) {
           return createSuppressedTimeline(
             ecsData,
             createTimeline,
@@ -1036,10 +1058,11 @@ export const sendAlertToTimelineAction = async ({
             from,
             timeline: {
               ...timeline,
+              excludedRowRendererIds: [],
               title: '',
-              timelineType: TimelineType.default,
+              timelineType: TimelineTypeEnum.default,
               templateTimelineId: null,
-              status: TimelineStatus.draft,
+              status: TimelineStatusEnum.draft,
               dataProviders,
               eventType: 'all',
               filters,
@@ -1066,7 +1089,9 @@ export const sendAlertToTimelineAction = async ({
           });
         }
       }
-    } catch {
+    } catch (error) {
+      /* eslint-disable-next-line no-console */
+      console.error(error);
       updateTimelineIsLoading({ id: TimelineId.active, isLoading: false });
       return createTimeline({
         from,
@@ -1088,7 +1113,13 @@ export const sendAlertToTimelineAction = async ({
     return createThresholdTimeline(ecsData, createTimeline, noteContent, {}, getExceptionFilter);
   } else if (isNewTermsAlert(ecsData)) {
     return createNewTermsTimeline(ecsData, createTimeline, noteContent, {}, getExceptionFilter);
-  } else if (isSuppressedAlert(ecsData)) {
+    // The Query field should remain unpopulated with the suppressed EQL/ES|QL alert.
+  } else if (
+    isSuppressedAlert(ecsData) &&
+    !isEqlAlert(ecsData) &&
+    !isEsqlAlert(ecsData) &&
+    !isMlAlert(ecsData)
+  ) {
     return createSuppressedTimeline(ecsData, createTimeline, noteContent, {}, getExceptionFilter);
   } else {
     let { dataProviders, filters } = buildTimelineDataProviderOrFilter(
@@ -1106,6 +1137,7 @@ export const sendAlertToTimelineAction = async ({
       notes: null,
       timeline: {
         ...timelineDefaults,
+        excludedRowRendererIds: [],
         dataProviders,
         id: TimelineId.active,
         indexNames: [],

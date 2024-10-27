@@ -10,15 +10,7 @@ import type {
   CoverageOverviewRuleActivity,
   CoverageOverviewRuleSource,
 } from '../../../../../common/api/detection_engine';
-import type { CoverageOverviewMitreTactic } from '../../../rule_management/model/coverage_overview/mitre_tactic';
-import type { CoverageOverviewMitreTechnique } from '../../../rule_management/model/coverage_overview/mitre_technique';
 import { coverageOverviewCardColorThresholds } from './constants';
-
-export const getNumOfCoveredTechniques = (tactic: CoverageOverviewMitreTactic): number =>
-  tactic.techniques.filter((technique) => technique.enabledRules.length !== 0).length;
-
-export const getNumOfCoveredSubtechniques = (technique: CoverageOverviewMitreTechnique): number =>
-  technique.subtechniques.filter((subtechnique) => subtechnique.enabledRules.length !== 0).length;
 
 export const getCardBackgroundColor = (value: number) => {
   for (const { threshold, color } of coverageOverviewCardColorThresholds) {
@@ -31,15 +23,17 @@ export const getCardBackgroundColor = (value: number) => {
 export const extractSelected = <
   T extends CoverageOverviewRuleSource | CoverageOverviewRuleActivity
 >(
-  options: Array<{ checked?: string; label: T }>
+  options: EuiSelectableOption[]
 ): T[] => {
-  return options.filter((option) => option.checked === 'on').map((option) => option.label);
+  return options.filter((option) => option.checked === 'on').map((option) => option.label as T);
 };
 
-export const populateSelected = (
-  allOptions: EuiSelectableOption[],
+export const populateSelected = <
+  T extends CoverageOverviewRuleSource | CoverageOverviewRuleActivity
+>(
+  allOptions: Array<EuiSelectableOption<{ label: T }>>,
   selected: string[]
-): EuiSelectableOption[] =>
+): Array<EuiSelectableOption<{ label: T }>> =>
   allOptions.map((option) =>
     selected.includes(option.label) ? { ...option, checked: 'on' } : option
   );

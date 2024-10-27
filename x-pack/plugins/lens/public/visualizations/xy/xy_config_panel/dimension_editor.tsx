@@ -7,45 +7,48 @@
 
 import React, { useCallback, useMemo } from 'react';
 import { i18n } from '@kbn/i18n';
-import { EuiButtonGroup, EuiFormRow, htmlIdGenerator } from '@elastic/eui';
-import type { PaletteRegistry } from '@kbn/coloring';
-import { useDebouncedValue } from '@kbn/visualization-ui-components';
+import { useDebouncedValue } from '@kbn/visualization-utils';
 import { ColorPicker } from '@kbn/visualization-ui-components';
+
+import { EuiButtonGroup, EuiFormRow, htmlIdGenerator } from '@elastic/eui';
+import { PaletteRegistry, ColorMapping, PaletteOutput } from '@kbn/coloring';
+import { getColorCategories } from '@kbn/chart-expressions-common';
+import type { ValuesType } from 'utility-types';
 import type { VisualizationDimensionEditorProps } from '../../../types';
 import { State, XYState, XYDataLayerConfig, YConfig, YAxisMode } from '../types';
 import { FormatFactory } from '../../../../common/types';
 import { getSeriesColor, isHorizontalChart } from '../state_helpers';
-import { PalettePicker } from '../../../shared_components';
 import { getDataLayers } from '../visualization_helpers';
 import { CollapseSetting } from '../../../shared_components/collapse_setting';
 import { getSortedAccessors } from '../to_expression';
 import { getColorAssignments, getAssignedColorConfig } from '../color_assignment';
-
-type UnwrapArray<T> = T extends Array<infer P> ? P : T;
-
-export function updateLayer(
-  state: State,
-  layer: UnwrapArray<State['layers']>,
-  index: number
-): State {
-  const newLayers = [...state.layers];
-  newLayers[index] = layer;
-
-  return {
-    ...state,
-    layers: newLayers,
-  };
-}
+import { ColorMappingByTerms } from '../../../shared_components/coloring/color_mapping_by_terms';
 
 export const idPrefix = htmlIdGenerator()();
+
+function updateLayer(
+  state: State,
+  index: number,
+  layer: ValuesType<State['layers']>,
+  newLayer: Partial<ValuesType<State['layers']>>
+): State['layers'] {
+  const newLayers = [...state.layers];
+  newLayers[index] = {
+    ...layer,
+    ...newLayer,
+  } as ValuesType<State['layers']>;
+
+  return newLayers;
+}
 
 export function DataDimensionEditor(
   props: VisualizationDimensionEditorProps<State> & {
     formatFactory: FormatFactory;
     paletteService: PaletteRegistry;
+    isDarkMode: boolean;
   }
 ) {
-  const { state, setState, layerId, accessor } = props;
+  const { state, layerId, accessor, isDarkMode, isInlineEditing } = props;
   const index = state.layers.findIndex((l) => l.layerId === layerId);
   const layer = state.layers[index] as XYDataLayerConfig;
 
@@ -53,6 +56,16 @@ export function DataDimensionEditor(
     value: props.state,
     onChange: props.setState,
   });
+
+  const updateLayerState = useCallback(
+    (layerIndex: number, newLayer: Partial<ValuesType<State['layers']>>) => {
+      setLocalState({
+        ...localState,
+        layers: updateLayer(localState, layerIndex, layer, newLayer),
+      });
+    },
+    [layer, setLocalState, localState]
+  );
 
   const localYConfig = layer?.yConfig?.find((yAxisConfig) => yAxisConfig.forAccessor === accessor);
   const axisMode = localYConfig?.axisMode || 'auto';
@@ -74,9 +87,22 @@ export function DataDimensionEditor(
           ...yConfig,
         });
       }
-      setLocalState(updateLayer(localState, { ...layer, yConfig: newYConfigs }, index));
+      updateLayerState(index, { yConfig: newYConfigs });
     },
-    [accessor, index, localState, layer, setLocalState]
+    [layer.yConfig, updateLayerState, index, accessor]
+  );
+
+  const setColorMapping = useCallback(
+    (colorMapping?: ColorMapping.Config) => {
+      updateLayerState(index, { colorMapping });
+    },
+    [updateLayerState, index]
+  );
+  const setPalette = useCallback(
+    (palette: PaletteOutput) => {
+      updateLayerState(index, { palette });
+    },
+    [updateLayerState, index]
   );
 
   const overwriteColor = getSeriesColor(layer, accessor);
@@ -104,25 +130,28 @@ export function DataDimensionEditor(
     ).color;
   }, [props.frame, props.paletteService, state.layers, accessor, props.formatFactory, layer]);
 
-  const localLayer: XYDataLayerConfig = layer;
+  const table = props.frame.activeData?.[layer.layerId];
+  const { splitAccessor } = layer;
+  const splitCategories = getColorCategories(table?.rows ?? [], splitAccessor);
+
   if (props.groupId === 'breakdown') {
-    return (
-      <>
-        {!layer.collapseFn && (
-          <PalettePicker
-            palettes={props.paletteService}
-            activePalette={localLayer?.palette}
-            setPalette={(newPalette) => {
-              setState(updateLayer(localState, { ...localLayer, palette: newPalette }, index));
-            }}
-          />
-        )}
-      </>
-    );
+    return !layer.collapseFn ? (
+      <ColorMappingByTerms
+        isDarkMode={isDarkMode}
+        colorMapping={layer.colorMapping}
+        palette={layer.palette}
+        isInlineEditing={isInlineEditing}
+        setPalette={setPalette}
+        setColorMapping={setColorMapping}
+        paletteService={props.paletteService}
+        panelRef={props.panelRef}
+        categories={splitCategories}
+      />
+    ) : null;
   }
 
   const isHorizontal = isHorizontalChart(state.layers);
-  const disabledMessage = Boolean(!localLayer.collapseFn && localLayer.splitAccessor)
+  const disabledMessage = Boolean(!layer.collapseFn && layer.splitAccessor)
     ? i18n.translate('xpack.lens.xyChart.colorPicker.tooltip.disabled', {
         defaultMessage:
           'You are unable to apply custom colors to individual series when the layer includes a "Break down by" field.',
@@ -152,7 +181,6 @@ export function DataDimensionEditor(
             defaultMessage: 'Axis side',
           })}
           data-test-subj="lnsXY_axisSide_groups"
-          name="axisSide"
           buttonSize="compressed"
           options={[
             {
@@ -211,13 +239,23 @@ export function DataDimensionEditorDataSectionExtra(
     onChange: props.setState,
   });
 
+  const updateLayerState = useCallback(
+    (layerIndex: number, newLayer: Partial<ValuesType<State['layers']>>) => {
+      setLocalState({
+        ...localState,
+        layers: updateLayer(localState, layerIndex, layer, newLayer),
+      });
+    },
+    [layer, setLocalState, localState]
+  );
+
   if (props.groupId === 'breakdown') {
     return (
       <>
         <CollapseSetting
           value={layer.collapseFn || ''}
           onChange={(collapseFn) => {
-            setLocalState(updateLayer(localState, { ...layer, collapseFn }, index));
+            updateLayerState(index, { collapseFn });
           }}
         />
       </>

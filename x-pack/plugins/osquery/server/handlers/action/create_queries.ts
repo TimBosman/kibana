@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { isEmpty, map, pickBy } from 'lodash';
+import { isEmpty, isNumber, map, pickBy } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { ParsedTechnicalFields } from '@kbn/rule-registry-plugin/common';
@@ -17,7 +17,7 @@ import { isSavedQueryPrebuilt } from '../../routes/saved_query/utils';
 
 interface CreateDynamicQueriesParams {
   params: CreateLiveQueryRequestBodySchema;
-  alertData?: ParsedTechnicalFields;
+  alertData?: ParsedTechnicalFields & { _index: string };
   agents: string[];
   osqueryContext: OsqueryAppContext;
   error?: string;
@@ -43,7 +43,7 @@ export const createDynamicQueries = async ({
             alert_ids: params.alert_ids,
             agents,
           },
-          (value) => !isEmpty(value) || value === true
+          (value) => !isEmpty(value) || value === true || isNumber(value)
         );
       })
     : [
@@ -61,16 +61,17 @@ export const createDynamicQueries = async ({
               : undefined,
             ecs_mapping: params.ecs_mapping,
             alert_ids: params.alert_ids,
+            timeout: params.timeout,
             agents,
             ...(error ? { error } : {}),
           },
-          (value) => !isEmpty(value)
+          (value) => !isEmpty(value) || isNumber(value)
         ),
       ];
 
 export const replacedQueries = (
   query: string | undefined,
-  alertData?: ParsedTechnicalFields
+  alertData?: ParsedTechnicalFields & { _index: string }
 ): { query: string | undefined; error?: string } => {
   if (alertData && query) {
     const { result, skipped } = replaceParamsQuery(query, alertData);

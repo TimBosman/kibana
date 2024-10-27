@@ -9,7 +9,7 @@ import type { DefaultItemAction } from '@elastic/eui';
 import { EuiToolTip } from '@elastic/eui';
 import React from 'react';
 import { DuplicateOptions } from '../../../../../common/detection_engine/rule_management/constants';
-import { BulkActionType } from '../../../../../common/api/detection_engine/rule_management/bulk_actions/bulk_actions_route';
+import { BulkActionTypeEnum } from '../../../../../common/api/detection_engine/rule_management';
 import { SINGLE_RULE_ACTIONS } from '../../../../common/lib/apm/user_actions';
 import { useStartTransaction } from '../../../../common/lib/apm/use_start_transaction';
 import { useKibana } from '../../../../common/lib/kibana';
@@ -23,20 +23,28 @@ import {
 } from '../../../rule_management/logic/bulk_actions/use_execute_bulk_action';
 import { useDownloadExportedRules } from '../../../rule_management/logic/bulk_actions/use_download_exported_rules';
 import { useHasActionsPrivileges } from './use_has_actions_privileges';
+import type { TimeRange } from '../../../rule_gaps/types';
+import { useScheduleRuleRun } from '../../../rule_gaps/logic/use_schedule_rule_run';
 
 export const useRulesTableActions = ({
   showExceptionsDuplicateConfirmation,
+  showManualRuleRunConfirmation,
   confirmDeletion,
 }: {
   showExceptionsDuplicateConfirmation: () => Promise<string | null>;
+  showManualRuleRunConfirmation: () => Promise<TimeRange | null>;
   confirmDeletion: () => Promise<boolean>;
 }): Array<DefaultItemAction<Rule>> => {
-  const { navigateToApp } = useKibana().services.application;
+  const {
+    application: { navigateToApp },
+    telemetry,
+  } = useKibana().services;
   const hasActionsPrivileges = useHasActionsPrivileges();
   const { startTransaction } = useStartTransaction();
   const { executeBulkAction } = useExecuteBulkAction();
   const { bulkExport } = useBulkExport();
   const downloadExportedRules = useDownloadExportedRules();
+  const { scheduleRuleRun } = useScheduleRuleRun();
 
   return [
     {
@@ -75,7 +83,7 @@ export const useRulesTableActions = ({
           return;
         }
         const result = await executeBulkAction({
-          type: BulkActionType.duplicate,
+          type: BulkActionTypeEnum.duplicate,
           ids: [rule.id],
           duplicatePayload: {
             include_exceptions:
@@ -111,6 +119,28 @@ export const useRulesTableActions = ({
     },
     {
       type: 'icon',
+      'data-test-subj': 'manualRuleRunAction',
+      description: (rule) => (!rule.enabled ? i18n.MANUAL_RULE_RUN_TOOLTIP : i18n.MANUAL_RULE_RUN),
+      icon: 'play',
+      name: i18n.MANUAL_RULE_RUN,
+      onClick: async (rule: Rule) => {
+        startTransaction({ name: SINGLE_RULE_ACTIONS.MANUAL_RULE_RUN });
+        const modalManualRuleRunConfirmationResult = await showManualRuleRunConfirmation();
+        telemetry.reportManualRuleRunOpenModal({
+          type: 'single',
+        });
+        if (modalManualRuleRunConfirmationResult === null) {
+          return;
+        }
+        await scheduleRuleRun({
+          ruleIds: [rule.id],
+          timeRange: modalManualRuleRunConfirmationResult,
+        });
+      },
+      enabled: (rule: Rule) => rule.enabled,
+    },
+    {
+      type: 'icon',
       'data-test-subj': 'deleteRuleAction',
       description: i18n.DELETE_RULE,
       icon: 'trash',
@@ -123,7 +153,7 @@ export const useRulesTableActions = ({
 
         startTransaction({ name: SINGLE_RULE_ACTIONS.DELETE });
         await executeBulkAction({
-          type: BulkActionType.delete,
+          type: BulkActionTypeEnum.delete,
           ids: [rule.id],
         });
       },

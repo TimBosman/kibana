@@ -8,17 +8,15 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { of } from 'rxjs';
 
 import { useKibana as mockUseKibana } from '../../common/lib/kibana/__mocks__';
 import { TestProviders } from '../../common/mock';
 import { DataQuality } from './data_quality';
-import { HOT, WARM, UNMANAGED } from './translations';
+import { useKibana } from '../../common/lib/kibana';
 
 const mockedUseKibana = mockUseKibana();
-const mockIsILMAvailable = of(true);
 
-jest.mock('../../common/components/landing_page');
+jest.mock('../../common/components/empty_prompt');
 jest.mock('../../common/lib/kibana', () => {
   const original = jest.requireActual('../../common/lib/kibana');
 
@@ -31,29 +29,7 @@ jest.mock('../../common/lib/kibana', () => {
   return {
     ...original,
     KibanaServices: mockKibanaServices,
-    useGetUserCasesPermissions: () => ({
-      all: false,
-      create: false,
-      read: true,
-      update: false,
-      delete: false,
-      push: false,
-    }),
-    useKibana: () => ({
-      ...mockedUseKibana,
-      services: {
-        ...mockedUseKibana.services,
-        cases: {
-          api: {
-            getRelatedCases: jest.fn(),
-          },
-          hooks: {
-            useCasesAddToNewCaseFlyout: jest.fn(),
-          },
-        },
-        isILMAvailable$: mockIsILMAvailable,
-      },
-    }),
+    useKibana: jest.fn(),
     useUiSetting$: () => ['0,0.[000]'],
   };
 });
@@ -65,7 +41,7 @@ const defaultUseSourcererReturn = {
   selectedPatterns: ['auditbeat-*', 'logs-*', 'packetbeat-*'],
 };
 const mockUseSourcererDataView = jest.fn(() => defaultUseSourcererReturn);
-jest.mock('../../common/containers/sourcerer', () => ({
+jest.mock('../../sourcerer/containers', () => ({
   useSourcererDataView: () => mockUseSourcererDataView(),
 }));
 
@@ -79,10 +55,36 @@ jest.mock('../../detections/containers/detection_engine/alerts/use_signal_index'
 }));
 
 describe('DataQuality', () => {
-  const defaultIlmPhases = `${HOT}${WARM}${UNMANAGED}`;
+  const defaultIlmPhases = 'hotwarmunmanaged';
 
   beforeEach(() => {
-    jest.resetAllMocks();
+    jest.clearAllMocks();
+
+    (useKibana as jest.Mock).mockReturnValue({
+      ...mockedUseKibana,
+      services: {
+        ...mockedUseKibana.services,
+        cases: {
+          api: {
+            getRelatedCases: jest.fn(),
+          },
+          hooks: {
+            useCasesAddToNewCaseFlyout: jest.fn(),
+          },
+          helpers: {
+            canUseCases: jest.fn().mockReturnValue({
+              all: false,
+              create: false,
+              read: true,
+              update: false,
+              delete: false,
+              push: false,
+            }),
+          },
+        },
+        configSettings: { ILMEnabled: true },
+      },
+    });
 
     mockUseSourcererDataView.mockReturnValue(defaultUseSourcererReturn);
     mockUseSignalIndex.mockReturnValue(defaultUseSignalIndexReturn);
@@ -114,7 +116,7 @@ describe('DataQuality', () => {
     });
 
     test('it does NOT render the landing page', () => {
-      expect(screen.queryByTestId('siem-landing-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('empty-prompt')).not.toBeInTheDocument();
     });
   });
 
@@ -146,7 +148,7 @@ describe('DataQuality', () => {
     });
 
     test('it does NOT render the landing page', () => {
-      expect(screen.queryByTestId('siem-landing-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('empty-prompt')).not.toBeInTheDocument();
     });
   });
 
@@ -178,7 +180,7 @@ describe('DataQuality', () => {
     });
 
     test('it does NOT render the landing page', () => {
-      expect(screen.queryByTestId('siem-landing-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('empty-prompt')).not.toBeInTheDocument();
     });
   });
 
@@ -215,7 +217,7 @@ describe('DataQuality', () => {
     });
 
     test('it renders the landing page', () => {
-      expect(screen.getByTestId('siem-landing-page')).toBeInTheDocument();
+      expect(screen.getByTestId('empty-prompt')).toBeInTheDocument();
     });
   });
 
@@ -252,7 +254,7 @@ describe('DataQuality', () => {
     });
 
     test('it does NOT render the landing page', () => {
-      expect(screen.queryByTestId('siem-landing-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('empty-prompt')).not.toBeInTheDocument();
     });
   });
 
@@ -289,7 +291,55 @@ describe('DataQuality', () => {
     });
 
     test('it does NOT render the landing page', () => {
-      expect(screen.queryByTestId('siem-landing-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('empty-prompt')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('when ILMEnabled is false', () => {
+    beforeEach(async () => {
+      (useKibana as jest.Mock).mockReturnValue({
+        ...mockedUseKibana,
+        services: {
+          ...mockedUseKibana.services,
+          cases: {
+            api: {
+              getRelatedCases: jest.fn(),
+            },
+            hooks: {
+              useCasesAddToNewCaseFlyout: jest.fn(),
+            },
+            helpers: {
+              canUseCases: jest.fn().mockReturnValue({
+                all: false,
+                create: false,
+                read: true,
+                update: false,
+                delete: false,
+                push: false,
+              }),
+            },
+          },
+          configSettings: { ILMEnabled: false },
+        },
+      });
+
+      render(
+        <TestProviders>
+          <MemoryRouter>
+            <DataQuality />
+          </MemoryRouter>
+        </TestProviders>
+      );
+
+      await waitFor(() => {});
+    });
+
+    test('it should not render default ILM phases', () => {
+      expect(screen.queryByTestId('selectIlmPhases')).not.toBeInTheDocument();
+    });
+
+    test('it should render a date picker', () => {
+      expect(screen.getByTestId('dataQualityDatePicker')).toBeInTheDocument();
     });
   });
 });

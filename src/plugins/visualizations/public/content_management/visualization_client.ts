@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { SearchQuery } from '@kbn/content-management-plugin/common';
@@ -66,6 +67,13 @@ const deleteVisualization = async (id: string) => {
 };
 
 const search = async (query: SearchQuery = {}, options?: VisualizationSearchQuery) => {
+  if (options && options.types && options.types.length > 1) {
+    const { types } = options;
+    return getContentManagement().client.mSearch<VisualizationSearchOut['hits'][number]>({
+      contentTypes: types.map((type) => ({ contentTypeId: type })),
+      query,
+    });
+  }
   return getContentManagement().client.search<VisualizationSearchIn, VisualizationSearchOut>({
     contentTypeId: 'visualization',
     query,

@@ -4,28 +4,46 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import { useState, useEffect, useMemo } from 'react';
+import crypto from 'crypto';
+
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { i18n } from '@kbn/i18n';
 
+import { dump } from 'js-yaml';
+
 import type { PackagePolicy, AgentPolicy } from '../../types';
-import { sendGetOneAgentPolicy, useGetPackageInfoByKeyQuery, useStartServices } from '../../hooks';
+import {
+  sendGetOneAgentPolicy,
+  sendGetOneAgentPolicyFull,
+  useGetPackageInfoByKeyQuery,
+  useStartServices,
+} from '../../hooks';
 import {
   FLEET_KUBERNETES_PACKAGE,
   FLEET_CLOUD_SECURITY_POSTURE_PACKAGE,
   FLEET_CLOUD_DEFEND_PACKAGE,
 } from '../../../common';
-import { getCloudShellUrlFromAgentPolicy } from '../../services';
 
 import {
-  getCloudFormationTemplateUrlFromPackageInfo,
-  getCloudFormationTemplateUrlFromAgentPolicy,
-} from '../../services';
+  getTemplateUrlFromAgentPolicy,
+  getTemplateUrlFromPackageInfo,
+  getCloudShellUrlFromAgentPolicy,
+  SUPPORTED_TEMPLATES_URL_FROM_PACKAGE_INFO_INPUT_VARS,
+  SUPPORTED_TEMPLATES_URL_FROM_AGENT_POLICY_CONFIG,
+} from '../cloud_security_posture/services';
+
+import { sendCreateStandaloneAgentAPIKey } from '../../hooks';
+
+import type { FullAgentPolicy } from '../../../common';
+
+import { fullAgentPolicyToYaml } from '../../services';
 
 import type {
   K8sMode,
   CloudSecurityIntegrationType,
   CloudSecurityIntegrationAwsAccountType,
   CloudSecurityIntegration,
+  CloudSecurityIntegrationAzureAccountType,
 } from './types';
 
 // Packages that requires custom elastic-agent manifest
@@ -99,6 +117,9 @@ export function useCloudSecurityIntegration(agentPolicy?: AgentPolicy) {
     { enabled: Boolean(cloudSecurityPackagePolicy) }
   );
 
+  const AWS_ACCOUNT_TYPE = 'aws.account_type';
+  const AZURE_ACCOUNT_TYPE = 'azure.account_type';
+
   const cloudSecurityIntegration: CloudSecurityIntegration | undefined = useMemo(() => {
     if (!agentPolicy || !cloudSecurityPackagePolicy) {
       return undefined;
@@ -109,8 +130,15 @@ export function useCloudSecurityIntegration(agentPolicy?: AgentPolicy) {
 
     if (!integrationType) return undefined;
 
-    const cloudFormationTemplateFromAgentPolicy =
-      getCloudFormationTemplateUrlFromAgentPolicy(agentPolicy);
+    const cloudFormationTemplateFromAgentPolicy = getTemplateUrlFromAgentPolicy(
+      SUPPORTED_TEMPLATES_URL_FROM_AGENT_POLICY_CONFIG.CLOUD_FORMATION,
+      agentPolicy
+    );
+
+    const azureArmTemplateFromAgentPolicy = getTemplateUrlFromAgentPolicy(
+      SUPPORTED_TEMPLATES_URL_FROM_AGENT_POLICY_CONFIG.ARM_TEMPLATE,
+      agentPolicy
+    );
 
     // Use the latest CloudFormation template for the current version
     // So it guarantee that the template version matches the integration version
@@ -118,14 +146,29 @@ export function useCloudSecurityIntegration(agentPolicy?: AgentPolicy) {
     // In case it can't find the template for the current version,
     // it will fallback to the one from the agent policy.
     const cloudFormationTemplateUrl = packageInfoData?.item
-      ? getCloudFormationTemplateUrlFromPackageInfo(packageInfoData.item, integrationType)
+      ? getTemplateUrlFromPackageInfo(
+          packageInfoData.item,
+          integrationType,
+          SUPPORTED_TEMPLATES_URL_FROM_PACKAGE_INFO_INPUT_VARS.CLOUD_FORMATION
+        )
       : cloudFormationTemplateFromAgentPolicy;
-
-    const AWS_ACCOUNT_TYPE = 'aws.account_type';
 
     const cloudFormationAwsAccountType: CloudSecurityIntegrationAwsAccountType | undefined =
       cloudSecurityPackagePolicy?.inputs?.find((input) => input.enabled)?.streams?.[0]?.vars?.[
         AWS_ACCOUNT_TYPE
+      ]?.value;
+
+    const azureArmTemplateUrl = packageInfoData?.item
+      ? getTemplateUrlFromPackageInfo(
+          packageInfoData.item,
+          integrationType,
+          SUPPORTED_TEMPLATES_URL_FROM_PACKAGE_INFO_INPUT_VARS.ARM_TEMPLATE
+        )
+      : azureArmTemplateFromAgentPolicy;
+
+    const azureArmTemplateAccountType: CloudSecurityIntegrationAzureAccountType | undefined =
+      cloudSecurityPackagePolicy?.inputs?.find((input) => input.enabled)?.streams?.[0]?.vars?.[
+        AZURE_ACCOUNT_TYPE
       ]?.value;
 
     const cloudShellUrl = getCloudShellUrlFromAgentPolicy(agentPolicy);
@@ -136,6 +179,11 @@ export function useCloudSecurityIntegration(agentPolicy?: AgentPolicy) {
       cloudFormationProps: {
         awsAccountType: cloudFormationAwsAccountType,
         templateUrl: cloudFormationTemplateUrl,
+      },
+      isAzureArmTemplate: Boolean(azureArmTemplateFromAgentPolicy),
+      azureArmTemplateProps: {
+        azureAccountType: azureArmTemplateAccountType,
+        templateUrl: azureArmTemplateUrl,
       },
       cloudShellUrl,
     };
@@ -157,3 +205,110 @@ const getCloudSecurityPackagePolicyFromAgentPolicy = (
     (input) => input.package?.name === FLEET_CLOUD_SECURITY_POSTURE_PACKAGE
   );
 };
+
+export function useGetCreateApiKey() {
+  const core = useStartServices();
+
+  const [apiKey, setApiKey] = useState<string | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const onCreateApiKey = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const res = await sendCreateStandaloneAgentAPIKey({
+        name: crypto.randomBytes(16).toString('hex'),
+      });
+
+      const newApiKey = `${res.item.id}:${res.item.api_key}`;
+      setApiKey(newApiKey);
+    } catch (err) {
+      core.notifications.toasts.addError(err, {
+        title: i18n.translate('xpack.fleet.standaloneAgentPage.errorCreatingAgentAPIKey', {
+          defaultMessage: 'Error creating Agent API Key',
+        }),
+      });
+    }
+    setIsLoading(false);
+  }, [core.notifications.toasts]);
+  return {
+    apiKey,
+    isLoading,
+    onCreateApiKey,
+  };
+}
+
+export function useFetchFullPolicy(agentPolicy: AgentPolicy | undefined, isK8s?: K8sMode) {
+  const core = useStartServices();
+  const [yaml, setYaml] = useState<any | undefined>('');
+  const [fullAgentPolicy, setFullAgentPolicy] = useState<FullAgentPolicy | undefined>();
+  const { apiKey, isLoading: isCreatingApiKey, onCreateApiKey } = useGetCreateApiKey();
+
+  useEffect(() => {
+    async function fetchFullPolicy() {
+      try {
+        if (!agentPolicy?.id) {
+          return;
+        }
+        let query = { standalone: true, kubernetes: false };
+        if (isK8s === 'IS_KUBERNETES') {
+          query = { standalone: true, kubernetes: true };
+        }
+        const res = await sendGetOneAgentPolicyFull(agentPolicy?.id, query);
+        if (res.error) {
+          throw res.error;
+        }
+
+        if (!res.data) {
+          throw new Error('No data while fetching full agent policy');
+        }
+        setFullAgentPolicy(res.data.item);
+      } catch (error) {
+        core.notifications.toasts.addError(error, {
+          title: i18n.translate('xpack.fleet.standaloneAgentPage.errorFetchingFullAgentPolicy', {
+            defaultMessage: 'Error fetching full agent policy',
+          }),
+        });
+      }
+    }
+
+    if (isK8s === 'IS_NOT_KUBERNETES' || isK8s !== 'IS_LOADING') {
+      fetchFullPolicy();
+    }
+  }, [core.http.basePath, agentPolicy?.id, core.notifications.toasts, apiKey, isK8s, agentPolicy]);
+
+  useEffect(() => {
+    if (!fullAgentPolicy) {
+      return;
+    }
+
+    if (isK8s === 'IS_KUBERNETES') {
+      if (typeof fullAgentPolicy === 'object') {
+        return;
+      }
+      setYaml(fullAgentPolicy);
+    } else {
+      if (typeof fullAgentPolicy === 'string') {
+        return;
+      }
+      setYaml(fullAgentPolicyToYaml(fullAgentPolicy, dump, apiKey));
+    }
+  }, [apiKey, fullAgentPolicy, isK8s]);
+
+  const downloadYaml = useMemo(
+    () => () => {
+      const link = document.createElement('a');
+      link.href = `data:text/x-yaml;charset=utf-8,${yaml}`;
+      link.download = `elastic-agent.yml`;
+      link.click();
+    },
+    [yaml]
+  );
+
+  return {
+    yaml,
+    onCreateApiKey,
+    fullAgentPolicy,
+    isCreatingApiKey,
+    apiKey,
+    downloadYaml,
+  };
+}

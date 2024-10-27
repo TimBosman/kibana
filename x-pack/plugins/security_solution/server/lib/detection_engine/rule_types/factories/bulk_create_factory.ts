@@ -27,6 +27,7 @@ export interface GenericBulkCreateResponse<T extends BaseFieldsLatest> {
   createdItems: Array<AlertWithCommonFieldsLatest<T> & { _id: string; _index: string }>;
   errors: string[];
   alertsWereTruncated: boolean;
+  suppressedItemsCount?: number;
 }
 
 export const bulkCreateFactory =
@@ -69,7 +70,7 @@ export const bulkCreateFactory =
           const enrichedAlerts = await enrichAlerts(alerts, params, experimentalFeatures);
           return enrichedAlerts;
         } catch (error) {
-          ruleExecutionLogger.error(`Enrichments failed ${error}`);
+          ruleExecutionLogger.error(`Alerts enrichment failed: ${error}`);
           throw error;
         } finally {
           enrichmentsTimeFinish = performance.now();
@@ -90,13 +91,11 @@ export const bulkCreateFactory =
 
     const end = performance.now();
 
-    ruleExecutionLogger.debug(
-      `individual bulk process time took: ${makeFloatString(end - start)} milliseconds`
-    );
+    ruleExecutionLogger.debug(`Alerts bulk process took ${makeFloatString(end - start)} ms`);
 
     if (!isEmpty(errors)) {
-      ruleExecutionLogger.debug(
-        `[-] bulkResponse had errors with responses of: ${JSON.stringify(errors)}`
+      ruleExecutionLogger.warn(
+        `Alerts bulk process finished with errors: ${JSON.stringify(errors)}`
       );
       return {
         errors: Object.keys(errors),

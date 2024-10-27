@@ -7,21 +7,16 @@
 
 import { encode } from '@kbn/rison';
 
-import { cleanKibana, resetRulesTableState } from '../../../../tasks/common';
-import { login, visit } from '../../../../tasks/login';
-import {
-  DASHBOARDS_URL,
-  KIBANA_HOME,
-  SECURITY_DETECTIONS_RULES_MANAGEMENT_URL,
-  SECURITY_DETECTIONS_RULES_MONITORING_URL,
-  SECURITY_DETECTIONS_RULES_URL,
-} from '../../../../urls/navigation';
+import { resetRulesTableState } from '../../../../tasks/common';
+import { login } from '../../../../tasks/login';
+import { visit } from '../../../../tasks/navigation';
+import { DASHBOARDS_URL, KIBANA_HOME } from '../../../../urls/navigation';
+import { RULES_MANAGEMENT_URL, RULES_MONITORING_URL } from '../../../../urls/rules_management';
 import { getNewRule } from '../../../../objects/rule';
 import {
   filterByCustomRules,
   filterBySearchTerm,
   filterByTags,
-  goToRuleDetails,
   expectFilterSearchTerm,
   expectFilterByTags,
   expectFilterByCustomRules,
@@ -35,6 +30,7 @@ import {
   expectFilterByPrebuiltRules,
   expectFilterByEnabledRules,
   expectManagementTableRules,
+  goToRuleDetailsOf,
 } from '../../../../tasks/alerts_detection_rules';
 import { createRule } from '../../../../tasks/api_calls/rules';
 import {
@@ -45,6 +41,7 @@ import {
   setRowsPerPageTo,
   sortByTableColumn,
 } from '../../../../tasks/table_pagination';
+import { deleteAlertsAndRules } from '../../../../tasks/api_calls/common';
 
 function createTestRules(): void {
   createRule(getNewRule({ rule_id: '1', name: 'test 1', tags: ['tag-a'], enabled: false }));
@@ -62,7 +59,7 @@ function createTestRules(): void {
 }
 
 function visitRulesTableWithState(urlTableState: Record<string, unknown>): void {
-  visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL, { qs: { rulesTable: encode(urlTableState) } });
+  visit(RULES_MANAGEMENT_URL, { visitOptions: { qs: { rulesTable: encode(urlTableState) } } });
 }
 
 function setStorageState(storageTableState: Record<string, unknown>): void {
@@ -99,24 +96,20 @@ function expectDefaultRulesTableState(): void {
   expectTablePage(1);
 }
 
-describe('Rules table: persistent state', { tags: ['@ess', '@serverless'] }, () => {
-  before(() => {
-    cleanKibana();
-    createTestRules();
-  });
+describe(
+  'Rules table: persistent state',
+  { tags: ['@ess', '@serverless', '@skipInServerlessMKI'] },
+  () => {
+    beforeEach(() => {
+      deleteAlertsAndRules();
+      createTestRules();
+      login();
+      resetRulesTableState();
+    });
 
-  beforeEach(() => {
-    login();
-    resetRulesTableState();
-  });
-
-  // Flaky on serverless
-  describe(
-    'while on a happy path',
-    { tags: ['@ess', '@serverless', '@brokenInServerless'] },
-    () => {
+    describe('while on a happy path', { tags: ['@ess', '@serverless'] }, () => {
       it('activates management tab by default', () => {
-        visit(SECURITY_DETECTIONS_RULES_URL);
+        visit(RULES_MANAGEMENT_URL);
 
         expectRulesManagementTab();
       });
@@ -169,7 +162,7 @@ describe('Rules table: persistent state', { tags: ['@ess', '@serverless'] }, () 
           perPage: 10,
         });
 
-        visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL);
+        visit(RULES_MANAGEMENT_URL);
 
         expectRulesManagementTab();
         expectFilterSearchTerm('test');
@@ -209,7 +202,7 @@ describe('Rules table: persistent state', { tags: ['@ess', '@serverless'] }, () 
       describe('and on the rules management tab', () => {
         beforeEach(() => {
           login();
-          visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL);
+          visit(RULES_MANAGEMENT_URL);
         });
 
         it('persists after reloading the page', () => {
@@ -227,7 +220,7 @@ describe('Rules table: persistent state', { tags: ['@ess', '@serverless'] }, () 
           changeRulesTableState();
           goToTablePage(2);
 
-          goToRuleDetails();
+          goToRuleDetailsOf('rule 6');
           cy.go('back');
 
           expectRulesManagementTab();
@@ -240,7 +233,7 @@ describe('Rules table: persistent state', { tags: ['@ess', '@serverless'] }, () 
           goToTablePage(2);
 
           visit(DASHBOARDS_URL);
-          visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL);
+          visit(RULES_MANAGEMENT_URL);
 
           expectRulesManagementTab();
           expectRulesTableState();
@@ -252,7 +245,7 @@ describe('Rules table: persistent state', { tags: ['@ess', '@serverless'] }, () 
           goToTablePage(2);
 
           visit(KIBANA_HOME);
-          visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL);
+          visit(RULES_MANAGEMENT_URL);
 
           expectRulesManagementTab();
           expectRulesTableState();
@@ -263,7 +256,7 @@ describe('Rules table: persistent state', { tags: ['@ess', '@serverless'] }, () 
       describe('and on the rules monitoring tab', () => {
         beforeEach(() => {
           login();
-          visit(SECURITY_DETECTIONS_RULES_MONITORING_URL);
+          visit(RULES_MONITORING_URL);
         });
 
         it('persists the selected tab', () => {
@@ -274,134 +267,136 @@ describe('Rules table: persistent state', { tags: ['@ess', '@serverless'] }, () 
           expectRulesMonitoringTab();
         });
       });
-    }
-  );
-
-  describe('upon state format upgrade', async () => {
-    beforeEach(() => {
-      login();
     });
 
-    describe('and having state in the url', () => {
-      it('ignores unsupported state key', () => {
-        visitRulesTableWithState({
-          someKey: 10,
-          searchTerm: 'rule',
-          tags: ['tag-b'],
-          source: 'custom',
-          enabled: false,
-          field: 'name',
-          order: 'asc',
-          perPage: 5,
-          page: 2,
-        });
-
-        expectRulesTableState();
-        expectTablePage(2);
-      });
-    });
-
-    describe('and having state in the session storage', () => {
-      it('ignores unsupported state key', () => {
-        setStorageState({
-          someKey: 10,
-          searchTerm: 'rule',
-          tags: ['tag-b'],
-          source: 'custom',
-          enabled: false,
-          field: 'name',
-          order: 'asc',
-          perPage: 5,
-        });
-
-        visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL);
-
-        expectRulesTableState();
-        expectTablePage(1);
-      });
-    });
-  });
-
-  describe('when persisted state is partially unavailable', () => {
-    describe('and on the rules management tab', () => {
+    describe('upon state format upgrade', async () => {
       beforeEach(() => {
         login();
-        visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL);
       });
 
-      it('persists after clearing the session storage', () => {
-        changeRulesTableState();
-        goToTablePage(2);
+      describe('and having state in the url', () => {
+        it('ignores unsupported state key', () => {
+          visitRulesTableWithState({
+            someKey: 10,
+            searchTerm: 'rule',
+            tags: ['tag-b'],
+            source: 'custom',
+            enabled: false,
+            field: 'name',
+            order: 'asc',
+            perPage: 5,
+            page: 2,
+          });
 
-        cy.window().then((win) => {
-          win.sessionStorage.clear();
+          expectRulesTableState();
+          expectTablePage(2);
         });
-        cy.reload();
-
-        expectRulesManagementTab();
-        expectRulesTableState();
-        expectTablePage(2);
       });
 
-      it('persists after clearing the url state', () => {
-        changeRulesTableState();
-        goToTablePage(2);
+      describe('and having state in the session storage', () => {
+        it('ignores unsupported state key', () => {
+          setStorageState({
+            someKey: 10,
+            searchTerm: 'rule',
+            tags: ['tag-b'],
+            source: 'custom',
+            enabled: false,
+            field: 'name',
+            order: 'asc',
+            perPage: 5,
+          });
 
-        visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL);
+          visit(RULES_MANAGEMENT_URL);
 
-        expectRulesManagementTab();
-        expectRulesTableState();
-        expectTablePage(1);
+          expectRulesTableState();
+          expectTablePage(1);
+        });
       });
     });
-  });
 
-  describe('when corrupted', () => {
-    describe('and on the rules management tab', () => {
-      beforeEach(() => {
-        login();
-        visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL);
-      });
+    describe('when persisted state is partially unavailable', () => {
+      describe('and on the rules management tab', () => {
+        beforeEach(() => {
+          login();
+          visit(RULES_MANAGEMENT_URL);
+        });
 
-      it('persists after corrupting the session storage data', () => {
-        changeRulesTableState();
-        goToTablePage(2);
+        it('persists after clearing the session storage', () => {
+          changeRulesTableState();
+          goToTablePage(2);
 
-        cy.window().then((win) => {
-          win.sessionStorage.setItem('securitySolution.rulesTable', '!invalid');
+          cy.window().then((win) => {
+            win.sessionStorage.clear();
+          });
           cy.reload();
 
           expectRulesManagementTab();
           expectRulesTableState();
           expectTablePage(2);
         });
-      });
 
-      it('persists after corrupting the url param data', () => {
-        changeRulesTableState();
-        goToTablePage(2);
+        it('persists after clearing the url state', () => {
+          changeRulesTableState();
+          goToTablePage(2);
 
-        visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL, { qs: { rulesTable: '(!invalid)' } });
+          visit(RULES_MANAGEMENT_URL);
 
-        expectRulesManagementTab();
-        expectRulesTableState();
-        expectTablePage(1);
-      });
-
-      it('DOES NOT persist after corrupting the session storage and url param data', () => {
-        changeRulesTableState();
-        goToTablePage(2);
-
-        visit(SECURITY_DETECTIONS_RULES_MANAGEMENT_URL, {
-          qs: { rulesTable: '(!invalid)' },
-          onBeforeLoad: (win) => {
-            win.sessionStorage.setItem('securitySolution.rulesTable', '!invalid');
-          },
+          expectRulesManagementTab();
+          expectRulesTableState();
+          expectTablePage(1);
         });
-
-        expectRulesManagementTab();
-        expectDefaultRulesTableState();
       });
     });
-  });
-});
+
+    describe('when corrupted', () => {
+      describe('and on the rules management tab', () => {
+        beforeEach(() => {
+          login();
+          visit(RULES_MANAGEMENT_URL);
+        });
+
+        it('persists after corrupting the session storage data', () => {
+          changeRulesTableState();
+          goToTablePage(2);
+
+          cy.window().then((win) => {
+            win.sessionStorage.setItem('securitySolution.rulesTable', '!invalid');
+            cy.reload();
+
+            expectRulesManagementTab();
+            expectRulesTableState();
+            expectTablePage(2);
+          });
+        });
+
+        it('persists after corrupting the url param data', () => {
+          changeRulesTableState();
+          goToTablePage(2);
+
+          visit(RULES_MANAGEMENT_URL, { visitOptions: { qs: { rulesTable: '(!invalid)' } } });
+
+          expectRulesManagementTab();
+          expectRulesTableState();
+          expectTablePage(1);
+        });
+
+        it('DOES NOT persist after corrupting the session storage and url param data', () => {
+          changeRulesTableState();
+          goToTablePage(2);
+
+          visit(RULES_MANAGEMENT_URL, {
+            visitOptions: {
+              qs: { rulesTable: '(!invalid)' },
+              onBeforeLoad: (win) => {
+                win.sessionStorage.setItem('securitySolution.rulesTable', '!invalid');
+              },
+            },
+          });
+
+          expectRulesManagementTab();
+          expectDefaultRulesTableState();
+        });
+      });
+    });
+  }
+);

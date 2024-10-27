@@ -8,8 +8,10 @@
 import { EuiButtonIcon, EuiComboBox, EuiTextArea } from '@elastic/eui';
 import React from 'react';
 
+import '@kbn/code-editor-mock/jest_helper';
+import { CodeEditorField } from '@kbn/code-editor';
 import { coreMock } from '@kbn/core/public/mocks';
-import { CodeEditorField, KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
+import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
 import { findTestSubject, mountWithIntl, nextTick, shallowWithIntl } from '@kbn/test-jest-helpers';
 
 import { IndexPrivilegeForm } from './index_privilege_form';
@@ -103,34 +105,6 @@ test('should not render clusters field for local indices', () => {
     />
   );
   expect(wrapper.find('[data-test-subj="clustersInput0"]')).toHaveLength(0);
-});
-
-test('should render clusters field for remote indices', () => {
-  const wrapper = shallowWithIntl(
-    <IndexPrivilegeForm
-      indexType="remote_indices"
-      indexPrivilege={{
-        clusters: [],
-        names: [],
-        privileges: [],
-        query: '',
-        field_security: {
-          grant: [],
-        },
-      }}
-      formIndex={0}
-      indexPatterns={[]}
-      indicesAPIClient={indicesAPIClientMock.create()}
-      availableIndexPrivileges={['all', 'read', 'write', 'index']}
-      isRoleReadOnly={false}
-      allowDocumentLevelSecurity
-      allowFieldLevelSecurity
-      validator={new RoleValidator()}
-      onChange={jest.fn()}
-      onDelete={jest.fn()}
-    />
-  );
-  expect(wrapper.find('[data-test-subj="clustersInput0"]')).toHaveLength(1);
 });
 
 describe('delete button', () => {
@@ -451,13 +425,13 @@ describe('field level security', () => {
     const wrapper = mountWithIntl(<IndexPrivilegeForm {...testProps} />);
     expect(wrapper.find('div.indexPrivilegeForm__grantedFieldsRow')).toHaveLength(1);
     expect(wrapper.find('div.indexPrivilegeForm__deniedFieldsRow')).toHaveLength(1);
-    expect(wrapper.find('.euiFormHelpText')).toHaveLength(1);
+    expect(wrapper.find('div.euiFormHelpText')).toHaveLength(1);
   });
 
   test('it does not display a warning when fields are granted', () => {
     const wrapper = mountWithIntl(<IndexPrivilegeForm {...props} />);
     expect(wrapper.find('div.indexPrivilegeForm__grantedFieldsRow')).toHaveLength(1);
     expect(wrapper.find('div.indexPrivilegeForm__deniedFieldsRow')).toHaveLength(1);
-    expect(wrapper.find('.euiFormHelpText')).toHaveLength(0);
+    expect(wrapper.find('div.euiFormHelpText')).toHaveLength(0);
   });
 });

@@ -7,7 +7,7 @@
 
 import type { RuleObjectId, RuleSignatureId, RuleTagArray } from '../../model';
 import type { PartialRuleDiff } from '../model';
-import type { RuleResponse } from '../../model/rule_schema/rule_schemas';
+import type { RuleResponse } from '../../model/rule_schema';
 
 export interface ReviewRuleUpgradeResponseBody {
   /** Aggregated info about all rules available for upgrade */
@@ -20,6 +20,12 @@ export interface ReviewRuleUpgradeResponseBody {
 export interface RuleUpgradeStatsForReview {
   /** Number of installed prebuilt rules available for upgrade (stock + customized) */
   num_rules_to_upgrade_total: number;
+
+  /** Number of installed prebuilt rules with upgrade conflicts (SOLVABLE or NON_SOLVABLE) */
+  num_rules_with_conflicts: number;
+
+  /** Number of installed prebuilt rules with NON_SOLVABLE upgrade conflicts */
+  num_rules_with_non_solvable_conflicts: number;
 
   /** A union of all tags of all rules available for upgrade */
   tags: RuleTagArray;

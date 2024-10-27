@@ -11,8 +11,6 @@ export * from './data_provider';
 export * from './rows';
 export * from './store';
 
-import type { ExpandedDetailType } from '../detail_panel';
-
 /**
  * Used for scrolling top inside a tab. Especially when swiching tabs.
  */
@@ -24,11 +22,6 @@ export interface ScrollToTopEvent {
   timestamp: number;
 }
 
-export type ToggleDetailPanel = ExpandedDetailType & {
-  tabType?: TimelineTabs;
-  id: string;
-};
-
 export enum TimelineTabs {
   query = 'query',
   graph = 'graph',
@@ -37,7 +30,7 @@ export enum TimelineTabs {
   eql = 'eql',
   session = 'session',
   securityAssistant = 'securityAssistant',
-  discover = 'discover',
+  esql = 'esql',
 }
 
 /*
@@ -48,7 +41,6 @@ export enum TimelineId {
   active = 'timeline-1',
   casePage = 'timeline-case',
   test = 'timeline-test', // Reserved for testing purposes
-  detectionsAlertDetailsPage = 'detections-alert-details-page',
 }
 
 export type TimelineEventsType = 'all' | 'raw' | 'alert' | 'signal' | 'custom' | 'eql';

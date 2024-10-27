@@ -1,12 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import type { Type } from '@kbn/config-schema';
 import type { ApiVersion } from '@kbn/core-http-common';
 import type { MaybePromise } from '@kbn/utility-types';
 import type {
@@ -15,26 +15,32 @@ import type {
   RequestHandler,
   IKibanaResponse,
   RouteConfigOptions,
-  RouteValidatorFullConfig,
+  RouteValidatorFullConfigRequest,
   RequestHandlerContextBase,
   RouteValidationFunction,
+  LazyValidator,
 } from '../..';
-
+import type { RouteDeprecationInfo } from '../router/route';
 type RqCtx = RequestHandlerContextBase;
 
 export type { ApiVersion };
 
 /**
  * Configuration for a versioned route
- * @experimental
+ * @public
  */
 export type VersionedRouteConfig<Method extends RouteMethod> = Omit<
   RouteConfig<unknown, unknown, unknown, Method>,
   'validate' | 'options'
 > & {
-  options?: Omit<RouteConfigOptions<Method>, 'access'>;
+  options?: Omit<
+    RouteConfigOptions<Method>,
+    'access' | 'description' | 'summary' | 'deprecated' | 'discontinued' | 'security'
+  >;
   /** See {@link RouteConfigOptions<RouteMethod>['access']} */
   access: Exclude<RouteConfigOptions<Method>['access'], undefined>;
+  /** See {@link RouteConfigOptions<RouteMethod>['security']} */
+  security?: Exclude<RouteConfigOptions<Method>['security'], undefined>;
   /**
    * When enabled, the router will also check for the presence of an `apiVersion`
    * query parameter to determine the route version to resolve to:
@@ -49,10 +55,47 @@ export type VersionedRouteConfig<Method extends RouteMethod> = Omit<
    * @note When enabled `apiVersion` is a reserved query parameter and will not
    *       be passed to the route handler or handler validation.
    * @note `apiVersion` is a reserved query parameter, avoid using it
-   * @experimental
+   * @public
    * @default false
    */
   enableQueryVersion?: boolean;
+
+  /**
+   * Short summary of this route. Required for all routes used in OAS documentation.
+   *
+   * @example
+   * ```ts
+   * router.get({
+   *  path: '/api/foo/{id}',
+   *  access: 'public',
+   *  summary: `Get foo resources for an ID`,
+   * })
+   * ```
+   */
+  summary?: string;
+
+  /**
+   * Optional API description, which supports [CommonMark](https://spec.commonmark.org) markdown formatting
+   *
+   * @example
+   * ```ts
+   * router.get({
+   *  path: '/api/foo/{id}',
+   *  access: 'public',
+   *  summary: `Get foo resources for an ID`,
+   *  description: `Foo resources require **X** and **Y** `read` permissions to access.`,
+   * })
+   * ```
+   */
+  description?: string;
+
+  /**
+   * Release version or date that this route will be removed
+   * Use with `deprecated: {@link RouteDeprecationInfo}`
+   *
+   * @default undefined
+   */
+  discontinued?: string;
 };
 
 /**
@@ -60,7 +103,7 @@ export type VersionedRouteConfig<Method extends RouteMethod> = Omit<
  *
  * @param config - The route configuration
  * @returns A versioned route
- * @experimental
+ * @public
  */
 export type VersionedRouteRegistrar<Method extends RouteMethod, Ctx extends RqCtx = RqCtx> = (
   config: VersionedRouteConfig<Method>
@@ -68,7 +111,7 @@ export type VersionedRouteRegistrar<Method extends RouteMethod, Ctx extends RqCt
 
 /**
  * A router, very similar to {@link IRouter} that will return an {@link VersionedRoute}
- * instead.
+ * instead
  *
  * @example
  * const versionedRoute = versionedRouter
@@ -155,60 +198,122 @@ export type VersionedRouteRegistrar<Method extends RouteMethod, Ctx extends RqCt
  *     }
  *   );
 
- * @experimental
+ * @public
  */
 export interface VersionedRouter<Ctx extends RqCtx = RqCtx> {
   /**
-   * @experimental
+   * @public
    * @track-adoption
    */
   get: VersionedRouteRegistrar<'get', Ctx>;
   /**
-   * @experimental
+   * @public
    * @track-adoption
    */
   put: VersionedRouteRegistrar<'put', Ctx>;
   /**
-   * @experimental
+   * @public
    * @track-adoption
    */
   post: VersionedRouteRegistrar<'post', Ctx>;
   /**
-   * @experimental
+   * @public
    * @track-adoption
    */
   patch: VersionedRouteRegistrar<'patch', Ctx>;
   /**
-   * @experimental
+   * @public
    * @track-adoption
    */
   delete: VersionedRouteRegistrar<'delete', Ctx>;
+
+  /**
+   * @public
+   */
+  getRoutes: () => VersionedRouterRoute[];
 }
 
-/** @experimental */
-export type VersionedRouteRequestValidation<P, Q, B> = RouteValidatorFullConfig<P, Q, B>;
+/** @public */
+export type VersionedRouteRequestValidation<P, Q, B> = RouteValidatorFullConfigRequest<P, Q, B>;
 
-/** @experimental */
+/** @public */
+export interface VersionedRouteCustomResponseBodyValidation {
+  /** A custom validation function */
+  custom: RouteValidationFunction<unknown>;
+}
+
+/** @public */
+export type VersionedResponseBodyValidation =
+  | LazyValidator
+  | VersionedRouteCustomResponseBodyValidation;
+
+/**
+ * Map of response status codes to response schemas
+ *
+ * @note Instantiating response schemas is expensive, especially when it is
+ *       not needed in most cases. See example below to ensure this is lazily
+ *       provided.
+ *
+ * @note The {@link TypeOf} type utility from @kbn/config-schema can extract
+ *       types from lazily created schemas
+ *
+ * @example
+ * ```ts
+ * // Avoid this:
+ * const badResponseSchema = schema.object({ foo: foo.string() });
+ * // Do this:
+ * const goodResponseSchema = () => schema.object({ foo: foo.string() });
+ *
+ * type ResponseType = TypeOf<typeof goodResponseSchema>;
+ * ...
+ * .addVersion(
+ *  { ... validation: { response: { 200: { body: goodResponseSchema } } } },
+ *  handlerFn
+ * )
+ * ...
+ * ```
+ * @example
+ * ```ts
+ * {
+ *    200: {
+ *       body: schema.stream()
+ *       bodyContentType: 'application/octet-stream'
+ *    }
+ * }
+ * @public
+ */
 export interface VersionedRouteResponseValidation {
-  [statusCode: number]: { body: RouteValidationFunction<unknown> | Type<unknown> };
+  [statusCode: number]: {
+    /**
+     * A description of the response. This is required input for complete OAS documentation.
+     */
+    description?: string;
+    /**
+     * A string representing the mime type of the response body.
+     */
+    bodyContentType?: string;
+    body?: VersionedResponseBodyValidation;
+  };
   unsafe?: { body?: boolean };
 }
 
 /**
  * Versioned route validation
- * @experimental
+ * @public
  */
-export interface FullValidationConfig<P, Q, B> {
+export interface VersionedRouteValidation<P, Q, B> {
   /**
    * Validation to run against route inputs: params, query and body
-   * @experimental
+   * @public
    */
   request?: VersionedRouteRequestValidation<P, Q, B>;
   /**
-   * Validation to run against route output
+   * Validation to run against route output.
+   *
    * @note This validation is only intended to run in development. Do not use this
    *       for setting default values!
-   * @experimental
+   *
+   * @public
    */
   response?: VersionedRouteResponseValidation;
 }
@@ -216,24 +321,32 @@ export interface FullValidationConfig<P, Q, B> {
 /**
  * Options for a versioned route. Probably needs a lot more options like sunsetting
  * of an endpoint etc.
- * @experimental
+ * @public
  */
 export interface AddVersionOpts<P, Q, B> {
   /**
    * Version to assign to this route
-   * @experimental
+   * @public
    */
   version: ApiVersion;
   /**
    * Validation for this version of a route
-   * @experimental
+   * @note if providing a function to lazily load your validation schemas assume
+   *       that the function will only be called once.
+   * @public
    */
-  validate: false | FullValidationConfig<P, Q, B>;
+  validate: false | VersionedRouteValidation<P, Q, B> | (() => VersionedRouteValidation<P, Q, B>); // Provide a way to lazily load validation schemas
+
+  security?: Exclude<RouteConfigOptions<RouteMethod>['security'], undefined>;
+
+  options?: {
+    deprecated?: RouteDeprecationInfo;
+  };
 }
 
 /**
  * A versioned route
- * @experimental
+ * @public
  */
 export interface VersionedRoute<
   Method extends RouteMethod = RouteMethod,
@@ -244,10 +357,18 @@ export interface VersionedRoute<
    * @param opts {@link AddVersionOpts | Options} for this version of a route
    * @param handler The request handler for this version of a route
    * @returns A versioned route, allows for fluent chaining of version declarations
-   * @experimental
+   * @public
    */
   addVersion<P = unknown, Q = unknown, B = unknown>(
     options: AddVersionOpts<P, Q, B>,
     handler: (...params: Parameters<RequestHandler<P, Q, B, Ctx>>) => MaybePromise<IKibanaResponse>
   ): VersionedRoute<Method, Ctx>;
+}
+
+export interface VersionedRouterRoute<P = unknown, Q = unknown, B = unknown> {
+  method: string;
+  path: string;
+  options: Omit<VersionedRouteConfig<RouteMethod>, 'path'>;
+  handlers: Array<{ fn: RequestHandler<P, Q, B>; options: AddVersionOpts<P, Q, B> }>;
+  isVersioned: true;
 }

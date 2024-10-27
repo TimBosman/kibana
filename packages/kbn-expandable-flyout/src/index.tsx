@@ -1,33 +1,44 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { useCallback, useMemo } from 'react';
-import type { EuiFlyoutProps } from '@elastic/eui';
-import { EuiFlexGroup, EuiFlyout } from '@elastic/eui';
-import { useExpandableFlyoutContext } from './context';
-import { PreviewSection } from './components/preview_section';
-import { RightSection } from './components/right_section';
-import type { FlyoutPanelProps, Panel } from './types';
-import { LeftSection } from './components/left_section';
-import { isPreviewBanner } from './components/preview_section';
+import React, { useMemo } from 'react';
+import type { Interpolation, Theme } from '@emotion/react';
+import { EuiFlyoutProps } from '@elastic/eui';
+import { EuiFlyoutResizableProps } from '@elastic/eui/src/components/flyout/flyout_resizable';
+import { Container } from './components/container';
+import { useWindowWidth } from './hooks/use_window_width';
+import { useInitializeFromLocalStorage } from './hooks/use_initialize_from_local_storage';
+import { FlyoutCustomProps } from './components/settings_menu';
+import type { Panel } from './types';
 
-export interface ExpandableFlyoutProps extends Omit<EuiFlyoutProps, 'onClose'> {
+export interface ExpandableFlyoutProps extends Omit<EuiFlyoutResizableProps, 'onClose'> {
   /**
    * List of all registered panels available for render
    */
   registeredPanels: Panel[];
   /**
-   * Propagate out EuiFlyout onClose event
+   * Allows for custom styles to be passed to the EuiFlyout component
    */
-  handleOnFlyoutClosed?: () => void;
+  customStyles?: Interpolation<Theme>;
+  /**
+   * Callback function to let application's code the flyout is closed
+   */
+  onClose?: EuiFlyoutProps['onClose'];
+  /**
+   * Set of properties that drive a settings menu
+   */
+  flyoutCustomProps?: FlyoutCustomProps;
+  /**
+   * Optional data test subject string to be used on the EuiFlyoutResizable component
+   */
+  'data-test-subj'?: string;
 }
-
-const flyoutInnerStyles = { height: '100%' };
 
 /**
  * Expandable flyout UI React component.
@@ -36,84 +47,18 @@ const flyoutInnerStyles = { height: '100%' };
  * The behavior expects that the left and preview sections should only be displayed is a right section
  * is already rendered.
  */
-export const ExpandableFlyout: React.FC<ExpandableFlyoutProps> = ({
-  registeredPanels,
-  handleOnFlyoutClosed,
-  ...flyoutProps
-}) => {
-  const { panels, closeFlyout } = useExpandableFlyoutContext();
-  const { left, right, preview } = panels;
+export const ExpandableFlyout: React.FC<ExpandableFlyoutProps> = ({ ...props }) => {
+  const windowWidth = useWindowWidth();
 
-  const onClose = useCallback(() => {
-    if (handleOnFlyoutClosed) handleOnFlyoutClosed();
-    closeFlyout();
-  }, [closeFlyout, handleOnFlyoutClosed]);
+  useInitializeFromLocalStorage();
 
-  const leftSection = useMemo(
-    () => registeredPanels.find((panel) => panel.key === left?.id),
-    [left, registeredPanels]
-  );
+  const container = useMemo(() => <Container {...props} />, [props]);
 
-  const rightSection = useMemo(
-    () => registeredPanels.find((panel) => panel.key === right?.id),
-    [right, registeredPanels]
-  );
-
-  // retrieve the last preview panel (most recent)
-  const mostRecentPreview = preview ? preview[preview.length - 1] : undefined;
-  const previewBanner = isPreviewBanner(mostRecentPreview?.params?.banner)
-    ? mostRecentPreview?.params?.banner
-    : undefined;
-
-  const showBackButton = preview && preview.length > 1;
-  const previewSection = useMemo(
-    () => registeredPanels.find((panel) => panel.key === mostRecentPreview?.id),
-    [mostRecentPreview, registeredPanels]
-  );
-
-  const hideFlyout = !left && !right && !preview.length;
-
-  if (hideFlyout) {
+  if (windowWidth === 0) {
     return null;
   }
 
-  const flyoutWidth: string = leftSection && rightSection ? 'l' : 's';
-  const rightSectionWidth: number = leftSection ? 0.4 : 1;
-  const leftSectionWidth: number = 0.6;
-  const previewSectionWidth: number = leftSection ? 0.4 : 1;
-
-  return (
-    <EuiFlyout {...flyoutProps} size={flyoutWidth} ownFocus={false} onClose={onClose}>
-      <EuiFlexGroup
-        direction={leftSection ? 'row' : 'column'}
-        wrap={false}
-        gutterSize="none"
-        style={flyoutInnerStyles}
-      >
-        {leftSection && left ? (
-          <LeftSection
-            component={leftSection.component({ ...(left as FlyoutPanelProps) })}
-            width={leftSectionWidth}
-          />
-        ) : null}
-        {rightSection && right ? (
-          <RightSection
-            component={rightSection.component({ ...(right as FlyoutPanelProps) })}
-            width={rightSectionWidth}
-          />
-        ) : null}
-      </EuiFlexGroup>
-
-      {previewSection && preview ? (
-        <PreviewSection
-          component={previewSection.component({ ...(mostRecentPreview as FlyoutPanelProps) })}
-          showBackButton={showBackButton}
-          width={previewSectionWidth}
-          banner={previewBanner}
-        />
-      ) : null}
-    </EuiFlyout>
-  );
+  return <>{container}</>;
 };
 
 ExpandableFlyout.displayName = 'ExpandableFlyout';

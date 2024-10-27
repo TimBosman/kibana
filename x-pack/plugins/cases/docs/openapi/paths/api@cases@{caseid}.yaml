@@ -1,5 +1,5 @@
 get:
-  summary: Retrieves information about a case in the default space.
+  summary: Get case information
   operationId: getCaseDefaultSpace
   description: >
     You must have `read` privileges for the **Cases** feature in the
@@ -18,15 +18,13 @@ get:
           schema:
             $ref: '../components/schemas/case_response_properties.yaml'
           examples:
-            getCaseResponse:
+            getDefaultCaseResponse:
               $ref: '../components/examples/get_case_response.yaml'
+            getDefaultObservabilityCaseReponse:
+              $ref: '../components/examples/get_case_observability_response.yaml'
     '401':
       description: Authorization information is missing or invalid.
       content:
         application/json:
           schema:
             $ref: '../components/schemas/4xx_response.yaml'
-  servers:
-    - url: https://localhost:5601
-servers:
-  - url: https://localhost:5601

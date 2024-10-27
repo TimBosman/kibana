@@ -33,9 +33,17 @@ import { AGENT_POLICY_NAME_LINK } from '../../screens/integrations';
 import { cleanupAgentPolicies, unenrollAgent } from '../../tasks/cleanup';
 import { setFleetServerHost } from '../../tasks/fleet_server';
 
+import { API_VERSIONS } from '../../../common/constants';
+import { login } from '../../tasks/login';
+import { request } from '../../tasks/common';
+
 describe('Home page', () => {
   before(() => {
     setFleetServerHost('https://fleetserver:8220');
+  });
+
+  beforeEach(() => {
+    login();
   });
 
   describe('Agents', () => {
@@ -110,7 +118,7 @@ describe('Home page', () => {
         'be.visible'
       );
       cy.getBySel(AGENT_POLICY_CREATE_AGENT_POLICY_NAME_FIELD).type('testName');
-      cy.get('.ingest-active-button').click();
+      cy.getBySel(AGENT_POLICIES_CREATE_AGENT_POLICY_FLYOUT.ADVANCED_OPTIONS_TOGGLE).click();
       cy.getBySel(AGENT_POLICIES_FLYOUT_ADVANCED_DEFAULT_NAMESPACE_HEADER, {
         timeout: 15000,
       }).should('be.visible');
@@ -148,11 +156,11 @@ describe('Home page', () => {
 
   describe('Uninstall Tokens', () => {
     before(() => {
-      cy.request({
+      request({
         method: 'POST',
         url: '/api/fleet/agent_policies',
         body: { name: 'Agent policy for A11y test', namespace: 'default', id: 'agent-policy-a11y' },
-        headers: { 'kbn-xsrf': 'cypress' },
+        headers: { 'kbn-xsrf': 'cypress', 'Elastic-Api-Version': `${API_VERSIONS.public.v1}` },
       });
     });
     beforeEach(() => {
@@ -160,11 +168,11 @@ describe('Home page', () => {
       cy.getBySel(UNINSTALL_TOKENS_TAB).click();
     });
     after(() => {
-      cy.request({
+      request({
         method: 'POST',
         url: '/api/fleet/agent_policies/delete',
         body: { agentPolicyId: 'agent-policy-a11y' },
-        headers: { 'kbn-xsrf': 'kibana' },
+        headers: { 'kbn-xsrf': 'kibana', 'Elastic-Api-Version': `${API_VERSIONS.public.v1}` },
       });
     });
     it('Uninstall Tokens Table', () => {
@@ -180,6 +188,7 @@ describe('Home page', () => {
 
   describe('Data Streams', () => {
     before(() => {
+      login();
       navigateTo(FLEET);
       cy.getBySel(DATA_STREAMS_TAB, { timeout: 15000 }).should('be.visible');
       cy.getBySel(DATA_STREAMS_TAB).click();

@@ -16,10 +16,12 @@ import {
 import {
   BLOCKLIST_PATH,
   ENDPOINTS_PATH,
+  ENTITY_ANALYTICS_ENTITY_STORE_MANAGEMENT_PATH,
   ENTITY_ANALYTICS_MANAGEMENT_PATH,
   EVENT_FILTERS_PATH,
   HOST_ISOLATION_EXCEPTIONS_PATH,
   MANAGE_PATH,
+  NOTES_PATH,
   POLICIES_PATH,
   RESPONSE_ACTIONS_HISTORY_PATH,
   SecurityPageName,
@@ -36,6 +38,8 @@ import {
   RESPONSE_ACTIONS_HISTORY,
   TRUSTED_APPLICATIONS,
   ENTITY_ANALYTICS_RISK_SCORE,
+  NOTES,
+  ENTITY_STORE,
 } from '../app/translations';
 import { licenseService } from '../common/hooks/use_license';
 import type { LinkItem } from '../common/links/types';
@@ -50,13 +54,17 @@ import { IconSavedObject } from '../common/icons/saved_object';
 import { IconDashboards } from '../common/icons/dashboards';
 import { IconEntityAnalytics } from '../common/icons/entity_analytics';
 import { HostIsolationExceptionsApiClient } from './pages/host_isolation_exceptions/host_isolation_exceptions_api_client';
+import { IconAssetCriticality } from '../common/icons/asset_criticality';
 
 const categories = [
   {
     label: i18n.translate('xpack.securitySolution.appLinks.category.entityAnalytics', {
       defaultMessage: 'Entity Analytics',
     }),
-    linkIds: [SecurityPageName.entityAnalyticsManagement],
+    linkIds: [
+      SecurityPageName.entityAnalyticsManagement,
+      SecurityPageName.entityAnalyticsEntityStoreManagement,
+    ],
   },
   {
     label: i18n.translate('xpack.securitySolution.appLinks.category.endpoints', {
@@ -78,6 +86,12 @@ const categories = [
     }),
     linkIds: [SecurityPageName.cloudDefendPolicies],
   },
+  {
+    label: i18n.translate('xpack.securitySolution.appLinks.category.investigations', {
+      defaultMessage: 'Investigations',
+    }),
+    linkIds: [SecurityPageName.notes],
+  },
 ];
 
 export const links: LinkItem = {
@@ -86,7 +100,7 @@ export const links: LinkItem = {
   path: MANAGE_PATH,
   skipUrlState: true,
   hideTimeline: true,
-  globalNavPosition: 9,
+  globalNavPosition: 10,
   capabilities: [`${SERVER_APP_ID}.show`],
   globalSearchKeywords: [
     i18n.translate('xpack.securitySolution.appLinks.manage', {
@@ -170,7 +184,7 @@ export const links: LinkItem = {
       id: SecurityPageName.entityAnalyticsManagement,
       title: ENTITY_ANALYTICS_RISK_SCORE,
       description: i18n.translate('xpack.securitySolution.appLinks.entityRiskScoringDescription', {
-        defaultMessage: 'Manage entity risk scoring and detect insider threats.',
+        defaultMessage: 'Monitor user and host risk scores, and track anomalies.',
       }),
       landingIcon: IconEntityAnalytics,
       path: ENTITY_ANALYTICS_MANAGEMENT_PATH,
@@ -179,6 +193,18 @@ export const links: LinkItem = {
       capabilities: [`${SERVER_APP_ID}.entity-analytics`],
       experimentalKey: 'riskScoringRoutesEnabled',
       licenseType: 'platinum',
+    },
+    {
+      id: SecurityPageName.entityAnalyticsEntityStoreManagement,
+      title: ENTITY_STORE,
+      description: i18n.translate('xpack.securitySolution.appLinks.entityStoreDescription', {
+        defaultMessage: "Allows comprehensive monitoring of your system's hosts and users.",
+      }),
+      landingIcon: IconAssetCriticality,
+      path: ENTITY_ANALYTICS_ENTITY_STORE_MANAGEMENT_PATH,
+      skipUrlState: true,
+      hideTimeline: true,
+      capabilities: [`${SERVER_APP_ID}.entity-analytics`],
     },
     {
       id: SecurityPageName.responseActionsHistory,
@@ -192,6 +218,19 @@ export const links: LinkItem = {
       hideTimeline: true,
     },
     cloudDefendLink,
+    {
+      id: SecurityPageName.notes,
+      title: NOTES,
+      description: i18n.translate('xpack.securitySolution.appLinks.notesDescription', {
+        defaultMessage:
+          'Oversee, revise, and revisit the notes attached to alerts, events and Timelines.',
+      }),
+      landingIcon: 'filebeatApp',
+      path: NOTES_PATH,
+      skipUrlState: true,
+      hideTimeline: true,
+      experimentalKey: 'securitySolutionNotesEnabled',
+    },
   ],
 };
 
@@ -235,6 +274,7 @@ export const getManagementFilteredLinks = async (
 
   if (!canReadPolicyManagement) {
     linksToExclude.push(SecurityPageName.policies);
+    linksToExclude.push(SecurityPageName.cloudDefendPolicies);
   }
 
   if (!canReadActionsLogManagement) {

@@ -7,13 +7,10 @@
 
 import type { PluginInitializerContext } from '@kbn/core/server';
 
-import { FleetPlugin } from './plugin';
-
 export { buildAgentStatusRuntimeField } from './services/agents/build_status_runtime_field';
 export type {
   AgentService,
   AgentClient,
-  ESIndexPatternService,
   PackageService,
   PackageClient,
   AgentPolicyServiceInterface,
@@ -23,6 +20,7 @@ export type {
   MessageSigningServiceInterface,
 } from './services';
 export { getRegistryUrl } from './services';
+export { NamingCollisionError } from './services/epm/packages/custom_integrations/validation/check_naming_collision';
 
 export type { FleetSetupContract, FleetSetupDeps, FleetStartContract } from './plugin';
 export type {
@@ -50,6 +48,7 @@ export type {
   FleetFileUpdatableFields,
 } from './services/files/types';
 
-export const plugin = (initializerContext: PluginInitializerContext) => {
+export const plugin = async (initializerContext: PluginInitializerContext) => {
+  const { FleetPlugin } = await import('./plugin');
   return new FleetPlugin(initializerContext);
 };

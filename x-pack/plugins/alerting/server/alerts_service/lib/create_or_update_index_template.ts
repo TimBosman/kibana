@@ -68,6 +68,7 @@ export const getIndexTemplate = ({
             : {
                 'index.lifecycle': indexLifecycle,
               }),
+          'index.mapping.ignore_malformed': true,
           'index.mapping.total_fields.limit': totalFieldsLimit,
         },
         mappings: {
@@ -110,7 +111,7 @@ export const createOrUpdateIndexTemplate = async ({
   esClient,
   template,
 }: CreateOrUpdateIndexTemplateOpts) => {
-  logger.info(`Installing index template ${template.name}`);
+  logger.debug(`Installing index template ${template.name}`);
 
   let mappings: MappingTypeMapping = {};
   try {

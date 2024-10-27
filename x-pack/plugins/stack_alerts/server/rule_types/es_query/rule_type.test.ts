@@ -10,8 +10,7 @@ import type { Writable } from '@kbn/utility-types';
 import { RuleExecutorServices } from '@kbn/alerting-plugin/server';
 import { RuleExecutorServicesMock, alertsMock } from '@kbn/alerting-plugin/server/mocks';
 import { loggingSystemMock } from '@kbn/core/server/mocks';
-import type { DataViewSpec } from '@kbn/data-views-plugin/common';
-import { createStubDataView } from '@kbn/data-views-plugin/common/data_view.stub';
+import { dataViewPluginMocks } from '@kbn/data-views-plugin/public/mocks';
 import { getRuleType } from './rule_type';
 import { EsQueryRuleParams, EsQueryRuleState } from './rule_type_params';
 import { ActionContext } from './action_context';
@@ -19,14 +18,18 @@ import type { ESSearchResponse, ESSearchRequest } from '@kbn/es-types';
 import { elasticsearchClientMock } from '@kbn/core-elasticsearch-client-server-mocks';
 import { coreMock } from '@kbn/core/server/mocks';
 import { ActionGroupId, ConditionMetAlertInstanceId } from './constants';
-import { OnlyEsQueryRuleParams, OnlySearchSourceRuleParams } from './types';
+import {
+  OnlyEsqlQueryRuleParams,
+  OnlyEsQueryRuleParams,
+  OnlySearchSourceRuleParams,
+} from './types';
 import { searchSourceInstanceMock } from '@kbn/data-plugin/common/search/search_source/mocks';
 import { Comparator } from '../../../common/comparator_types';
 import { DEFAULT_FLAPPING_SETTINGS } from '@kbn/alerting-plugin/common/rules_settings';
 
 const logger = loggingSystemMock.create().get();
 const coreSetup = coreMock.createSetup();
-const ruleType = getRuleType(coreSetup);
+let ruleType = getRuleType(coreSetup, false);
 const mockNow = jest.getRealSystemTime();
 
 describe('ruleType', () => {
@@ -36,6 +39,7 @@ describe('ruleType', () => {
   });
   beforeEach(() => {
     jest.clearAllMocks();
+    ruleType = getRuleType(coreSetup, false);
   });
   afterAll(() => {
     jest.useRealTimers();
@@ -108,6 +112,10 @@ describe('ruleType', () => {
             "description": "The indices the rule queries.",
             "name": "index",
           },
+          Object {
+            "description": "ES|QL query field used to fetch data from Elasticsearch.",
+            "name": "esqlQuery",
+          },
         ],
       }
     `);
@@ -152,6 +160,49 @@ describe('ruleType', () => {
 
       expect(() => paramsSchema.validate(params)).toThrowErrorMatchingInlineSnapshot(
         `"[threshold]: must have two elements for the \\"between\\" comparator"`
+      );
+    });
+
+    it('validator succeeds with valid es query params (serverless)', async () => {
+      ruleType = getRuleType(coreSetup, true);
+      const params: Partial<Writable<OnlyEsQueryRuleParams>> = {
+        index: ['index-name'],
+        timeField: 'time-field',
+        esQuery: `{\n  \"query\":{\n    \"match_all\" : {}\n  }\n}`,
+        size: 100,
+        timeWindowSize: 5,
+        timeWindowUnit: 'm',
+        thresholdComparator: Comparator.LT,
+        threshold: [0],
+        searchType: 'esQuery',
+        aggType: 'count',
+        groupBy: 'all',
+      };
+
+      expect(ruleType.validate.params.validate(params)).toBeTruthy();
+    });
+
+    it('validator fails with invalid es query params - size (serverless)', async () => {
+      ruleType = getRuleType(coreSetup, true);
+      const paramsSchema = ruleType.validate.params;
+      if (!paramsSchema) throw new Error('params validator not set');
+
+      const params: Partial<Writable<OnlyEsQueryRuleParams>> = {
+        index: ['index-name'],
+        timeField: 'time-field',
+        esQuery: `{\n  \"query\":{\n    \"match_all\" : {}\n  }\n}`,
+        size: 104,
+        timeWindowSize: 5,
+        timeWindowUnit: 'm',
+        thresholdComparator: Comparator.LT,
+        threshold: [0],
+        searchType: 'esQuery',
+        aggType: 'count',
+        groupBy: 'all',
+      };
+
+      expect(() => paramsSchema.validate(params)).toThrowErrorMatchingInlineSnapshot(
+        `"[size]: must be less than or equal to 100"`
       );
     });
 
@@ -558,31 +609,33 @@ describe('ruleType', () => {
   });
 
   describe('search source query', () => {
-    const dataViewMock = createStubDataView({
-      spec: {
-        id: 'test-id',
-        title: 'test-title',
-        timeFieldName: 'time-field',
-        fields: {
-          message: {
-            name: 'message',
-            type: 'string',
-            scripted: false,
-            searchable: false,
-            aggregatable: false,
-            readFromDocValues: false,
-          },
-          timestamp: {
-            name: 'timestamp',
-            type: 'date',
-            scripted: false,
-            searchable: true,
-            aggregatable: false,
-            readFromDocValues: false,
-          },
+    const dataViewMock = {
+      id: 'test-id',
+      title: 'test-title',
+      timeFieldName: 'timestamp',
+      fields: [
+        {
+          name: 'message',
+          type: 'string',
+          displayName: 'message',
+          scripted: false,
+          filterable: false,
+          aggregatable: false,
         },
+        {
+          name: 'timestamp',
+          type: 'date',
+          displayName: 'timestamp',
+          scripted: false,
+          filterable: false,
+          aggregatable: false,
+        },
+      ],
+      toSpec: () => {
+        return { id: 'test-id', title: 'test-title', timeFieldName: 'timestamp', fields: [] };
       },
-    });
+      getTimeField: () => dataViewMock.fields[1],
+    };
     const defaultParams: OnlySearchSourceRuleParams = {
       size: 100,
       timeWindowSize: 5,
@@ -595,10 +648,6 @@ describe('ruleType', () => {
       aggType: 'count',
       groupBy: 'all',
     };
-
-    afterAll(() => {
-      jest.resetAllMocks();
-    });
 
     it('validator succeeds with valid search source params', async () => {
       expect(ruleType.validate.params.validate(defaultParams)).toBeTruthy();
@@ -628,9 +677,14 @@ describe('ruleType', () => {
       const searchResult: ESSearchResponse<unknown, {}> = generateResults([]);
       const ruleServices: RuleExecutorServicesMock = alertsMock.createRuleExecutorServices();
 
-      (ruleServices.dataViews.create as jest.Mock).mockImplementationOnce((spec: DataViewSpec) =>
-        createStubDataView({ spec })
-      );
+      ruleServices.getDataViews = jest.fn().mockResolvedValueOnce({
+        ...dataViewPluginMocks.createStartContract(),
+        create: jest.fn().mockResolvedValueOnce({
+          ...dataViewMock.toSpec(),
+          toSpec: () => dataViewMock.toSpec(),
+          toMinimalSpec: () => dataViewMock.toSpec(),
+        }),
+      });
       (searchSourceInstanceMock.getField as jest.Mock).mockImplementation((name: string) => {
         if (name === 'index') {
           return dataViewMock;
@@ -652,12 +706,12 @@ describe('ruleType', () => {
 
       (searchSourceInstanceMock.getField as jest.Mock).mockImplementationOnce((name: string) => {
         if (name === 'index') {
-          return { dataViewMock, timeFieldName: undefined };
+          return { dataViewMock, getTimeField: () => undefined, id: 1234 };
         }
       });
 
       await expect(invokeExecutor({ params, ruleServices })).rejects.toThrow(
-        'Invalid data view without timeFieldName.'
+        'Data view with ID 1234 no longer contains a time field.'
       );
     });
 
@@ -665,9 +719,15 @@ describe('ruleType', () => {
       const params = { ...defaultParams, thresholdComparator: Comparator.GT_OR_EQ, threshold: [3] };
       const ruleServices: RuleExecutorServicesMock = alertsMock.createRuleExecutorServices();
 
-      (ruleServices.dataViews.create as jest.Mock).mockImplementationOnce((spec: DataViewSpec) =>
-        createStubDataView({ spec })
-      );
+      ruleServices.getDataViews = jest.fn().mockResolvedValueOnce({
+        ...dataViewPluginMocks.createStartContract(),
+        create: jest.fn().mockResolvedValueOnce({
+          ...dataViewMock.toSpec(),
+          toSpec: () => dataViewMock.toSpec(),
+          getTimeField: () => dataViewMock.fields[1],
+          toMinimalSpec: () => dataViewMock.toSpec(),
+        }),
+      });
       (searchSourceInstanceMock.getField as jest.Mock).mockImplementation((name: string) => {
         if (name === 'index') {
           return dataViewMock;
@@ -694,17 +754,108 @@ describe('ruleType', () => {
           actionGroup: 'query matched',
           id: 'query matched',
           payload: expect.objectContaining({
-            kibana: {
-              alert: {
-                url: expect.any(String),
-                reason: expect.any(String),
-                title: "rule 'rule-name' matched query",
-                evaluation: {
-                  conditions: 'Number of matching documents is greater than or equal to 3',
-                  value: 3,
-                },
-              },
-            },
+            'kibana.alert.evaluation.conditions':
+              'Number of matching documents is greater than or equal to 3',
+            'kibana.alert.evaluation.threshold': 3,
+            'kibana.alert.evaluation.value': '3',
+            'kibana.alert.reason': expect.any(String),
+            'kibana.alert.title': "rule 'rule-name' matched query",
+            'kibana.alert.url': expect.any(String),
+          }),
+        })
+      );
+    });
+  });
+
+  describe('ESQL query', () => {
+    const defaultParams: OnlyEsqlQueryRuleParams = {
+      size: 100,
+      timeWindowSize: 5,
+      timeWindowUnit: 'm',
+      thresholdComparator: Comparator.GT,
+      threshold: [0],
+      esqlQuery: { esql: 'test' },
+      timeField: 'timestamp',
+      searchType: 'esqlQuery',
+      excludeHitsFromPreviousRun: true,
+      aggType: 'count',
+      groupBy: 'all',
+    };
+
+    it('validator succeeds with valid ESQL query params', async () => {
+      expect(ruleType.validate.params.validate(defaultParams)).toBeTruthy();
+    });
+
+    it('validator fails with invalid ESQL query params - esQuery provided', async () => {
+      const paramsSchema = ruleType.validate.params;
+      const params: Partial<Writable<EsQueryRuleParams>> = {
+        size: 100,
+        timeWindowSize: 5,
+        timeWindowUnit: 'm',
+        thresholdComparator: Comparator.LT,
+        threshold: [0],
+        esQuery: '',
+        searchType: 'esqlQuery',
+        aggType: 'count',
+        groupBy: 'all',
+      };
+
+      expect(() => paramsSchema.validate(params)).toThrowErrorMatchingInlineSnapshot(
+        `"[esQuery]: a value wasn't expected to be present"`
+      );
+    });
+
+    it('rule executor handles no documents returned by ES', async () => {
+      const params = defaultParams;
+      const ruleServices: RuleExecutorServicesMock = alertsMock.createRuleExecutorServices();
+      const searchResult = {
+        columns: [
+          { name: 'timestamp', type: 'date' },
+          { name: 'message', type: 'keyword' },
+        ],
+        values: [],
+      };
+      ruleServices.scopedClusterClient.asCurrentUser.transport.request.mockResolvedValueOnce(
+        searchResult
+      );
+
+      await invokeExecutor({ params, ruleServices });
+      expect(ruleServices.alertsClient.report).not.toHaveBeenCalled();
+    });
+
+    it('rule executor schedule actions when condition met', async () => {
+      const params = defaultParams;
+      const ruleServices: RuleExecutorServicesMock = alertsMock.createRuleExecutorServices();
+      const searchResult = {
+        columns: [
+          { name: 'timestamp', type: 'date' },
+          { name: 'message', type: 'keyword' },
+        ],
+        values: [
+          ['timestamp', 'message'],
+          ['timestamp', 'message'],
+          ['timestamp', 'message'],
+        ],
+      };
+      ruleServices.scopedClusterClient.asCurrentUser.transport.request.mockResolvedValueOnce(
+        searchResult
+      );
+
+      await invokeExecutor({ params, ruleServices });
+
+      expect(ruleServices.alertsClient.report).toHaveBeenCalledTimes(1);
+
+      expect(ruleServices.alertsClient.report).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionGroup: 'query matched',
+          id: 'query matched',
+          payload: expect.objectContaining({
+            'kibana.alert.evaluation.conditions': 'Query matched documents',
+            'kibana.alert.evaluation.threshold': 0,
+            'kibana.alert.evaluation.value': '3',
+            'kibana.alert.reason': expect.any(String),
+            'kibana.alert.title': "rule 'rule-name' matched query",
+            'kibana.alert.url': expect.any(String),
           }),
         })
       );
@@ -756,13 +907,14 @@ async function invokeExecutor({
   ruleServices,
   state,
 }: {
-  params: OnlySearchSourceRuleParams | OnlyEsQueryRuleParams;
+  params: OnlySearchSourceRuleParams | OnlyEsQueryRuleParams | OnlyEsqlQueryRuleParams;
   ruleServices: RuleExecutorServicesMock;
   state?: EsQueryRuleState;
 }) {
   return await ruleType.executor({
     executionId: uuidv4(),
     startedAt: new Date(),
+    startedAtOverridden: false,
     previousStartedAt: new Date(),
     services: ruleServices as unknown as RuleExecutorServices<
       EsQueryRuleState,
@@ -801,5 +953,9 @@ async function invokeExecutor({
     },
     logger,
     flappingSettings: DEFAULT_FLAPPING_SETTINGS,
+    getTimeRange: () => {
+      const date = new Date(Date.now()).toISOString();
+      return { dateStart: date, dateEnd: date };
+    },
   });
 }

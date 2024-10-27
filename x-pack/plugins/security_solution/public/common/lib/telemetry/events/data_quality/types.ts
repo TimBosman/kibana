@@ -5,14 +5,15 @@
  * 2.0.
  */
 
-import type { RootSchema } from '@kbn/analytics-client';
+import type { RootSchema } from '@kbn/core/public';
 import type { TelemetryEventTypes } from '../../constants';
 
 export type ReportDataQualityIndexCheckedParams = ReportDataQualityCheckAllCompletedParams & {
   errorCount?: number;
   ilmPhase?: string;
-  indexId: string;
+  indexId?: string | null;
   indexName: string;
+  sameFamilyFields?: string[];
   unallowedMappingFields?: string[];
   unallowedValueFields?: string[];
 };
@@ -22,9 +23,13 @@ export interface ReportDataQualityCheckAllCompletedParams {
   ecsVersion?: string;
   isCheckAll?: boolean;
   numberOfDocuments?: number;
+  numberOfFields?: number;
   numberOfIncompatibleFields?: number;
+  numberOfEcsFields?: number;
+  numberOfCustomFields?: number;
   numberOfIndices?: number;
   numberOfIndicesChecked?: number;
+  numberOfSameFamily?: number;
   sizeInBytes?: number;
   timeConsumedMs?: number;
 }

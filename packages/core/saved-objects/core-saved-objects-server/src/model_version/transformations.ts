@@ -1,11 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+import type { SavedObjectsNamespaceType } from '@kbn/core-saved-objects-common';
 import type { SavedObjectUnsanitizedDoc } from '../serialization';
 import type { SavedObjectsMigrationLogger } from '../migration';
 
@@ -30,6 +32,10 @@ export interface SavedObjectModelTransformationContext {
    * The model version this migration is registered for
    */
   readonly modelVersion: number;
+  /**
+   * The namespace type of the savedObject type this migration is registered for
+   */
+  readonly namespaceType: SavedObjectsNamespaceType;
 }
 
 /**
@@ -56,29 +62,6 @@ export type SavedObjectModelTransformationFn<
   document: SavedObjectModelTransformationDoc<InputAttributes>,
   context: SavedObjectModelTransformationContext
 ) => SavedObjectModelTransformationResult<OutputAttributes>;
-
-/**
- * A bidirectional transformation.
- *
- * Bidirectional transformations define migration functions that can be used to
- * transform a document from the lower version to the higher one (`up`), and
- * the other way around, from the higher version to the lower one (`down`)
- *
- * @public
- */
-export interface SavedObjectModelBidirectionalTransformation<
-  PreviousAttributes = unknown,
-  NewAttributes = unknown
-> {
-  /**
-   * The upward (previous=>next) transformation.
-   */
-  up: SavedObjectModelTransformationFn<PreviousAttributes, NewAttributes>;
-  /**
-   * The downward (next=>previous) transformation.
-   */
-  down: SavedObjectModelTransformationFn<NewAttributes, PreviousAttributes>;
-}
 
 /**
  * Return type for the {@link SavedObjectModelTransformationFn | transformation functions}

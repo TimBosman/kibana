@@ -10,7 +10,7 @@ import type { FtrProviderContext } from '../../../../ftr_provider_context';
 
 const TEST_START_TIME = 'Jan 2, 2021 @ 00:00:00.000';
 const TEST_END_TIME = 'Jan 2, 2022 @ 00:00:00.000';
-const metaFields = ['_id', '_index', '_score'];
+const metaFields = ['_id', '_index', '_score', '_ignored'];
 
 const fieldsWithData = [
   'ts',
@@ -28,7 +28,13 @@ export default ({ getService, getPageObjects }: FtrProviderContext) => {
   const retry = getService('retry');
   const testSubjects = getService('testSubjects');
   const monacoEditor = getService('monacoEditor');
-  const PageObjects = getPageObjects(['common', 'timePicker', 'header', 'unifiedFieldList']);
+  const PageObjects = getPageObjects([
+    'common',
+    'timePicker',
+    'header',
+    'unifiedFieldList',
+    'svlCommonPage',
+  ]);
   const dataViewTitle = 'existence_index_*';
 
   async function addDSLFilter(value: string) {
@@ -59,6 +65,7 @@ export default ({ getService, getPageObjects }: FtrProviderContext) => {
       await kibanaServer.importExport.load(
         'test/api_integration/fixtures/kbn_archiver/index_patterns/constant_keyword.json'
       );
+      await PageObjects.svlCommonPage.loginAsAdmin();
       await PageObjects.common.navigateToApp('unifiedFieldListExamples');
       await PageObjects.header.waitUntilLoadingHasFinished();
       await retry.waitFor('combobox is ready', async () => {
@@ -71,7 +78,7 @@ export default ({ getService, getPageObjects }: FtrProviderContext) => {
       await PageObjects.timePicker.setAbsoluteRange(TEST_START_TIME, TEST_END_TIME);
       await PageObjects.header.waitUntilLoadingHasFinished();
       await PageObjects.unifiedFieldList.waitUntilSidebarHasLoaded();
-      await PageObjects.unifiedFieldList.toggleSidebarSection('meta');
+      await PageObjects.unifiedFieldList.openSidebarSection('meta');
     });
 
     after(async () => {

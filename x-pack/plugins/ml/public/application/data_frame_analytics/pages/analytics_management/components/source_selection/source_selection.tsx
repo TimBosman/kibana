@@ -5,12 +5,14 @@
  * 2.0.
  */
 
-import React, { FC, useState } from 'react';
+import type { FC } from 'react';
+import React, { useState } from 'react';
 import { EuiCallOut, EuiPageBody, EuiPanel, EuiSpacer } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { getNestedProperty } from '@kbn/ml-nested-property';
 import { SavedObjectFinder } from '@kbn/saved-objects-finder-plugin/public';
-import type { SavedObjectCommon } from '@kbn/saved-objects-finder-plugin/common';
+import type { FinderAttributes, SavedObjectCommon } from '@kbn/saved-objects-finder-plugin/common';
+import { CreateDataViewButton } from '../../../../../components/create_data_view_button';
 import { useMlKibana, useNavigateToPath } from '../../../../../contexts/kibana';
 import { useToastNotificationService } from '../../../../../services/toast_notification_service';
 import {
@@ -19,6 +21,8 @@ import {
 } from '../../../../../util/index_utils';
 
 const fixedPageSize: number = 20;
+
+type SavedObject = SavedObjectCommon<FinderAttributes & { isTextBasedQuery?: boolean }>;
 
 export const SourceSelection: FC = () => {
   const {
@@ -38,8 +42,8 @@ export const SourceSelection: FC = () => {
   const onSearchSelected = async (
     id: string,
     type: string,
-    fullName: string,
-    savedObject: SavedObjectCommon
+    fullName?: string,
+    savedObject?: SavedObject
   ) => {
     // Kibana data views including `:` are cross-cluster search indices
     // and are not supported by Data Frame Analytics yet. For saved searches
@@ -47,7 +51,7 @@ export const SourceSelection: FC = () => {
     // the selection before redirecting and show an error callout instead.
     let dataViewName = '';
 
-    if (type === 'index-pattern') {
+    if (type === 'index-pattern' && savedObject) {
       dataViewName = getNestedProperty(savedObject, 'attributes.title');
     } else if (type === 'search') {
       try {
@@ -71,14 +75,14 @@ export const SourceSelection: FC = () => {
       }
     }
 
-    if (isCcsIndexPattern(dataViewName)) {
+    if (isCcsIndexPattern(dataViewName) && savedObject) {
       setIsCcsCallOut(true);
       if (type === 'search') {
         setCcsCallOutBodyText(
           i18n.translate(
             'xpack.ml.dataFrame.analytics.create.searchSelection.CcsErrorCallOutBody',
             {
-              defaultMessage: `The saved search '{savedSearchTitle}' uses the data view '{dataViewName}'.`,
+              defaultMessage: `The saved search ''{savedSearchTitle}'' uses the data view ''{dataViewName}''.`,
               values: {
                 savedSearchTitle: getNestedProperty(savedObject, 'attributes.title'),
                 dataViewName,
@@ -140,12 +144,15 @@ export const SourceSelection: FC = () => {
                     defaultMessage: 'Saved search',
                   }
                 ),
+                showSavedObject: (savedObject: SavedObject) =>
+                  // ES|QL Based saved searches are not supported in DFA, filter them out
+                  savedObject.attributes.isTextBasedQuery !== true,
               },
               {
                 type: 'index-pattern',
                 getIconForSavedObject: () => 'indexPatternApp',
                 name: i18n.translate(
-                  'xpack.ml.dataFrame.analytics.create.searchSelection.savedObjectType.indexPattern',
+                  'xpack.ml.dataFrame.analytics.create.searchSelection.savedObjectType.dataView',
                   {
                     defaultMessage: 'Data view',
                   }
@@ -157,7 +164,14 @@ export const SourceSelection: FC = () => {
               contentClient: contentManagement.client,
               uiSettings,
             }}
-          />
+          >
+            <CreateDataViewButton
+              onDataViewCreated={(dataView) => {
+                onSearchSelected(dataView.id!, 'index-pattern', dataView.getIndexPattern());
+              }}
+              allowAdHocDataView={true}
+            />
+          </SavedObjectFinder>
         </EuiPanel>
       </EuiPageBody>
     </div>

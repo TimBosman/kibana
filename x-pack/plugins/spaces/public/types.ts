@@ -50,7 +50,30 @@ export interface SpacesApi {
   getActiveSpace(): Promise<Space>;
 
   /**
+   * Determines whether Kibana supports multiple spaces or only the default space.
+   *
+   * When `xpack.spaces.maxSpaces` is set to 1 Kibana only supports the default space and any spaces related UI can safely be hidden.
+   */
+  hasOnlyDefaultSpace: boolean;
+
+  /**
    * UI components and services to add spaces capabilities to an application.
    */
   ui: SpacesApiUi;
+
+  /**
+   * Indicates whether the solution view is enabled.
+   */
+  isSolutionViewEnabled: boolean;
+}
+
+/**
+ * The API for retrieving content associated with a space returns an array of summary data for each type of
+ * saved object content. SpaceContentTypeSummaryItem is the format of the items included in this summary data.
+ */
+export interface SpaceContentTypeSummaryItem {
+  displayName: string;
+  icon?: string;
+  count: number;
+  type: string; // the type of saved object content (dashboard, search, config, etc)
 }

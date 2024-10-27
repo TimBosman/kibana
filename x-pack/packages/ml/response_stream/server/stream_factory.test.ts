@@ -49,6 +49,7 @@ describe('streamFactory', () => {
       Connection: 'keep-alive',
       'Transfer-Encoding': 'chunked',
       'X-Accel-Buffering': 'no',
+      'X-Content-Type-Options': 'nosniff',
     });
     expect(streamResult).toBe('push1push2');
   });
@@ -75,6 +76,7 @@ describe('streamFactory', () => {
       Connection: 'keep-alive',
       'Transfer-Encoding': 'chunked',
       'X-Accel-Buffering': 'no',
+      'X-Content-Type-Options': 'nosniff',
     });
     expect(parsedItems).toHaveLength(2);
     expect(parsedItems[0]).toStrictEqual(mockItem1);
@@ -91,7 +93,7 @@ describe('streamFactory', () => {
   // the browser on the client side will automatically take care of unzipping
   // without the need for additional custom code.
   it('should encode and receive a compressed string based stream', (done) => {
-    (async () => {
+    void (async () => {
       const { end, push, responseWithHeaders } = streamFactory(
         {
           'accept-encoding': 'gzip',
@@ -121,6 +123,7 @@ describe('streamFactory', () => {
           'content-encoding': 'gzip',
           'Transfer-Encoding': 'chunked',
           'X-Accel-Buffering': 'no',
+          'X-Content-Type-Options': 'nosniff',
         });
         expect(streamResult).toBe('push1push2');
 
@@ -130,7 +133,7 @@ describe('streamFactory', () => {
   });
 
   it('should encode and receive a compressed NDJSON based stream', (done) => {
-    (async () => {
+    void (async () => {
       const { DELIMITER, end, push, responseWithHeaders } = streamFactory<MockItem>(
         {
           'accept-encoding': 'gzip',
@@ -165,6 +168,7 @@ describe('streamFactory', () => {
           'content-encoding': 'gzip',
           'Transfer-Encoding': 'chunked',
           'X-Accel-Buffering': 'no',
+          'X-Content-Type-Options': 'nosniff',
         });
         expect(parsedItems).toHaveLength(2);
         expect(parsedItems[0]).toStrictEqual(mockItem1);

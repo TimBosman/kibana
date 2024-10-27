@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { Plugin, CoreSetup, AppMountParameters, AppNavLinkStatus } from '@kbn/core/public';
+import { Plugin, CoreSetup, AppMountParameters } from '@kbn/core/public';
 import { PluginSetupContract as AlertingSetup } from '@kbn/alerting-plugin/public';
 import { ChartsPluginStart } from '@kbn/charts-plugin/public';
 import {
@@ -37,8 +37,8 @@ export class GenAiStreamingResponseExamplePlugin
   ) {
     core.application.register({
       id: 'GenAiStreamingResponseExample',
-      title: 'Generative AI Streaming Response Example',
-      navLinkStatus: AppNavLinkStatus.hidden,
+      title: 'OpenAI Streaming Response Example',
+      visibleIn: [],
       async mount(params: AppMountParameters) {
         const [coreStart, depsStart] = await core.getStartServices();
         const { renderApp } = await import('./application');
@@ -48,9 +48,8 @@ export class GenAiStreamingResponseExamplePlugin
 
     developerExamples.register({
       appId: 'GenAiStreamingResponseExample',
-      title: 'Generative AI Streaming Response Example',
-      description:
-        'This example demonstrates how to stream a response from a Generative AI connector',
+      title: 'OpenAI Streaming Response Example',
+      description: 'This example demonstrates how to stream a response from an OpenAI connector',
     });
   }
 

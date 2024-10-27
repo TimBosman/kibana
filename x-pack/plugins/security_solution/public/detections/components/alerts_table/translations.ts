@@ -7,17 +7,6 @@
 
 import { i18n } from '@kbn/i18n';
 
-export const PAGE_TITLE = i18n.translate('xpack.securitySolution.detectionEngine.pageTitle', {
-  defaultMessage: 'Detection engine',
-});
-
-export const ALERTS_DOCUMENT_TYPE = i18n.translate(
-  'xpack.securitySolution.detectionEngine.alerts.documentTypeTitle',
-  {
-    defaultMessage: 'Alerts',
-  }
-);
-
 export const OPEN_ALERTS = i18n.translate(
   'xpack.securitySolution.detectionEngine.alerts.openAlertsTitle',
   {
@@ -36,13 +25,6 @@ export const ACKNOWLEDGED_ALERTS = i18n.translate(
   'xpack.securitySolution.detectionEngine.alerts.acknowledgedAlertsTitle',
   {
     defaultMessage: 'Acknowledged',
-  }
-);
-
-export const LOADING_ALERTS = i18n.translate(
-  'xpack.securitySolution.detectionEngine.alerts.loadingAlertsTitle',
-  {
-    defaultMessage: 'Loading Alerts',
   }
 );
 
@@ -95,6 +77,13 @@ export const ALERTS_HEADERS_RISK_SCORE = i18n.translate(
   }
 );
 
+export const ALERTS_HEADERS_ASSIGNEES = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.assigneesTitle',
+  {
+    defaultMessage: 'Assignees',
+  }
+);
+
 export const ALERTS_HEADERS_THRESHOLD_COUNT = i18n.translate(
   'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.thresholdCount',
   {
@@ -130,10 +119,45 @@ export const ALERTS_HEADERS_NEW_TERMS_FIELDS = i18n.translate(
   }
 );
 
+export const ALERTS_HEADERS_HOST_RISK_LEVEL = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.hostRiskLevel',
+  {
+    defaultMessage: 'Host Risk Level',
+  }
+);
+
+export const ALERTS_HEADERS_USER_RISK_LEVEL = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.userRiskLevel',
+  {
+    defaultMessage: 'User Risk Level',
+  }
+);
+
+export const ALERTS_HEADERS_HOST_CRITICALITY = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.hostCriticality',
+  {
+    defaultMessage: 'Host Criticality',
+  }
+);
+
+export const ALERTS_HEADERS_USER_CRITICALITY = i18n.translate(
+  'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.userCriticality',
+  {
+    defaultMessage: 'User Criticality',
+  }
+);
+
 export const ACTION_INVESTIGATE_IN_TIMELINE = i18n.translate(
   'xpack.securitySolution.detectionEngine.alerts.actions.investigateInTimelineTitle',
   {
     defaultMessage: 'Investigate in timeline',
+  }
+);
+
+export const ACTION_CANNOT_INVESTIGATE_IN_TIMELINE = i18n.translate(
+  'xpack.securitySolution.detectionEngine.alerts.actions.cannotInvestigateInTimelineTitle',
+  {
+    defaultMessage: 'Please navigate to a page with timeline to investigate',
   }
 );
 
@@ -253,13 +277,6 @@ export const CLICK_TO_CHANGE_ALERT_STATUS = i18n.translate(
   }
 );
 
-export const SIGNAL_STATUS = i18n.translate(
-  'xpack.securitySolution.eventsViewer.alerts.overviewTable.signalStatusTitle',
-  {
-    defaultMessage: 'Status',
-  }
-);
-
 export const TRIGGERED = i18n.translate(
   'xpack.securitySolution.eventsViewer.alerts.defaultHeaders.triggeredTitle',
   {
@@ -292,13 +309,6 @@ export const SESSIONS_TITLE = i18n.translate('xpack.securitySolution.sessionsVie
   defaultMessage: 'Sessions',
 });
 
-export const TAKE_ACTION = i18n.translate(
-  'xpack.securitySolution.detectionEngine.groups.additionalActions.takeAction',
-  {
-    defaultMessage: 'Take actions',
-  }
-);
-
 export const STATS_GROUP_ALERTS = i18n.translate(
   'xpack.securitySolution.detectionEngine.groups.stats.alertsCount',
   {
@@ -310,20 +320,6 @@ export const STATS_GROUP_HOSTS = i18n.translate(
   'xpack.securitySolution.detectionEngine.groups.stats.hostsCount',
   {
     defaultMessage: 'Hosts:',
-  }
-);
-
-export const STATS_GROUP_IPS = i18n.translate(
-  'xpack.securitySolution.detectionEngine.groups.stats.ipsCount',
-  {
-    defaultMessage: `IP's:`,
-  }
-);
-
-export const GROUP_ALERTS_SELECTOR = i18n.translate(
-  'xpack.securitySolution.detectionEngine.selectGroup.title',
-  {
-    defaultMessage: `Group alerts by`,
   }
 );
 

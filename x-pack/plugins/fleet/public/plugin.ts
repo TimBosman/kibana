@@ -8,18 +8,22 @@
 import React from 'react';
 import type {
   AppMountParameters,
+  AppUpdater,
   CoreSetup,
+  CoreStart,
   Plugin,
   PluginInitializerContext,
-  CoreStart,
 } from '@kbn/core/public';
+import { DEFAULT_APP_CATEGORIES } from '@kbn/core/public';
 import { i18n } from '@kbn/i18n';
 
 import type { NavigationPublicPluginStart } from '@kbn/navigation-plugin/public';
+import type { IntegrationAssistantPluginStart } from '@kbn/integration-assistant-plugin/public';
+import { ELASTIC_HTTP_VERSION_HEADER } from '@kbn/core-http-common';
 
 import type {
-  CustomIntegrationsStart,
   CustomIntegrationsSetup,
+  CustomIntegrationsStart,
 } from '@kbn/custom-integrations-plugin/public';
 
 import type { SharePluginStart } from '@kbn/share-plugin/public';
@@ -28,20 +32,17 @@ import { once } from 'lodash';
 
 import type { SpacesPluginStart } from '@kbn/spaces-plugin/public';
 import type { DiscoverStart } from '@kbn/discover-plugin/public';
-import type { CloudStart } from '@kbn/cloud-plugin/public';
+import type { CloudSetup, CloudStart } from '@kbn/cloud-plugin/public';
 import type {
   UsageCollectionSetup,
   UsageCollectionStart,
 } from '@kbn/usage-collection-plugin/public';
-
-import { DEFAULT_APP_CATEGORIES, AppNavLinkStatus } from '@kbn/core/public';
 
 import type { DataPublicPluginSetup, DataPublicPluginStart } from '@kbn/data-plugin/public';
 import type { DataViewsPublicPluginStart } from '@kbn/data-views-plugin/public';
 import type { HomePublicPluginSetup } from '@kbn/home-plugin/public';
 import { Storage } from '@kbn/kibana-utils-plugin/public';
 import type { LicensingPluginStart } from '@kbn/licensing-plugin/public';
-import type { CloudSetup } from '@kbn/cloud-plugin/public';
 import type { GlobalSearchPluginSetup } from '@kbn/global-search-plugin/public';
 
 import type { SendRequestResponse } from '@kbn/es-ui-shared-plugin/public';
@@ -51,37 +52,44 @@ import type { GuidedOnboardingPluginStart } from '@kbn/guided-onboarding-plugin/
 
 import type { DashboardStart } from '@kbn/dashboard-plugin/public';
 
-import { PLUGIN_ID, INTEGRATIONS_PLUGIN_ID, setupRouteService, appRoutesService } from '../common';
-import { calculateAuthz, calculatePackagePrivilegesFromCapabilities } from '../common/authz';
-import { parseExperimentalConfigValue } from '../common/experimental_features';
-import type { CheckPermissionsResponse, PostFleetSetupResponse } from '../common/types';
-import type { FleetAuthz } from '../common';
-import type { ExperimentalFeatures } from '../common/experimental_features';
+import { Subject } from 'rxjs';
 
-import type { FleetConfigType } from '../common/types';
+import type { FleetAuthz } from '../common';
+import { appRoutesService, INTEGRATIONS_PLUGIN_ID, PLUGIN_ID, setupRouteService } from '../common';
+import {
+  calculateAuthz,
+  calculateEndpointExceptionsPrivilegesFromCapabilities,
+  calculatePackagePrivilegesFromCapabilities,
+} from '../common/authz';
+import type { ExperimentalFeatures } from '../common/experimental_features';
+import { parseExperimentalConfigValue } from '../common/experimental_features';
+import type {
+  CheckPermissionsResponse,
+  FleetConfigType,
+  PostFleetSetupResponse,
+} from '../common/types';
+
+import { API_VERSIONS } from '../common/constants';
 
 import { CUSTOM_LOGS_INTEGRATION_NAME, INTEGRATIONS_BASE_PATH } from './constants';
-import { licenseService } from './hooks';
+import type { RequestError } from './hooks';
+import { licenseService, sendGetBulkAssets } from './hooks';
 import { setHttpClient } from './hooks/use_request';
 import { createPackageSearchProvider } from './search_provider';
 import { TutorialDirectoryHeaderLink, TutorialModuleNotice } from './components/home_integration';
 import { createExtensionRegistrationCallback } from './services/ui_extensions';
 import { ExperimentalFeaturesService } from './services/experimental_features';
 import type {
-  UIExtensionRegistrationCallback,
-  UIExtensionsStorage,
   GetBulkAssetsRequest,
   GetBulkAssetsResponse,
+  UIExtensionRegistrationCallback,
+  UIExtensionsStorage,
 } from './types';
 import { LazyCustomLogsAssetsExtension } from './lazy_custom_logs_assets_extension';
+import { setCustomIntegrations, setCustomIntegrationsStart } from './services/custom_integrations';
+import { getFleetDeepLinks } from './deep_links';
 
 export type { FleetConfigType } from '../common/types';
-
-import { setCustomIntegrations, setCustomIntegrationsStart } from './services/custom_integrations';
-
-import type { RequestError } from './hooks';
-import { sendGetBulkAssets } from './hooks';
-import { fleetDeepLinks } from './deep_links';
 
 // We need to provide an object instead of void so that dependent plugins know when Fleet
 // is disabled.
@@ -94,6 +102,7 @@ export interface FleetSetup {}
 export interface FleetStart {
   /** Authorization for the current user */
   authz: FleetAuthz;
+  config: FleetConfigType;
   registerExtension: UIExtensionRegistrationCallback;
   isInitialized: () => Promise<true>;
   hooks: {
@@ -123,20 +132,22 @@ export interface FleetStartDeps {
   navigation: NavigationPublicPluginStart;
   customIntegrations: CustomIntegrationsStart;
   share: SharePluginStart;
+  integrationAssistant?: IntegrationAssistantPluginStart;
   cloud?: CloudStart;
   usageCollection?: UsageCollectionStart;
-  guidedOnboarding: GuidedOnboardingPluginStart;
+  guidedOnboarding?: GuidedOnboardingPluginStart;
 }
 
 export interface FleetStartServices extends CoreStart, Exclude<FleetStartDeps, 'cloud'> {
   storage: Storage;
   share: SharePluginStart;
   dashboard: DashboardStart;
+  integrationAssistant?: IntegrationAssistantPluginStart;
   cloud?: CloudSetup & CloudStart;
   discover?: DiscoverStart;
   spaces?: SpacesPluginStart;
   authz: FleetAuthz;
-  guidedOnboarding: GuidedOnboardingPluginStart;
+  guidedOnboarding?: GuidedOnboardingPluginStart;
 }
 
 export class FleetPlugin implements Plugin<FleetSetup, FleetStart, FleetSetupDeps, FleetStartDeps> {
@@ -145,6 +156,7 @@ export class FleetPlugin implements Plugin<FleetSetup, FleetStart, FleetSetupDep
   private extensions: UIExtensionsStorage = {};
   private experimentalFeatures: ExperimentalFeatures;
   private storage = new Storage(localStorage);
+  private appUpdater$ = new Subject<AppUpdater>();
 
   constructor(private readonly initializerContext: PluginInitializerContext) {
     this.config = this.initializerContext.config.get<FleetConfigType>();
@@ -186,7 +198,7 @@ export class FleetPlugin implements Plugin<FleetSetup, FleetStart, FleetSetupDep
           ...startDepsServices,
           storage: this.storage,
           cloud,
-          authz: await fleetStart.authz,
+          authz: fleetStart.authz,
         };
         const { renderApp, teardownIntegrations } = await import('./applications/integrations');
 
@@ -216,7 +228,8 @@ export class FleetPlugin implements Plugin<FleetSetup, FleetStart, FleetSetupDep
       order: 9020,
       euiIconType: 'logoElastic',
       appRoute: '/app/fleet',
-      deepLinks: fleetDeepLinks,
+      updater$: this.appUpdater$,
+      deepLinks: getFleetDeepLinks(this.experimentalFeatures),
       mount: async (params: AppMountParameters) => {
         const [coreStartServices, startDepsServices, fleetStart] = await core.getStartServices();
         const cloud =
@@ -228,11 +241,10 @@ export class FleetPlugin implements Plugin<FleetSetup, FleetStart, FleetSetupDep
           ...startDepsServices,
           storage: this.storage,
           cloud,
-          authz: await fleetStart.authz,
+          authz: fleetStart.authz,
         };
         const { renderApp, teardownFleet } = await import('./applications/fleet');
         const unmount = renderApp(startServices, params, config, kibanaVersion, extensions);
-
         return () => {
           unmount();
           teardownFleet(startServices);
@@ -244,7 +256,7 @@ export class FleetPlugin implements Plugin<FleetSetup, FleetStart, FleetSetupDep
     core.application.register({
       id: 'ingestManager',
       category: DEFAULT_APP_CATEGORIES.management,
-      navLinkStatus: AppNavLinkStatus.hidden,
+      visibleIn: [],
       title: i18n.translate('xpack.fleet.oldAppTitle', { defaultMessage: 'Ingest Manager' }),
       async mount(params: AppMountParameters) {
         const [coreStart] = await core.getStartServices();
@@ -287,45 +299,74 @@ export class FleetPlugin implements Plugin<FleetSetup, FleetStart, FleetSetupDep
     ExperimentalFeaturesService.init(this.experimentalFeatures);
     const registerExtension = createExtensionRegistrationCallback(this.extensions);
     const getPermissions = once(() =>
-      core.http.get<CheckPermissionsResponse>(appRoutesService.getCheckPermissionsPath())
+      core.http.fetch<CheckPermissionsResponse>(appRoutesService.getCheckPermissionsPath(), {
+        headers: {
+          [ELASTIC_HTTP_VERSION_HEADER]: API_VERSIONS.public.v1,
+        },
+        version: API_VERSIONS.public.v1,
+      })
     );
 
     // Set up license service
     licenseService.start(deps.licensing.license$);
+
+    const { capabilities } = core.application;
+    const authz = {
+      ...calculateAuthz({
+        fleet: {
+          all: capabilities.fleetv2.all as boolean,
+          setup: false,
+          agents: {
+            read: capabilities.fleetv2.agents_read as boolean,
+            all: capabilities.fleetv2.agents_all as boolean,
+          },
+          agentPolicies: {
+            read: capabilities.fleetv2.agent_policies_read as boolean,
+            all: capabilities.fleetv2.agent_policies_all as boolean,
+          },
+          settings: {
+            read: capabilities.fleetv2.settings_read as boolean,
+            all: capabilities.fleetv2.settings_all as boolean,
+          },
+        },
+        integrations: {
+          all: capabilities.fleet.all as boolean,
+          read: capabilities.fleet.read as boolean,
+        },
+        subfeatureEnabled: this.experimentalFeatures.subfeaturePrivileges ?? false,
+      }),
+      packagePrivileges: calculatePackagePrivilegesFromCapabilities(capabilities),
+      endpointExceptionsPrivileges:
+        calculateEndpointExceptionsPrivilegesFromCapabilities(capabilities),
+    };
+
+    // Update Fleet deeplinks with authz
+    this.appUpdater$.next(() => ({
+      deepLinks: getFleetDeepLinks(this.experimentalFeatures, authz),
+    }));
 
     registerExtension({
       package: CUSTOM_LOGS_INTEGRATION_NAME,
       view: 'package-detail-assets',
       Component: LazyCustomLogsAssetsExtension,
     });
-    const { capabilities } = core.application;
 
     // Set the custom integrations language clients
     setCustomIntegrationsStart(deps.customIntegrations);
 
     //  capabilities.fleetv2 returns fleet privileges and capabilities.fleet returns integrations privileges
     return {
-      authz: {
-        ...calculateAuthz({
-          fleet: {
-            all: capabilities.fleetv2.all as boolean,
-            setup: false,
-          },
-          integrations: {
-            all: capabilities.fleet.all as boolean,
-            read: capabilities.fleet.read as boolean,
-          },
-          isSuperuser: false,
-        }),
-        packagePrivileges: calculatePackagePrivilegesFromCapabilities(capabilities),
-      },
-
+      authz,
+      config: this.config,
       isInitialized: once(async () => {
         const permissionsResponse = await getPermissions();
 
         if (permissionsResponse?.success) {
           const { isInitialized } = await core.http.post<PostFleetSetupResponse>(
-            setupRouteService.getSetupPath()
+            setupRouteService.getSetupPath(),
+            {
+              version: API_VERSIONS.public.v1,
+            }
           );
           if (!isInitialized) {
             throw new Error('Unknown setup error');

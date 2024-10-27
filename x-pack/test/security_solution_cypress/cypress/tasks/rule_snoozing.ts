@@ -36,7 +36,7 @@ export function snoozeRule(duration: SnoozeDuration): void {
 }
 
 export function expectSnoozeSuccessToast(): void {
-  cy.get(TOASTER).should('contain', 'Rule successfully snoozed');
+  cy.get(TOASTER).should('contain', 'Rules notification successfully snoozed');
 }
 
 export function expectSnoozeErrorToast(): void {
@@ -72,7 +72,7 @@ export function unsnoozeRule(): void {
 }
 
 export function expectUnsnoozeSuccessToast(): void {
-  cy.get(TOASTER).should('contain', 'Rule successfully unsnoozed');
+  cy.get(TOASTER).should('contain', 'Rules notification successfully unsnoozed');
 }
 
 export function expectRuleUnsnoozed(): void {
@@ -119,8 +119,7 @@ function snoozeRuleInOpenPopover(duration: SnoozeDuration): void {
 
   cy.log(`Snooze a rule for ${value} ${units}`);
 
-  cy.get(SNOOZE_POPOVER_INTERVAL_VALUE_INPUT).clear();
-  cy.get(SNOOZE_POPOVER_INTERVAL_VALUE_INPUT).type(value.toString());
+  cy.get(SNOOZE_POPOVER_INTERVAL_VALUE_INPUT).type(`{selectAll}${value.toString()}`);
   cy.get(SNOOZE_POPOVER_INTERVAL_UNIT_INPUT).select(units);
   cy.get(SNOOZE_POPOVER_APPLY_BUTTON).click();
 }

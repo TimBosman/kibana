@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { mount } from 'enzyme';
+import { mount, type ComponentType as EnzymeComponentType } from 'enzyme';
 import { AlertContextMenu } from './alert_context_menu';
 import { TestProviders } from '../../../../common/mock';
 import React from 'react';
@@ -26,6 +26,10 @@ jest.mock('../../../../common/components/links', () => ({
 
 jest.mock('../../../../common/hooks/use_experimental_features', () => ({
   useIsExperimentalFeatureEnabled: jest.fn().mockReturnValue(true),
+}));
+
+jest.mock('../../../../common/hooks/use_license', () => ({
+  useLicense: jest.fn().mockReturnValue({ isPlatinumPlus: () => true }),
 }));
 
 const ecsRowData: Ecs = {
@@ -74,16 +78,21 @@ jest.mock('../../../../common/lib/kibana', () => {
         application: {
           capabilities: { siem: { crud_alerts: true, read_alerts: true } },
         },
-        cases: mockCasesContract(),
+        cases: {
+          ...mockCasesContract(),
+          helpers: {
+            canUseCases: jest.fn().mockReturnValue({
+              all: true,
+              create: true,
+              read: true,
+              update: true,
+              delete: true,
+              push: true,
+            }),
+            getRuleIdFromEvent: jest.fn(),
+          },
+        },
       },
-    }),
-    useGetUserCasesPermissions: jest.fn().mockReturnValue({
-      all: true,
-      create: true,
-      read: true,
-      update: true,
-      delete: true,
-      push: true,
     }),
   };
 });
@@ -99,14 +108,14 @@ const markAsOpenButton = '[data-test-subj="open-alert-status"]';
 const markAsAcknowledgedButton = '[data-test-subj="acknowledged-alert-status"]';
 const markAsClosedButton = '[data-test-subj="close-alert-status"]';
 const addEndpointEventFilterButton = '[data-test-subj="add-event-filter-menu-item"]';
-const openAlertDetailsPageButton = '[data-test-subj="open-alert-details-page-menu-item"]';
 const applyAlertTagsButton = '[data-test-subj="alert-tags-context-menu-item"]';
+const applyAlertAssigneesButton = '[data-test-subj="alert-assignees-context-menu-item"]';
 
 describe('Alert table context menu', () => {
   describe('Case actions', () => {
     test('it render AddToCase context menu item if timelineId === TimelineId.detectionsPage', () => {
       const wrapper = mount(<AlertContextMenu {...props} scopeId={TableId.alertsOnAlertsPage} />, {
-        wrappingComponent: TestProviders,
+        wrappingComponent: TestProviders as EnzymeComponentType<{}>,
       });
 
       wrapper.find(actionMenuButton).simulate('click');
@@ -118,7 +127,7 @@ describe('Alert table context menu', () => {
       const wrapper = mount(
         <AlertContextMenu {...props} scopeId={TableId.alertsOnRuleDetailsPage} />,
         {
-          wrappingComponent: TestProviders,
+          wrappingComponent: TestProviders as EnzymeComponentType<{}>,
         }
       );
 
@@ -129,7 +138,7 @@ describe('Alert table context menu', () => {
 
     test('it render AddToCase context menu item if timelineId === TimelineId.active', () => {
       const wrapper = mount(<AlertContextMenu {...props} scopeId={TimelineId.active} />, {
-        wrappingComponent: TestProviders,
+        wrappingComponent: TestProviders as EnzymeComponentType<{}>,
       });
 
       wrapper.find(actionMenuButton).simulate('click');
@@ -139,7 +148,7 @@ describe('Alert table context menu', () => {
 
     test('it does NOT render AddToCase context menu item when timelineId is not in the allowed list', () => {
       const wrapper = mount(<AlertContextMenu {...props} scopeId="timeline-test" />, {
-        wrappingComponent: TestProviders,
+        wrappingComponent: TestProviders as EnzymeComponentType<{}>,
       });
       wrapper.find(actionMenuButton).simulate('click');
       expect(wrapper.find(addToExistingCaseButton).first().exists()).toEqual(false);
@@ -150,7 +159,7 @@ describe('Alert table context menu', () => {
   describe('Alert status actions', () => {
     test('it renders the correct status action buttons', () => {
       const wrapper = mount(<AlertContextMenu {...props} scopeId={TimelineId.active} />, {
-        wrappingComponent: TestProviders,
+        wrappingComponent: TestProviders as EnzymeComponentType<{}>,
       });
 
       wrapper.find(actionMenuButton).simulate('click');
@@ -180,7 +189,7 @@ describe('Alert table context menu', () => {
           const wrapper = mount(
             <AlertContextMenu {...endpointEventProps} scopeId={TimelineId.active} />,
             {
-              wrappingComponent: TestProviders,
+              wrappingComponent: TestProviders as EnzymeComponentType<{}>,
             }
           );
 
@@ -193,7 +202,7 @@ describe('Alert table context menu', () => {
           const wrapper = mount(
             <AlertContextMenu {...endpointEventProps} scopeId={TableId.hostsPageEvents} />,
             {
-              wrappingComponent: TestProviders,
+              wrappingComponent: TestProviders as EnzymeComponentType<{}>,
             }
           );
 
@@ -212,7 +221,7 @@ describe('Alert table context menu', () => {
           const wrapper = mount(
             <AlertContextMenu {...customProps} scopeId={TableId.hostsPageEvents} />,
             {
-              wrappingComponent: TestProviders,
+              wrappingComponent: TestProviders as EnzymeComponentType<{}>,
             }
           );
 
@@ -225,7 +234,7 @@ describe('Alert table context menu', () => {
           const wrapper = mount(
             <AlertContextMenu {...endpointEventProps} scopeId={TableId.usersPageEvents} />,
             {
-              wrappingComponent: TestProviders,
+              wrappingComponent: TestProviders as EnzymeComponentType<{}>,
             }
           );
 
@@ -244,7 +253,7 @@ describe('Alert table context menu', () => {
           const wrapper = mount(
             <AlertContextMenu {...customProps} scopeId={TableId.usersPageEvents} />,
             {
-              wrappingComponent: TestProviders,
+              wrappingComponent: TestProviders as EnzymeComponentType<{}>,
             }
           );
 
@@ -266,7 +275,7 @@ describe('Alert table context menu', () => {
           const wrapper = mount(
             <AlertContextMenu {...endpointEventProps} scopeId={TableId.hostsPageEvents} />,
             {
-              wrappingComponent: TestProviders,
+              wrappingComponent: TestProviders as EnzymeComponentType<{}>,
             }
           );
 
@@ -278,7 +287,7 @@ describe('Alert table context menu', () => {
           const wrapper = mount(
             <AlertContextMenu {...endpointEventProps} scopeId={TableId.usersPageEvents} />,
             {
-              wrappingComponent: TestProviders,
+              wrappingComponent: TestProviders as EnzymeComponentType<{}>,
             }
           );
 
@@ -289,53 +298,27 @@ describe('Alert table context menu', () => {
     });
   });
 
-  describe('Open alert details action', () => {
-    test('it does not render the open alert details page action if kibana.alert.rule.uuid is not set', () => {
-      const nonAlertProps = {
-        ...props,
-        ecsRowData: {
-          ...ecsRowData,
-          kibana: {
-            alert: {
-              workflow_status: ['open'],
-              rule: {
-                parameters: {},
-                uuid: [],
-              },
-            },
-          },
-        },
-      };
-
-      const wrapper = mount(<AlertContextMenu {...nonAlertProps} scopeId={TimelineId.active} />, {
-        wrappingComponent: TestProviders,
-      });
-
-      wrapper.find(actionMenuButton).simulate('click');
-
-      expect(wrapper.find(openAlertDetailsPageButton).first().exists()).toEqual(false);
-    });
-
-    test('it renders the open alert details action button', () => {
-      const wrapper = mount(<AlertContextMenu {...props} scopeId={TimelineId.active} />, {
-        wrappingComponent: TestProviders,
-      });
-
-      wrapper.find(actionMenuButton).simulate('click');
-
-      expect(wrapper.find(openAlertDetailsPageButton).first().exists()).toEqual(true);
-    });
-  });
-
   describe('Apply alert tags action', () => {
     test('it renders the apply alert tags action button', () => {
       const wrapper = mount(<AlertContextMenu {...props} scopeId={TimelineId.active} />, {
-        wrappingComponent: TestProviders,
+        wrappingComponent: TestProviders as EnzymeComponentType<{}>,
       });
 
       wrapper.find(actionMenuButton).simulate('click');
 
       expect(wrapper.find(applyAlertTagsButton).first().exists()).toEqual(true);
+    });
+  });
+
+  describe('Assign alert action', () => {
+    test('it renders the assign alert action button', () => {
+      const wrapper = mount(<AlertContextMenu {...props} scopeId={TimelineId.active} />, {
+        wrappingComponent: TestProviders as EnzymeComponentType<{}>,
+      });
+
+      wrapper.find(actionMenuButton).simulate('click');
+
+      expect(wrapper.find(applyAlertAssigneesButton).first().exists()).toEqual(true);
     });
   });
 });

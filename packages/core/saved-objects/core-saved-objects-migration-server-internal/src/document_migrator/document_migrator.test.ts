@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
@@ -709,6 +710,36 @@ describe('DocumentMigrator', () => {
             coreMigrationVersion: kibanaVersion,
             typeMigrationVersion: '1.0.0',
             // there is no 'namespaces' field because no transforms were applied; this scenario is contrived for a clean test case but is not indicative of a real-world scenario
+          },
+        ]);
+      });
+
+      it('does not lose namespaces in documents with undefined namespace and defined namespaces property', () => {
+        const migrator = new DocumentMigrator({
+          ...testOpts(),
+          typeRegistry: createRegistry(
+            { name: 'dog', namespaceType: 'multiple', convertToMultiNamespaceTypeVersion: '1.0.0' }
+            // no migration transforms are defined, the typeMigrationVersion will be derived from 'convertToMultiNamespaceTypeVersion'
+          ),
+        });
+        migrator.prepareMigrations();
+        const obj = {
+          id: 'mischievous',
+          type: 'dog',
+          attributes: { name: 'Ann' },
+          coreMigrationVersion: kibanaVersion,
+          typeMigrationVersion: '0.1.0',
+          namespaces: ['something'],
+        } as SavedObjectUnsanitizedDoc;
+        const actual = migrator.migrateAndConvert(obj);
+        expect(actual).toEqual([
+          {
+            id: 'mischievous',
+            type: 'dog',
+            attributes: { name: 'Ann' },
+            coreMigrationVersion: kibanaVersion,
+            typeMigrationVersion: '1.0.0',
+            namespaces: ['something'],
           },
         ]);
       });

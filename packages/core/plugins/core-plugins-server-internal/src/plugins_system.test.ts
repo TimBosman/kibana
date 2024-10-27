@@ -1,15 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
   mockCreatePluginPrebootSetupContext,
   mockCreatePluginSetupContext,
   mockCreatePluginStartContext,
+  runtimeResolverMock,
 } from './plugins_system.test.mocks';
 
 import { BehaviorSubject } from 'rxjs';
@@ -42,7 +44,7 @@ function createPlugin(
     type?: PluginType;
   } = {}
 ): PluginWrapper<any, any> {
-  return new PluginWrapper<any, any>({
+  const plugin = new PluginWrapper<any, any>({
     path: 'some-path',
     manifest: {
       id,
@@ -52,6 +54,7 @@ function createPlugin(
       type,
       requiredPlugins: required,
       optionalPlugins: optional,
+      runtimePluginDependencies: [],
       requiredBundles: [],
       server,
       ui,
@@ -60,6 +63,8 @@ function createPlugin(
     opaqueId: Symbol(id),
     initializerContext: { logger } as any,
   });
+  jest.spyOn(plugin, 'init').mockResolvedValue();
+  return plugin;
 }
 
 const prebootDeps = coreInternalLifecycleMock.createInternalPreboot();
@@ -73,6 +78,10 @@ let env: Env;
 let coreContext: CoreContext;
 
 beforeEach(() => {
+  runtimeResolverMock.setDependencyMap.mockReset();
+  runtimeResolverMock.resolveSetupRequests.mockReset();
+  runtimeResolverMock.resolveStartRequests.mockReset();
+
   logger = loggingSystemMock.create();
   env = Env.createDefault(REPO_ROOT, getEnvOptions());
 
@@ -120,7 +129,7 @@ test('getPlugins returns the list of plugins', () => {
   expect(pluginsSystem.getPlugins()).toEqual([pluginA, pluginB]);
 });
 
-test('getPluginDependencies returns dependency tree of symbols', () => {
+test('getPluginDependencies returns dependency tree with keys topologically sorted', () => {
   pluginsSystem.addPlugin(createPlugin('plugin-a', { required: ['no-dep'] }));
   pluginsSystem.addPlugin(
     createPlugin('plugin-b', { required: ['plugin-a'], optional: ['no-dep', 'other'] })
@@ -130,6 +139,7 @@ test('getPluginDependencies returns dependency tree of symbols', () => {
   expect(pluginsSystem.getPluginDependencies()).toMatchInlineSnapshot(`
     Object {
       "asNames": Map {
+        "no-dep" => Array [],
         "plugin-a" => Array [
           "no-dep",
         ],
@@ -137,9 +147,9 @@ test('getPluginDependencies returns dependency tree of symbols', () => {
           "plugin-a",
           "no-dep",
         ],
-        "no-dep" => Array [],
       },
       "asOpaqueIds": Map {
+        Symbol(no-dep) => Array [],
         Symbol(plugin-a) => Array [
           Symbol(no-dep),
         ],
@@ -147,7 +157,6 @@ test('getPluginDependencies returns dependency tree of symbols', () => {
           Symbol(plugin-a),
           Symbol(no-dep),
         ],
-        Symbol(no-dep) => Array [],
       },
     }
   `);
@@ -195,6 +204,31 @@ test('`setupPlugins` ignores missing optional dependency', async () => {
       ],
     ]
   `);
+});
+
+test('`setupPlugins` setups the runtimeResolver', async () => {
+  const pluginA = createPlugin('pluginA', { required: [] });
+  const pluginB = createPlugin('pluginB', { required: ['pluginA'] });
+
+  jest.spyOn(pluginA, 'setup').mockReturnValue('contractA');
+  jest.spyOn(pluginB, 'setup').mockReturnValue('contractB');
+
+  pluginsSystem.addPlugin(pluginA);
+  pluginsSystem.addPlugin(pluginB);
+
+  await pluginsSystem.setupPlugins(setupDeps);
+
+  expect(runtimeResolverMock.setDependencyMap).toHaveBeenCalledTimes(1);
+  expect(runtimeResolverMock.setDependencyMap).toHaveBeenCalledWith(expect.any(Map));
+
+  expect(runtimeResolverMock.resolveSetupRequests).toHaveBeenCalledTimes(1);
+  expect(runtimeResolverMock.resolveSetupRequests).toHaveBeenCalledWith(expect.any(Map));
+  expect(
+    Object.fromEntries([...runtimeResolverMock.resolveSetupRequests.mock.calls[0][0].entries()])
+  ).toEqual({
+    pluginA: 'contractA',
+    pluginB: 'contractB',
+  });
 });
 
 test('correctly orders plugins and returns exposed values for "setup" and "start"', async () => {
@@ -254,13 +288,9 @@ test('correctly orders plugins and returns exposed values for "setup" and "start
     pluginsSystem.addPlugin(plugin);
   });
 
-  mockCreatePluginSetupContext.mockImplementation((context, deps, plugin) =>
-    setupContextMap.get(plugin.name)
-  );
+  mockCreatePluginSetupContext.mockImplementation(({ plugin }) => setupContextMap.get(plugin.name));
 
-  mockCreatePluginStartContext.mockImplementation((context, deps, plugin) =>
-    startContextMap.get(plugin.name)
-  );
+  mockCreatePluginStartContext.mockImplementation(({ plugin }) => startContextMap.get(plugin.name));
 
   expect([...(await pluginsSystem.setupPlugins(setupDeps))]).toMatchInlineSnapshot(`
     Array [
@@ -288,7 +318,11 @@ test('correctly orders plugins and returns exposed values for "setup" and "start
   `);
 
   for (const [plugin, deps] of plugins) {
-    expect(mockCreatePluginSetupContext).toHaveBeenCalledWith(coreContext, setupDeps, plugin);
+    expect(mockCreatePluginSetupContext).toHaveBeenCalledWith({
+      deps: setupDeps,
+      plugin,
+      runtimeResolver: expect.any(Object),
+    });
     expect(plugin.setup).toHaveBeenCalledTimes(1);
     expect(plugin.setup).toHaveBeenCalledWith(setupContextMap.get(plugin.name), deps.setup);
   }
@@ -319,7 +353,11 @@ test('correctly orders plugins and returns exposed values for "setup" and "start
   `);
 
   for (const [plugin, deps] of plugins) {
-    expect(mockCreatePluginStartContext).toHaveBeenCalledWith(coreContext, startDeps, plugin);
+    expect(mockCreatePluginStartContext).toHaveBeenCalledWith({
+      deps: startDeps,
+      plugin,
+      runtimeResolver: expect.any(Object),
+    });
     expect(plugin.start).toHaveBeenCalledTimes(1);
     expect(plugin.start).toHaveBeenCalledWith(startContextMap.get(plugin.name), deps.start);
   }
@@ -362,7 +400,7 @@ test('correctly orders preboot plugins and returns exposed values for "setup"', 
     prebootPluginSystem.addPlugin(plugin);
   });
 
-  mockCreatePluginPrebootSetupContext.mockImplementation((context, deps, plugin) =>
+  mockCreatePluginPrebootSetupContext.mockImplementation(({ plugin }) =>
     setupContextMap.get(plugin.name)
   );
 
@@ -392,11 +430,10 @@ test('correctly orders preboot plugins and returns exposed values for "setup"', 
   `);
 
   for (const [plugin, deps] of plugins) {
-    expect(mockCreatePluginPrebootSetupContext).toHaveBeenCalledWith(
-      coreContext,
-      prebootDeps,
-      plugin
-    );
+    expect(mockCreatePluginPrebootSetupContext).toHaveBeenCalledWith({
+      deps: prebootDeps,
+      plugin,
+    });
     expect(plugin.setup).toHaveBeenCalledTimes(1);
     expect(plugin.setup).toHaveBeenCalledWith(setupContextMap.get(plugin.name), deps);
   }
@@ -426,17 +463,21 @@ test('`setupPlugins` only setups plugins that have server side', async () => {
     ]
   `);
 
-  expect(mockCreatePluginSetupContext).toHaveBeenCalledWith(
-    coreContext,
-    setupDeps,
-    firstPluginToRun
-  );
-  expect(mockCreatePluginSetupContext).not.toHaveBeenCalledWith(coreContext, secondPluginNotToRun);
-  expect(mockCreatePluginSetupContext).toHaveBeenCalledWith(
-    coreContext,
-    setupDeps,
-    thirdPluginToRun
-  );
+  expect(mockCreatePluginSetupContext).toHaveBeenCalledWith({
+    deps: setupDeps,
+    plugin: firstPluginToRun,
+    runtimeResolver: expect.any(Object),
+  });
+  expect(mockCreatePluginSetupContext).not.toHaveBeenCalledWith({
+    deps: setupDeps,
+    plugin: secondPluginNotToRun,
+    runtimeResolver: expect.any(Object),
+  });
+  expect(mockCreatePluginSetupContext).toHaveBeenCalledWith({
+    deps: setupDeps,
+    plugin: thirdPluginToRun,
+    runtimeResolver: expect.any(Object),
+  });
 
   expect(firstPluginToRun.setup).toHaveBeenCalledTimes(1);
   expect(secondPluginNotToRun.setup).not.toHaveBeenCalled();
@@ -564,7 +605,10 @@ describe('setup', () => {
     mockCreatePluginSetupContext.mockImplementation(() => ({}));
 
     const promise = pluginsSystem.setupPlugins(setupDeps);
-    jest.runAllTimers();
+    process.nextTick(() => {
+      // let the await init go through. then simulate the timeout
+      jest.runAllTimers();
+    });
 
     await expect(promise).rejects.toMatchInlineSnapshot(
       `[Error: Setup lifecycle of "timeout-setup" plugin wasn't completed in 10sec. Consider disabling the plugin and re-start.]`
@@ -626,6 +670,32 @@ describe('start', () => {
     await pluginsSystem.startPlugins(startDeps);
     const log = logger.get.mock.results[0].value as jest.Mocked<Logger>;
     expect(log.info).toHaveBeenCalledWith(`Starting [2] plugins: [order-1,order-0]`);
+  });
+
+  it('setups the runtimeResolver', async () => {
+    const pluginA = createPlugin('pluginA', { required: [] });
+    const pluginB = createPlugin('pluginB', { required: ['pluginA'] });
+
+    jest.spyOn(pluginA, 'setup').mockReturnValue({});
+    jest.spyOn(pluginB, 'setup').mockReturnValue({});
+
+    jest.spyOn(pluginA, 'start').mockReturnValue('contractA');
+    jest.spyOn(pluginB, 'start').mockReturnValue('contractB');
+
+    pluginsSystem.addPlugin(pluginA);
+    pluginsSystem.addPlugin(pluginB);
+
+    await pluginsSystem.setupPlugins(setupDeps);
+    await pluginsSystem.startPlugins(startDeps);
+
+    expect(runtimeResolverMock.resolveStartRequests).toHaveBeenCalledTimes(1);
+    expect(runtimeResolverMock.resolveStartRequests).toHaveBeenCalledWith(expect.any(Map));
+    expect(
+      Object.fromEntries([...runtimeResolverMock.resolveStartRequests.mock.calls[0][0].entries()])
+    ).toEqual({
+      pluginA: 'contractA',
+      pluginB: 'contractB',
+    });
   });
 });
 
@@ -819,7 +889,7 @@ describe('stop', () => {
     expect(stopSpy1.mock.invocationCallOrder[0]).toBeLessThan(stopSpy2.mock.invocationCallOrder[0]);
   });
 
-  it('waits for 30 sec to finish "stop" and move on to the next plugin.', async () => {
+  it('waits for 15 sec to finish "stop" and move on to the next plugin.', async () => {
     const [plugin1, plugin2] = [createPlugin('timeout-stop-1'), createPlugin('timeout-stop-2')].map(
       (plugin, index) => {
         jest.spyOn(plugin, 'setup').mockResolvedValue(`setup-as-${index}`);
@@ -849,7 +919,7 @@ describe('stop', () => {
 
     expect(loggingSystemMock.collect(logger).warn.flat()).toEqual(
       expect.arrayContaining([
-        `"timeout-stop-1" plugin didn't stop in 30sec., move on to the next.`,
+        `"timeout-stop-1" plugin didn't stop in 15sec., move on to the next.`,
       ])
     );
   });

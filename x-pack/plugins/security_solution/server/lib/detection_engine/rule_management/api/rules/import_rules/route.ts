@@ -5,48 +5,44 @@
  * 2.0.
  */
 
-import { chunk } from 'lodash/fp';
-import { extname } from 'path';
 import { schema } from '@kbn/config-schema';
-import { createPromiseFromStreams } from '@kbn/utils';
-
-import { transformError } from '@kbn/securitysolution-es-utils';
-import { validate } from '@kbn/securitysolution-io-ts-utils';
-
 import type { IKibanaResponse } from '@kbn/core/server';
-import { DETECTION_ENGINE_RULES_URL } from '../../../../../../../common/constants';
-import type { ImportRulesRequestQueryDecoded } from '../../../../../../../common/api/detection_engine/rule_management';
+import { transformError } from '@kbn/securitysolution-es-utils';
+import { chunk, partition } from 'lodash/fp';
+import { extname } from 'path';
+import { buildRouteValidationWithZod } from '@kbn/zod-helpers';
 import {
   ImportRulesRequestQuery,
   ImportRulesResponse,
 } from '../../../../../../../common/api/detection_engine/rule_management';
-
-import type { HapiReadableStream, SecuritySolutionPluginRouter } from '../../../../../../types';
+import { DETECTION_ENGINE_RULES_URL } from '../../../../../../../common/constants';
 import type { ConfigType } from '../../../../../../config';
-import type { SetupPlugins } from '../../../../../../plugin';
-import { buildMlAuthz } from '../../../../../machine_learning/authz';
-import type { ImportRuleResponse, BulkError } from '../../../../routes/utils';
-import { isBulkError, isImportRegular, buildSiemResponse } from '../../../../routes/utils';
-
+import type { HapiReadableStream, SecuritySolutionPluginRouter } from '../../../../../../types';
+import type { ImportRuleResponse } from '../../../../routes/utils';
+import {
+  buildSiemResponse,
+  createBulkErrorObject,
+  isBulkError,
+  isImportRegular,
+} from '../../../../routes/utils';
+import { createPrebuiltRuleAssetsClient } from '../../../../prebuilt_rules/logic/rule_assets/prebuilt_rule_assets_client';
+import { importRuleActionConnectors } from '../../../logic/import/action_connectors/import_rule_action_connectors';
+import { createRuleSourceImporter } from '../../../logic/import/rule_source_importer';
+import { importRules } from '../../../logic/import/import_rules';
+// eslint-disable-next-line no-restricted-imports
+import { importRulesLegacy } from '../../../logic/import/import_rules_legacy';
+import { createPromiseFromRuleImportStream } from '../../../logic/import/create_promise_from_rule_import_stream';
+import { importRuleExceptions } from '../../../logic/import/import_rule_exceptions';
+import { isRuleToImport } from '../../../logic/import/utils';
 import {
   getTupleDuplicateErrorsAndUniqueRules,
   migrateLegacyActionsIds,
 } from '../../../utils/utils';
-import { createRulesAndExceptionsStreamFromNdJson } from '../../../logic/import/create_rules_stream_from_ndjson';
-import { buildRouteValidation } from '../../../../../../utils/build_validation/route_validation';
-import type { RuleExceptionsPromiseFromStreams } from '../../../logic/import/import_rules_utils';
-import { importRules as importRulesHelper } from '../../../logic/import/import_rules_utils';
-import { getReferencedExceptionLists } from '../../../logic/import/gather_referenced_exceptions';
-import { importRuleExceptions } from '../../../logic/import/import_rule_exceptions';
-import { importRuleActionConnectors } from '../../../logic/import/action_connectors/import_rule_action_connectors';
+import { RULE_MANAGEMENT_IMPORT_EXPORT_SOCKET_TIMEOUT_MS } from '../../timeouts';
 
 const CHUNK_PARSED_OBJECT_SIZE = 50;
 
-export const importRulesRoute = (
-  router: SecuritySolutionPluginRouter,
-  config: ConfigType,
-  ml: SetupPlugins['ml']
-) => {
+export const importRulesRoute = (router: SecuritySolutionPluginRouter, config: ConfigType) => {
   router.versioned
     .post({
       access: 'public',
@@ -57,6 +53,9 @@ export const importRulesRoute = (
           maxBytes: config.maxRuleImportPayloadBytes,
           output: 'stream',
         },
+        timeout: {
+          idleSocket: RULE_MANAGEMENT_IMPORT_EXPORT_SOCKET_TIMEOUT_MS,
+        },
       },
     })
     .addVersion(
@@ -64,10 +63,7 @@ export const importRulesRoute = (
         version: '2023-10-31',
         validate: {
           request: {
-            query: buildRouteValidation<
-              typeof ImportRulesRequestQuery,
-              ImportRulesRequestQueryDecoded
-            >(ImportRulesRequestQuery),
+            query: buildRouteValidationWithZod(ImportRulesRequestQuery),
             body: schema.any(), // validation on file object is accomplished later in the handler.
           },
         },
@@ -85,7 +81,8 @@ export const importRulesRoute = (
             'licensing',
           ]);
 
-          const rulesClient = ctx.alerting.getRulesClient();
+          const { prebuiltRulesCustomizationEnabled } = config.experimentalFeatures;
+          const detectionRulesClient = ctx.securitySolution.getDetectionRulesClient();
           const actionsClient = ctx.actions.getActionsClient();
           const actionSOClient = ctx.core.savedObjects.getClient({
             includedHiddenTypes: ['action'],
@@ -94,13 +91,6 @@ export const importRulesRoute = (
 
           const savedObjectsClient = ctx.core.savedObjects.client;
           const exceptionsClient = ctx.lists?.getExceptionListClient();
-
-          const mlAuthz = buildMlAuthz({
-            license: ctx.licensing.license,
-            ml,
-            request,
-            savedObjectsClient,
-          });
 
           const { filename } = (request.body.file as HapiReadableStream).hapi;
           const fileExtension = extname(filename).toLowerCase();
@@ -114,10 +104,9 @@ export const importRulesRoute = (
           const objectLimit = config.maxRuleImportExportSize;
 
           // parse file to separate out exceptions from rules
-          const readAllStream = createRulesAndExceptionsStreamFromNdJson(objectLimit);
-          const [{ exceptions, rules, actionConnectors }] = await createPromiseFromStreams<
-            RuleExceptionsPromiseFromStreams[]
-          >([request.body.file as HapiReadableStream, ...readAllStream]);
+          const [{ exceptions, rules, actionConnectors }] = await createPromiseFromRuleImportStream(
+            { stream: request.body.file as HapiReadableStream, objectLimit }
+          );
 
           // import exceptions, includes validation
           const {
@@ -136,7 +125,8 @@ export const importRulesRoute = (
 
           const migratedParsedObjectsWithoutDuplicateErrors = await migrateLegacyActionsIds(
             parsedObjectsWithoutDuplicateErrors,
-            actionSOClient
+            actionSOClient,
+            actionsClient
           );
 
           // import actions-connectors
@@ -156,31 +146,53 @@ export const importRulesRoute = (
 
           // rulesWithMigratedActions: Is returned only in case connectors were exported from different namespace and the
           // original rules actions' ids were replaced with new destinationIds
-          const parsedRules = actionConnectorErrors.length
+          const parsedRuleStream = actionConnectorErrors.length
             ? []
             : rulesWithMigratedActions || migratedParsedObjectsWithoutDuplicateErrors;
 
-          // gather all exception lists that the imported rules reference
-          const foundReferencedExceptionLists = await getReferencedExceptionLists({
-            rules: parsedRules,
-            savedObjectsClient,
+          const ruleSourceImporter = createRuleSourceImporter({
+            config,
+            context: ctx.securitySolution,
+            prebuiltRuleAssetsClient: createPrebuiltRuleAssetsClient(savedObjectsClient),
           });
 
-          const chunkParseObjects = chunk(CHUNK_PARSED_OBJECT_SIZE, parsedRules);
+          const [parsedRules, parsedRuleErrors] = partition(isRuleToImport, parsedRuleStream);
+          const ruleChunks = chunk(CHUNK_PARSED_OBJECT_SIZE, parsedRules);
 
-          const importRuleResponse: ImportRuleResponse[] = await importRulesHelper({
-            ruleChunks: chunkParseObjects,
-            rulesResponseAcc: [...actionConnectorErrors, ...duplicateIdErrors],
-            mlAuthz,
-            overwriteRules: request.query.overwrite,
-            rulesClient,
-            savedObjectsClient,
-            exceptionsClient,
-            spaceId: ctx.securitySolution.getSpaceId(),
-            existingLists: foundReferencedExceptionLists,
-            allowMissingConnectorSecrets: !!actionConnectors.length,
-          });
-          const errorsResp = importRuleResponse.filter((resp) => isBulkError(resp)) as BulkError[];
+          let importRuleResponse: ImportRuleResponse[] = [];
+
+          if (prebuiltRulesCustomizationEnabled) {
+            importRuleResponse = await importRules({
+              ruleChunks,
+              overwriteRules: request.query.overwrite,
+              allowMissingConnectorSecrets: !!actionConnectors.length,
+              ruleSourceImporter,
+              detectionRulesClient,
+            });
+          } else {
+            importRuleResponse = await importRulesLegacy({
+              ruleChunks,
+              overwriteRules: request.query.overwrite,
+              allowMissingConnectorSecrets: !!actionConnectors.length,
+              detectionRulesClient,
+              savedObjectsClient,
+            });
+          }
+
+          const parseErrors = parsedRuleErrors.map((error) =>
+            createBulkErrorObject({
+              statusCode: 400,
+              message: error.message,
+            })
+          );
+          const importErrors = importRuleResponse.filter(isBulkError);
+          const errors = [
+            ...parseErrors,
+            ...actionConnectorErrors,
+            ...duplicateIdErrors,
+            ...importErrors,
+          ];
+
           const successes = importRuleResponse.filter((resp) => {
             if (isImportRegular(resp)) {
               return resp.status_code === 200;
@@ -188,11 +200,12 @@ export const importRulesRoute = (
               return false;
             }
           });
-          const importRules: ImportRulesResponse = {
-            success: errorsResp.length === 0,
+
+          const importRulesResponse: ImportRulesResponse = {
+            success: errors.length === 0,
             success_count: successes.length,
             rules_count: rules.length,
-            errors: errorsResp,
+            errors,
             exceptions_errors: exceptionsErrors,
             exceptions_success: exceptionsSuccess,
             exceptions_success_count: exceptionsSuccessCount,
@@ -202,12 +215,7 @@ export const importRulesRoute = (
             action_connectors_warnings: actionConnectorWarnings,
           };
 
-          const [validated, errors] = validate(importRules, ImportRulesResponse);
-          if (errors != null) {
-            return siemResponse.error({ statusCode: 500, body: errors });
-          } else {
-            return response.ok({ body: validated ?? {} });
-          }
+          return response.ok({ body: ImportRulesResponse.parse(importRulesResponse) });
         } catch (err) {
           const error = transformError(err);
           return siemResponse.error({

@@ -49,6 +49,12 @@ export const REMOVED_FIELD = i18n.translate('xpack.cases.caseView.actionLabel.re
   defaultMessage: 'removed',
 });
 
+export const CHANGED_FIELD_TO_EMPTY = (field: string) =>
+  i18n.translate('xpack.cases.caseView.actionLabel.changeFieldToEmpty', {
+    values: { field },
+    defaultMessage: 'changed {field} to "None"',
+  });
+
 export const VIEW_INCIDENT = (incidentNumber: string) =>
   i18n.translate('xpack.cases.caseView.actionLabel.viewIncident', {
     defaultMessage: 'View {incidentNumber}',
@@ -122,6 +128,10 @@ export const CASE_REFRESH = i18n.translate('xpack.cases.caseView.caseRefresh', {
 
 export const ACTIVITY = i18n.translate('xpack.cases.caseView.activity', {
   defaultMessage: 'Activity',
+});
+
+export const CASE_SETTINGS = i18n.translate('xpack.cases.caseView.caseSettings', {
+  defaultMessage: 'Case settings',
 });
 
 export const EMAIL_SUBJECT = (caseTitle: string) =>

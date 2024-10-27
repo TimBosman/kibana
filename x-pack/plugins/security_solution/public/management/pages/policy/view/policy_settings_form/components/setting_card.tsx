@@ -19,6 +19,7 @@ import {
   EuiPanel,
   EuiTextColor,
   EuiIconTip,
+  EuiSpacer,
 } from '@elastic/eui';
 
 import { ThemeContext } from 'styled-components';
@@ -57,10 +58,21 @@ export type SettingCardProps = React.PropsWithChildren<{
   dataTestSubj?: string;
   /** React Node to be put on the right corner of the card */
   rightCorner?: ReactNode;
+  mode?: 'edit' | 'view';
+  selected?: boolean;
 }>;
 
 export const SettingCard: FC<SettingCardProps> = memo(
-  ({ type, supportedOss, osRestriction, dataTestSubj, rightCorner, children }) => {
+  ({
+    type,
+    supportedOss,
+    osRestriction,
+    dataTestSubj,
+    rightCorner,
+    children,
+    selected = true,
+    mode = 'edit',
+  }) => {
     const paddingSize = useContext(ThemeContext).eui.euiPanelPaddingModifiers.paddingMedium;
     const getTestId = useTestIdGenerator(dataTestSubj);
 
@@ -115,7 +127,7 @@ export const SettingCard: FC<SettingCardProps> = memo(
               )}
             </EuiFlexGroup>
           </EuiFlexItem>
-          <EuiShowFor sizes={['m', 'l', 'xl']}>
+          <EuiShowFor sizes={['m', 'l', 'xl', 'xxl']}>
             <EuiFlexItem grow={3}>
               <EuiFlexGroup direction="row" gutterSize="none" justifyContent="flexEnd">
                 <EuiFlexItem grow={false} data-test-subj={getTestId('rightCornerContainer')}>
@@ -131,9 +143,16 @@ export const SettingCard: FC<SettingCardProps> = memo(
           </EuiShowFor>
         </EuiFlexGroup>
 
-        <EuiHorizontalRule margin="m" />
-
-        <div style={{ padding: `0 ${paddingSize} ${paddingSize} ${paddingSize}` }}>{children}</div>
+        {mode === 'edit' || selected ? (
+          <>
+            <EuiHorizontalRule margin="m" />
+            <div style={{ padding: `0 ${paddingSize} ${paddingSize} ${paddingSize}` }}>
+              {children}
+            </div>
+          </>
+        ) : (
+          <EuiSpacer size="m" />
+        )}
       </EuiPanel>
     );
   }

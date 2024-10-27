@@ -23,12 +23,14 @@ export default ({ getPageObjects, getService }: FtrProviderContext) => {
       // Create a repository
       await es.snapshot.createRepository({
         name: 'my-repository',
-        type: 'fs',
-        settings: {
-          location: '/tmp/es-backups/',
-          compress: true,
-        },
         verify: true,
+        repository: {
+          type: 'fs',
+          settings: {
+            location: '/tmp/es-backups/',
+            compress: true,
+          },
+        },
       });
 
       // Create a snapshot
@@ -38,7 +40,7 @@ export default ({ getPageObjects, getService }: FtrProviderContext) => {
       });
 
       // Wait for snapshot to be ready
-      await pageObjects.common.sleep(1000);
+      await pageObjects.common.sleep(2000);
 
       // Refresh page so that the snapshot shows up in the snapshots table
       await browser.refresh();

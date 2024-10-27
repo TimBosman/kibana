@@ -5,8 +5,10 @@
  * 2.0.
  */
 
-import { cleanKibana, resetRulesTableState, deleteAlertsAndRules } from '../../../../tasks/common';
-import { login, visitSecurityDetectionRulesPage } from '../../../../tasks/login';
+import { deleteAlertsAndRules } from '../../../../tasks/api_calls/common';
+import { resetRulesTableState } from '../../../../tasks/common';
+import { login } from '../../../../tasks/login';
+import { visitRulesManagementTable } from '../../../../tasks/rules_management';
 import {
   expectRulesWithExecutionStatus,
   filterByExecutionStatus,
@@ -28,24 +30,16 @@ import {
 import { disableAutoRefresh } from '../../../../tasks/alerts_detection_rules';
 import { getNewRule } from '../../../../objects/rule';
 
-// Flaky in serverless tests
-describe('Rules table: filtering', { tags: ['@ess', '@serverless', '@brokenInServerless'] }, () => {
-  before(() => {
-    cleanKibana();
-  });
-
+describe('Rules table: filtering', { tags: ['@ess', '@serverless', '@serverlessQA'] }, () => {
   beforeEach(() => {
     login();
     // Make sure persisted rules table state is cleared
     resetRulesTableState();
     deleteAlertsAndRules();
-    cy.task('esArchiverResetKibana');
   });
 
-  describe.skip('Last response filter', () => {
-    // Flaky in serverless tests
-    // @brokenInServerless tag is not working so a skip was needed
-    it('Filters rules by last response', { tags: ['@brokenInServerless'] }, function () {
+  describe('Last response filter', () => {
+    it('Filters rules by last response', function () {
       deleteIndex('test_index');
 
       createIndex('test_index', {
@@ -79,15 +73,15 @@ describe('Rules table: filtering', { tags: ['@ess', '@serverless', '@brokenInSer
           name: 'Failed rule',
           rule_id: 'failed_rule',
           index: ['test_index'],
-          // Setting a crazy large "Additional look-back time" to force a failure
-          from: 'now-9007199254746990s',
+          // Setting a malformed query to force a failure
+          query: 'host.name: "*',
           enabled: true,
         })
       );
 
       waitForRulesToFinishExecution(['successful_rule', 'warning_rule', 'failed_rule'], new Date());
 
-      visitSecurityDetectionRulesPage();
+      visitRulesManagementTable();
       disableAutoRefresh();
 
       // Initial table state - before filtering by status
@@ -138,7 +132,7 @@ describe('Rules table: filtering', { tags: ['@ess', '@serverless', '@brokenInSer
     });
 
     it('filter by different tags', () => {
-      visitSecurityDetectionRulesPage();
+      visitRulesManagementTable();
 
       expectManagementTableRules(['Rule 1', 'Rule 2', 'Rule 3']);
 

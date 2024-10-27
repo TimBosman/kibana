@@ -1,19 +1,25 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { BehaviorSubject } from 'rxjs';
-import type { HttpSetup } from '@kbn/core-http-browser';
+import type { InternalHttpSetup } from '@kbn/core-http-browser-internal';
 
 import type { UiSettingsState } from '@kbn/core-ui-settings-browser';
 import { UiSettingsScope } from '@kbn/core-ui-settings-common';
 
 export interface UiSettingsApiResponse {
   settings: UiSettingsState;
+}
+
+export interface ValidationApiResponse {
+  valid: boolean;
+  errorMessage?: string;
 }
 
 interface Changes {
@@ -37,7 +43,7 @@ export class UiSettingsApi {
 
   private readonly loadingCount$ = new BehaviorSubject(0);
 
-  constructor(private readonly http: HttpSetup) {}
+  constructor(private readonly http: InternalHttpSetup) {}
 
   /**
    * Adds a key+value that will be sent to the server ASAP. If a request is
@@ -91,6 +97,15 @@ export class UiSettingsApi {
       };
 
       this.flushPendingChanges('global');
+    });
+  }
+
+  /**
+   * Sends a validation request to the server for the provided key+value pair.
+   */
+  public async validate(key: string, value: any): Promise<ValidationApiResponse> {
+    return await this.sendRequest('POST', `/internal/kibana/settings/${key}/validate`, {
+      value,
     });
   }
 

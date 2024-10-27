@@ -10,44 +10,21 @@ import {
   DataQualityPanel,
   DATA_QUALITY_SUBTITLE,
   ECS_REFERENCE_URL,
-  getIlmPhaseDescription,
-  ILM_PHASE,
-  INDEX_LIFECYCLE_MANAGEMENT_PHASES,
-  SELECT_ONE_OR_MORE_ILM_PHASES,
 } from '@kbn/ecs-data-quality-dashboard';
-import type { EuiComboBoxOptionOption, OnTimeChangeProps } from '@elastic/eui';
-import {
-  EuiComboBox,
-  EuiFormControlLayout,
-  EuiFormLabel,
-  EuiLink,
-  EuiLoadingSpinner,
-  EuiText,
-  EuiToolTip,
-  useGeneratedHtmlId,
-  EuiSuperDatePicker,
-} from '@elastic/eui';
+import type { OnTimeChangeProps } from '@elastic/eui';
+import { EuiLink, EuiLoadingSpinner, EuiText, EuiToolTip, EuiSuperDatePicker } from '@elastic/eui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import styled from 'styled-components';
-import useObservable from 'react-use/lib/useObservable';
 
 import { useAssistantAvailability } from '../../assistant/use_assistant_availability';
 import { SecurityPageName } from '../../app/types';
-import { getGroupByFieldsOnClick } from '../../common/components/alerts_treemap/lib/helpers';
 import { useThemes } from '../../common/components/charts/common';
 import { HeaderPage } from '../../common/components/header_page';
-import { LandingPageComponent } from '../../common/components/landing_page';
+import { EmptyPrompt } from '../../common/components/empty_prompt';
 import { useLocalStorage } from '../../common/components/local_storage';
 import { SecuritySolutionPageWrapper } from '../../common/components/page_wrapper';
-import { DEFAULT_BYTES_FORMAT, DEFAULT_NUMBER_FORMAT } from '../../../common/constants';
-import { useSourcererDataView } from '../../common/containers/sourcerer';
-import {
-  KibanaServices,
-  useGetUserCasesPermissions,
-  useKibana,
-  useToasts,
-  useUiSetting$,
-} from '../../common/lib/kibana';
+import { APP_ID, DEFAULT_BYTES_FORMAT, DEFAULT_NUMBER_FORMAT } from '../../../common/constants';
+import { useSourcererDataView } from '../../sourcerer/containers';
+import { KibanaServices, useKibana, useToasts, useUiSetting$ } from '../../common/lib/kibana';
 import { SpyRoute } from '../../common/utils/route/spy_routes';
 import { useSignalIndex } from '../../detections/containers/detection_engine/alerts/use_signal_index';
 import * as i18n from './translations';
@@ -58,107 +35,21 @@ import type {
 
 const LOCAL_STORAGE_KEY = 'dataQualityDashboardLastChecked';
 
-const comboBoxStyle: React.CSSProperties = {
-  width: '322px',
-};
-
-const FormControlLayout = styled(EuiFormControlLayout)`
-  max-width: 500px;
-  height: 42px;
-
-  .euiFormControlLayout__childrenWrapper {
-    overflow: visible;
-  }
-`;
-
-const Option = styled.div`
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  width: 100%;
-`;
-
-const OptionLabel = styled.span`
-  font-weight: bold;
-`;
-
-const options: EuiComboBoxOptionOption[] = [
-  {
-    label: i18n.HOT,
-    value: 'hot',
-  },
-  {
-    label: i18n.WARM,
-    value: 'warm',
-  },
-  {
-    disabled: true,
-    label: i18n.COLD,
-    value: 'cold',
-  },
-  {
-    disabled: true,
-    label: i18n.FROZEN,
-    value: 'frozen',
-  },
-  {
-    label: i18n.UNMANAGED,
-    value: 'unmanaged',
-  },
-];
-
-const defaultOptions: EuiComboBoxOptionOption[] = [
-  {
-    label: i18n.HOT,
-    value: 'hot',
-  },
-  {
-    label: i18n.WARM,
-    value: 'warm',
-  },
-  {
-    label: i18n.UNMANAGED,
-    value: 'unmanaged',
-  },
-];
-
 const DEFAULT_START_TIME = 'now-7d';
 const DEFAULT_END_TIME = 'now';
 
-const renderOption = (
-  option: EuiComboBoxOptionOption<string | number | string[] | undefined>
-): React.ReactNode => (
-  <EuiToolTip content={`${option.label}: ${getIlmPhaseDescription(option.label)}`}>
-    <Option>
-      <OptionLabel>{`${option.label}`}</OptionLabel>
-      {': '}
-      <span>{getIlmPhaseDescription(option.label)}</span>
-    </Option>
-  </EuiToolTip>
-);
-
 const DataQualityComponent: React.FC = () => {
-  const { hasAssistantPrivilege } = useAssistantAvailability();
+  const { isAssistantEnabled } = useAssistantAvailability();
   const httpFetch = KibanaServices.get().http.fetch;
   const { baseTheme, theme } = useThemes();
   const toasts = useToasts();
-  const {
-    services: { telemetry },
-  } = useKibana();
-  const addSuccessToast = useCallback(
-    (toast: { title: string }) => {
-      toasts.addSuccess(toast);
-    },
-    [toasts]
-  );
+
   const [defaultBytesFormat] = useUiSetting$<string>(DEFAULT_BYTES_FORMAT);
   const [defaultNumberFormat] = useUiSetting$<string>(DEFAULT_NUMBER_FORMAT);
-  const labelInputId = useGeneratedHtmlId({ prefix: 'labelInput' });
-  const [selectedOptions, setSelectedOptions] = useState<EuiComboBoxOptionOption[]>(defaultOptions);
   const { indicesExist, loading: isSourcererLoading, selectedPatterns } = useSourcererDataView();
   const { signalIndexName, loading: isSignalIndexNameLoading } = useSignalIndex();
-  const { isILMAvailable$, cases } = useKibana().services;
-  const isILMAvailable = useObservable(isILMAvailable$);
+  const { configSettings, cases, telemetry } = useKibana().services;
+  const isILMAvailable = configSettings.ILMEnabled;
 
   const [startDate, setStartTime] = useState<string>();
   const [endDate, setEndTime] = useState<string>();
@@ -172,7 +63,7 @@ const DataQualityComponent: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isILMAvailable != null && isILMAvailable === false) {
+    if (!isILMAvailable) {
       setStartTime(DEFAULT_START_TIME);
       setEndTime(DEFAULT_END_TIME);
     }
@@ -196,22 +87,12 @@ const DataQualityComponent: React.FC = () => {
     []
   );
 
-  const ilmPhases: string[] = useMemo(
-    () => selectedOptions.map(({ label }) => label),
-    [selectedOptions]
-  );
-
-  const ilmFormLabel = useMemo(
-    () => <EuiFormLabel htmlFor={labelInputId}>{ILM_PHASE}</EuiFormLabel>,
-    [labelInputId]
-  );
-
   const [lastChecked, setLastChecked] = useLocalStorage<string>({
     defaultValue: '',
     key: LOCAL_STORAGE_KEY,
   });
 
-  const userCasesPermissions = useGetUserCasesPermissions();
+  const userCasesPermissions = cases.helpers.canUseCases([APP_ID]);
   const canUserCreateAndReadCases = useCallback(
     () => userCasesPermissions.create && userCasesPermissions.read,
     [userCasesPermissions.create, userCasesPermissions.read]
@@ -255,25 +136,9 @@ const DataQualityComponent: React.FC = () => {
 
   return (
     <>
-      {indicesExist && isILMAvailable != null ? (
+      {indicesExist ? (
         <SecuritySolutionPageWrapper data-test-subj="ecsDataQualityDashboardPage">
           <HeaderPage subtitle={subtitle} title={i18n.DATA_QUALITY_TITLE}>
-            {isILMAvailable && (
-              <EuiToolTip content={INDEX_LIFECYCLE_MANAGEMENT_PHASES}>
-                <FormControlLayout prepend={ilmFormLabel}>
-                  <EuiComboBox
-                    id={labelInputId}
-                    data-test-subj="selectIlmPhases"
-                    placeholder={SELECT_ONE_OR_MORE_ILM_PHASES}
-                    renderOption={renderOption}
-                    selectedOptions={selectedOptions}
-                    style={comboBoxStyle}
-                    options={options}
-                    onChange={setSelectedOptions}
-                  />
-                </FormControlLayout>
-              </EuiToolTip>
-            )}
             {!isILMAvailable && startDate && endDate && (
               <EuiToolTip content={i18n.DATE_PICKER_TOOLTIP}>
                 <EuiSuperDatePicker
@@ -282,24 +147,22 @@ const DataQualityComponent: React.FC = () => {
                   onTimeChange={onTimeChange}
                   showUpdateButton={false}
                   isDisabled={true}
+                  data-test-subj="dataQualityDatePicker"
                 />
               </EuiToolTip>
             )}
           </HeaderPage>
 
           <DataQualityPanel
-            addSuccessToast={addSuccessToast}
             baseTheme={baseTheme}
             canUserCreateAndReadCases={canUserCreateAndReadCases}
             defaultBytesFormat={defaultBytesFormat}
             defaultNumberFormat={defaultNumberFormat}
             endDate={endDate}
-            getGroupByFieldsOnClick={getGroupByFieldsOnClick}
             reportDataQualityCheckAllCompleted={reportDataQualityCheckAllCompleted}
             reportDataQualityIndexChecked={reportDataQualityIndexChecked}
             httpFetch={httpFetch}
-            ilmPhases={ilmPhases}
-            isAssistantEnabled={hasAssistantPrivilege}
+            isAssistantEnabled={isAssistantEnabled}
             isILMAvailable={isILMAvailable}
             lastChecked={lastChecked}
             openCreateCaseFlyout={openCreateCaseFlyout}
@@ -307,10 +170,11 @@ const DataQualityComponent: React.FC = () => {
             setLastChecked={setLastChecked}
             startDate={startDate}
             theme={theme}
+            toasts={toasts}
           />
         </SecuritySolutionPageWrapper>
       ) : (
-        <LandingPageComponent />
+        <EmptyPrompt />
       )}
 
       <SpyRoute pageName={SecurityPageName.dataQuality} />

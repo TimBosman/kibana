@@ -7,6 +7,9 @@
 
 import type { TypeOf } from '@kbn/config-schema';
 import type { Logger, RequestHandler } from '@kbn/core/server';
+import { FLEET_ENDPOINT_PACKAGE } from '@kbn/fleet-plugin/common';
+
+import { stringify } from '../../utils/stringify';
 import type {
   MetadataListResponse,
   EndpointSortableField,
@@ -25,7 +28,9 @@ import {
   ENDPOINT_DEFAULT_SORT_DIRECTION,
   ENDPOINT_DEFAULT_SORT_FIELD,
   METADATA_TRANSFORMS_PATTERN,
+  METADATA_TRANSFORMS_PATTERN_V2,
 } from '../../../../common/endpoint/constants';
+import { isEndpointPackageV2 } from '../../../../common/endpoint/utils/package_v2';
 
 export const getLogger = (endpointAppContext: EndpointAppContext): Logger => {
   return endpointAppContext.logFactory.get('metadata');
@@ -41,18 +46,13 @@ export function getMetadataListRequestHandler(
   SecuritySolutionRequestHandlerContext
 > {
   return async (context, request, response) => {
-    const endpointMetadataService = endpointAppContext.service.getEndpointMetadataService();
-    const fleetServices = endpointAppContext.service.getInternalFleetServices();
-    const esClient = (await context.core).elasticsearch.client.asInternalUser;
-    const soClient = (await context.core).savedObjects.client;
+    logger.debug(() => `endpoint host metadata list request:\n${stringify(request.query)}`);
+
+    const spaceId = (await context.securitySolution).getSpaceId();
+    const endpointMetadataService = endpointAppContext.service.getEndpointMetadataService(spaceId);
 
     try {
-      const { data, total } = await endpointMetadataService.getHostMetadataList(
-        esClient,
-        soClient,
-        fleetServices,
-        request.query
-      );
+      const { data, total } = await endpointMetadataService.getHostMetadataList(request.query);
 
       const body: MetadataListResponse = {
         data,
@@ -81,16 +81,12 @@ export const getMetadataRequestHandler = function (
   SecuritySolutionRequestHandlerContext
 > {
   return async (context, request, response) => {
-    const endpointMetadataService = endpointAppContext.service.getEndpointMetadataService();
+    const spaceId = (await context.securitySolution).getSpaceId();
+    const endpointMetadataService = endpointAppContext.service.getEndpointMetadataService(spaceId);
 
     try {
-      const esClient = (await context.core).elasticsearch.client;
       return response.ok({
-        body: await endpointMetadataService.getEnrichedHostMetadata(
-          esClient.asInternalUser,
-          endpointAppContext.service.getInternalFleetServices(),
-          request.params.id
-        ),
+        body: await endpointMetadataService.getEnrichedHostMetadata(request.params.id),
       });
     } catch (error) {
       return errorHandler(logger, response, error);
@@ -99,13 +95,21 @@ export const getMetadataRequestHandler = function (
 };
 
 export function getMetadataTransformStatsHandler(
+  endpointAppContext: EndpointAppContext,
   logger: Logger
 ): RequestHandler<unknown, unknown, unknown, SecuritySolutionRequestHandlerContext> {
   return async (context, _, response) => {
     const esClient = (await context.core).elasticsearch.client.asInternalUser;
+    const packageClient = endpointAppContext.service.getInternalFleetServices().packages;
+    const installation = await packageClient.getInstallation(FLEET_ENDPOINT_PACKAGE);
+    const transformName =
+      installation?.version && !isEndpointPackageV2(installation.version)
+        ? METADATA_TRANSFORMS_PATTERN
+        : METADATA_TRANSFORMS_PATTERN_V2;
+
     try {
       const transformStats = await esClient.transform.getTransformStats({
-        transform_id: METADATA_TRANSFORMS_PATTERN,
+        transform_id: transformName,
         allow_no_match: true,
       });
       return response.ok({

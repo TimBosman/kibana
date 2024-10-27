@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { useEffect, useMemo } from 'react';
 import { useHistory, useLocation, useParams } from 'react-router-dom';
-import { DiscoverAppLocatorParams } from '../../../common/locator';
+import { DiscoverAppLocatorParams } from '../../../common/app_locator';
 import { useDiscoverServices } from '../../hooks/use_discover_services';
 import { displayPossibleDocsDiffInfoAlert } from '../main/hooks/use_alert_results_toast';
 import { getAlertUtils, QueryParams } from './view_alert_utils';
@@ -20,7 +21,7 @@ const isActualAlert = (queryParams: QueryParams): queryParams is NonNullableEntr
 };
 
 export function ViewAlertRoute() {
-  const { core, data, locator, toastNotifications } = useDiscoverServices();
+  const { core, data, locator, toastNotifications, dataViews } = useDiscoverServices();
   const { id } = useParams<{ id: string }>();
   const history = useHistory();
   const { search } = useLocation();
@@ -46,7 +47,8 @@ export function ViewAlertRoute() {
       queryParams,
       toastNotifications,
       core,
-      data
+      data,
+      dataViews
     );
 
     const navigateWithDiscoverState = (state: DiscoverAppLocatorParams) => {
@@ -63,7 +65,17 @@ export function ViewAlertRoute() {
       .then(buildLocatorParams)
       .then(navigateWithDiscoverState)
       .catch(navigateToDiscoverRoot);
-  }, [core, data, history, id, locator, openActualAlert, queryParams, toastNotifications]);
+  }, [
+    core,
+    data,
+    dataViews,
+    history,
+    id,
+    locator,
+    openActualAlert,
+    queryParams,
+    toastNotifications,
+  ]);
 
   return null;
 }

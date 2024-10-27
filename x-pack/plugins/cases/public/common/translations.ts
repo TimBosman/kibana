@@ -22,11 +22,11 @@ export const DELETE_CASE = (quantity: number = 1) =>
   });
 
 export const COPY_ID_ACTION_LABEL = i18n.translate('xpack.cases.caseView.copyID', {
-  defaultMessage: 'Copy Case ID',
+  defaultMessage: 'Copy case ID',
 });
 
 export const COPY_ID_ACTION_SUCCESS = i18n.translate('xpack.cases.caseView.copyIDSuccess', {
-  defaultMessage: 'Copied Case ID to clipboard',
+  defaultMessage: 'Copied case ID to clipboard',
 });
 
 export const NAME = i18n.translate('xpack.cases.caseView.name', {
@@ -153,6 +153,14 @@ export const ACTIONS = i18n.translate('xpack.cases.allCases.actions', {
   defaultMessage: 'Actions',
 });
 
+export const ACTIONS_BUTTON_ARIA_LABEL = (title: string) =>
+  i18n.translate('xpack.cases.allCases.actions.button.ariaLabel', {
+    defaultMessage: 'Actions for "{title}" column',
+    values: {
+      title,
+    },
+  });
+
 export const NO_TAGS_AVAILABLE = i18n.translate('xpack.cases.allCases.noTagsAvailable', {
   defaultMessage: 'No tags available',
 });
@@ -192,12 +200,8 @@ export const TITLE_REQUIRED = i18n.translate('xpack.cases.createCase.titleFieldR
   defaultMessage: 'A name is required.',
 });
 
-export const CONFIGURE_CASES_PAGE_TITLE = i18n.translate('xpack.cases.configureCases.headerTitle', {
-  defaultMessage: 'Configure cases',
-});
-
 export const CONFIGURE_CASES_BUTTON = i18n.translate('xpack.cases.configureCasesButton', {
-  defaultMessage: 'Edit external connection',
+  defaultMessage: 'Settings',
 });
 
 export const ADD_COMMENT = i18n.translate('xpack.cases.caseView.comment.addComment', {
@@ -380,3 +384,12 @@ export const ADD_TAG_CUSTOM_OPTION_LABEL_COMBO_BOX = ADD_TAG_CUSTOM_OPTION_LABEL
 
 export const ADD_CATEGORY_CUSTOM_OPTION_LABEL_COMBO_BOX =
   ADD_CATEGORY_CUSTOM_OPTION_LABEL('{searchValue}');
+
+export const EXPERIMENTAL_LABEL = i18n.translate('xpack.cases.badge.experimentalLabel', {
+  defaultMessage: 'Technical preview',
+});
+
+export const EXPERIMENTAL_DESC = i18n.translate('xpack.cases.badge.experimentalDesc', {
+  defaultMessage:
+    'This functionality is in technical preview and may be changed or removed completely in a future release. Elastic will work to fix any issues, but features in technical preview are not subject to the support SLA of official GA features.',
+});

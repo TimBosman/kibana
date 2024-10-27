@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { isNumber, keys, values, find, each, cloneDeep, flatten } from 'lodash';
@@ -206,7 +207,11 @@ export const buildOtherBucketAgg = (
   ) => {
     // make sure there are actually results for the buckets
     const agg = aggregations[aggId];
-    if (!agg || !agg.buckets.length) {
+    if (
+      !agg ||
+      // buckets can be either an array or an object in case there's also a filter at the same level
+      (Array.isArray(agg.buckets) ? !agg.buckets.length : !Object.values(agg.buckets).length)
+    ) {
       noAggBucketResults = true;
       return;
     }
@@ -392,7 +397,7 @@ export const createOtherBucketPostFlightRequest = (
     inspectorRequestAdapter,
     abortSignal,
     searchSessionId,
-    disableShardFailureWarning
+    disableWarningToasts
   ) => {
     if (!resp.aggregations) return resp;
     const nestedSearchSource = searchSource.createChild();
@@ -406,7 +411,7 @@ export const createOtherBucketPostFlightRequest = (
         nestedSearchSource.fetch$({
           abortSignal,
           sessionId: searchSessionId,
-          disableShardFailureWarning,
+          disableWarningToasts,
           inspector: {
             adapter: inspectorRequestAdapter,
             title: i18n.translate('data.search.aggs.buckets.terms.otherBucketTitle', {

@@ -7,10 +7,12 @@
 
 import { get } from 'lodash';
 import { PluginConfigDescriptor, PluginInitializerContext } from '@kbn/core/server';
-import { TaskManagerPlugin } from './plugin';
 import { configSchema, TaskManagerConfig, MAX_WORKERS_LIMIT } from './config';
 
-export const plugin = (initContext: PluginInitializerContext) => new TaskManagerPlugin(initContext);
+export const plugin = async (initContext: PluginInitializerContext) => {
+  const { TaskManagerPlugin } = await import('./plugin');
+  return new TaskManagerPlugin(initContext);
+};
 
 export type {
   TaskInstance,
@@ -19,10 +21,9 @@ export type {
   TaskRunCreatorFunction,
   RunContext,
   IntervalSchedule,
-  LoadIndirectParamsResult,
 } from './task';
 
-export { TaskStatus } from './task';
+export { TaskStatus, TaskPriority, TaskCost } from './task';
 
 export type { TaskRegisterDefinition, TaskDefinitionRegistry } from './task_type_dictionary';
 
@@ -32,9 +33,12 @@ export {
   throwUnrecoverableError,
   throwRetryableError,
   isEphemeralTaskRejectedDueToCapacityError,
-  isSkipError,
-  createSkipError,
+  createTaskRunError,
+  TaskErrorSource,
 } from './task_running';
+
+export type { DecoratedError } from './task_running';
+
 export type { RunNowResult, BulkUpdateTaskResult } from './task_scheduling';
 export { getOldestIdleActionTask } from './queries/oldest_idle_action_task';
 export {
@@ -51,9 +55,6 @@ export type {
 
 export const config: PluginConfigDescriptor<TaskManagerConfig> = {
   schema: configSchema,
-  exposeToUsage: {
-    max_workers: true,
-  },
   deprecations: ({ deprecate }) => {
     return [
       deprecate('ephemeral_tasks.enabled', 'a future version', {
@@ -63,6 +64,10 @@ export const config: PluginConfigDescriptor<TaskManagerConfig> = {
       deprecate('ephemeral_tasks.request_capacity', 'a future version', {
         level: 'warning',
         message: `Configuring "xpack.task_manager.ephemeral_tasks.request_capacity" is deprecated and will be removed in a future version. Remove this setting to increase task execution resiliency.`,
+      }),
+      deprecate('max_workers', 'a future version', {
+        level: 'warning',
+        message: `Configuring "xpack.task_manager.max_workers" is deprecated and will be removed in a future version. Remove this setting and use "xpack.task_manager.capacity" instead.`,
       }),
       (settings, fromPath, addDeprecation) => {
         const taskManager = get(settings, fromPath);

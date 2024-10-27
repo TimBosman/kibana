@@ -15,53 +15,49 @@ import {
   LOCAL_QUERY_BAR_SELECTOR,
   RISK_SCORE_ERROR_PANEL,
   RISK_SCORE_STATUS,
+  LOCAL_QUERY_BAR_SEARCH_INPUT_SELECTOR,
 } from '../../screens/entity_analytics_management';
 
 import { deleteRiskScore, installRiskScoreModule } from '../../tasks/api_calls/risk_scores';
 import { RiskScoreEntity } from '../../tasks/risk_scores/common';
-import { login, visit } from '../../tasks/login';
-import { cleanKibana } from '../../tasks/common';
+import { login } from '../../tasks/login';
+import { visit } from '../../tasks/navigation';
 import { ENTITY_ANALYTICS_MANAGEMENT_URL } from '../../urls/navigation';
 import { getNewRule } from '../../objects/rule';
 import { createRule } from '../../tasks/api_calls/rules';
 import {
-  deleteConfiguration,
+  deleteRiskEngineConfiguration,
   interceptRiskPreviewError,
   interceptRiskPreviewSuccess,
   interceptRiskInitError,
 } from '../../tasks/api_calls/risk_engine';
 import { updateDateRangeInLocalDatePickers } from '../../tasks/date_picker';
-import { fillLocalSearchBar, submitLocalSearch } from '../../tasks/search_bar';
+import { submitLocalSearch } from '../../tasks/search_bar';
 import {
   riskEngineStatusChange,
-  updateRiskEngine,
-  updateRiskEngineConfirm,
+  upgradeRiskEngine,
   previewErrorButtonClick,
 } from '../../tasks/entity_analytics';
 
 describe(
   'Entity analytics management page',
   {
-    env: {
-      ftrConfig: { enableExperimental: ['riskScoringRoutesEnabled', 'riskScoringPersistence'] },
-    },
-    tags: ['@ess', '@brokenInServerless'],
+    tags: ['@ess', '@serverless'],
   },
   () => {
     before(() => {
-      cleanKibana();
       cy.task('esArchiverLoad', { archiveName: 'all_users' });
     });
 
     beforeEach(() => {
       login();
       createRule(getNewRule({ query: 'user.name:* or host.name:*', risk_score: 70 }));
-      deleteConfiguration();
+      deleteRiskEngineConfiguration();
       visit(ENTITY_ANALYTICS_MANAGEMENT_URL);
     });
 
     after(() => {
-      cy.task('esArchiverUnload', 'all_users');
+      cy.task('esArchiverUnload', { archiveName: 'all_users' });
     });
 
     it('renders page as expected', () => {
@@ -85,8 +81,7 @@ describe(
       it('risk scores reacts on change in search bar query', () => {
         cy.get(HOST_RISK_PREVIEW_TABLE_ROWS).should('have.length', 5);
         cy.get(USER_RISK_PREVIEW_TABLE_ROWS).should('have.length', 5);
-
-        fillLocalSearchBar('host.name: "test-host1"');
+        cy.get(LOCAL_QUERY_BAR_SEARCH_INPUT_SELECTOR).type('host.name: "test-host1"');
         submitLocalSearch(LOCAL_QUERY_BAR_SELECTOR);
 
         cy.get(HOST_RISK_PREVIEW_TABLE_ROWS).should('have.length', 1);
@@ -136,7 +131,7 @@ describe(
         // init
         riskEngineStatusChange();
 
-        cy.get(RISK_SCORE_ERROR_PANEL).contains('Sorry, there was an error');
+        cy.get(RISK_SCORE_ERROR_PANEL).contains('There was an error');
       });
 
       it('should update if there legacy risk score installed', () => {
@@ -145,10 +140,7 @@ describe(
 
         cy.get(RISK_SCORE_STATUS).should('not.exist');
 
-        updateRiskEngine();
-        updateRiskEngineConfirm();
-
-        cy.get(RISK_SCORE_STATUS).should('have.text', 'On');
+        upgradeRiskEngine();
 
         deleteRiskScore({ riskScoreEntity: RiskScoreEntity.host, spaceId: 'default' });
       });

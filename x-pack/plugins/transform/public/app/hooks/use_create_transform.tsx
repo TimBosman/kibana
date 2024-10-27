@@ -14,7 +14,7 @@ import { toMountPoint } from '@kbn/react-kibana-mount';
 import type {
   PutTransformsRequestSchema,
   PutTransformsResponseSchema,
-} from '../../../common/api_schemas/transforms';
+} from '../../../server/routes/api_schemas/transforms';
 import { addInternalBasePath } from '../../../common/constants';
 import type { TransformId } from '../../../common/types/transform';
 import { getErrorMessage } from '../../../common/utils/errors';
@@ -27,10 +27,12 @@ import { useRefreshTransformList } from './use_refresh_transform_list';
 interface CreateTransformArgs {
   transformId: TransformId;
   transformConfig: PutTransformsRequestSchema;
+  createDataView: boolean;
+  timeFieldName?: string;
 }
 
 export const useCreateTransform = () => {
-  const { http, i18n: i18nStart, theme } = useAppDependencies();
+  const { http, ...startServices } = useAppDependencies();
   const refreshTransformList = useRefreshTransformList();
   const toastNotifications = useToastNotifications();
 
@@ -40,18 +42,21 @@ export const useCreateTransform = () => {
         defaultMessage: 'An error occurred creating the transform {transformId}:',
         values: { transformId },
       }),
-      text: toMountPoint(<ToastNotificationText text={getErrorMessage(error)} />, {
-        theme,
-        i18n: i18nStart,
-      }),
+      text: toMountPoint(<ToastNotificationText text={getErrorMessage(error)} />, startServices),
     });
   }
 
   const mutation = useMutation({
-    mutationFn: ({ transformId, transformConfig }: CreateTransformArgs) => {
+    mutationFn: ({
+      transformId,
+      transformConfig,
+      createDataView = false,
+      timeFieldName,
+    }: CreateTransformArgs) => {
       return http.put<PutTransformsResponseSchema>(
         addInternalBasePath(`transforms/${transformId}`),
         {
+          query: { createDataView, timeFieldName },
           body: JSON.stringify(transformConfig),
           version: '1',
         }

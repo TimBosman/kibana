@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, useState, useEffect, useCallback, useMemo } from 'react';
+import type { FC } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import useDebounce from 'react-use/lib/useDebounce';
 
 import {
@@ -33,30 +34,35 @@ import { type ErrorType, extractErrorProperties } from '@kbn/ml-error-utils';
 import type { DataFrameAnalyticsConfig } from '@kbn/ml-data-frame-analytics-utils';
 
 import type { JobType } from '../../../../../common/types/saved_objects';
-import { useMlApiContext, useMlKibana } from '../../../contexts/kibana';
+import { useMlKibana } from '../../../contexts/kibana';
 import { CannotImportJobsCallout } from './cannot_import_jobs_callout';
 import { CannotReadFileCallout } from './cannot_read_file_callout';
 import { toastNotificationServiceProvider } from '../../../services/toast_notification_service';
 import { JobImportService } from './jobs_import_service';
 import { useValidateIds } from './validate';
 import type { ImportedAdJob, JobIdObject, SkippedJobs } from './jobs_import_service';
+import { useEnabledFeatures } from '../../../contexts/ml';
 
-interface Props {
+export interface Props {
   isDisabled: boolean;
+  onImportComplete: (() => void) | null;
 }
-export const ImportJobsFlyout: FC<Props> = ({ isDisabled }) => {
-  const {
-    jobs: { bulkCreateJobs },
-    dataFrameAnalytics: { createDataFrameAnalytics },
-    filters: { filters: getFilters },
-  } = useMlApiContext();
+
+export const ImportJobsFlyout: FC<Props> = ({ isDisabled, onImportComplete }) => {
   const {
     services: {
       data: {
         dataViews: { getTitles: getDataViewTitles },
       },
       notifications: { toasts },
-      mlServices: { mlUsageCollection },
+      mlServices: {
+        mlUsageCollection,
+        mlApi: {
+          jobs: { bulkCreateJobs },
+          dataFrameAnalytics: { createDataFrameAnalytics },
+          filters: { filters: getFilters },
+        },
+      },
     },
   } = useMlKibana();
 
@@ -79,6 +85,7 @@ export const ImportJobsFlyout: FC<Props> = ({ isDisabled }) => {
     () => toastNotificationServiceProvider(toasts),
     [toasts]
   );
+  const { isADEnabled, isDFAEnabled } = useEnabledFeatures();
 
   const [validateIds] = useValidateIds(
     jobType,
@@ -123,7 +130,11 @@ export const ImportJobsFlyout: FC<Props> = ({ isDisabled }) => {
 
     try {
       const loadedFile = await jobImportService.readJobConfigs(files[0]);
-      if (loadedFile.jobType === null) {
+      if (
+        loadedFile.jobType === null ||
+        (loadedFile.jobType === 'anomaly-detector' && isADEnabled === false) ||
+        (loadedFile.jobType === 'data-frame-analytics' && isDFAEnabled === false)
+      ) {
         reset(true);
         return;
       }
@@ -177,23 +188,26 @@ export const ImportJobsFlyout: FC<Props> = ({ isDisabled }) => {
 
   const onImport = useCallback(async () => {
     setImporting(true);
-    if (jobType === 'anomaly-detector') {
-      const renamedJobs = jobImportService.renameAdJobs(jobIdObjects, adJobs);
-      try {
+    try {
+      if (jobType === 'anomaly-detector' && isADEnabled === true) {
+        const renamedJobs = jobImportService.renameAdJobs(jobIdObjects, adJobs);
         await bulkCreateADJobs(renamedJobs);
         mlUsageCollection.count('imported_anomaly_detector_jobs', renamedJobs.length);
-      } catch (error) {
-        // display unexpected error
-        displayErrorToast(error);
+      } else if (jobType === 'data-frame-analytics' && isDFAEnabled === true) {
+        const renamedJobs = jobImportService.renameDfaJobs(jobIdObjects, dfaJobs);
+        await bulkCreateDfaJobs(renamedJobs);
+        mlUsageCollection.count('imported_data_frame_analytics_jobs', renamedJobs.length);
       }
-    } else if (jobType === 'data-frame-analytics') {
-      const renamedJobs = jobImportService.renameDfaJobs(jobIdObjects, dfaJobs);
-      await bulkCreateDfaJobs(renamedJobs);
-      mlUsageCollection.count('imported_data_frame_analytics_jobs', renamedJobs.length);
+    } catch (error) {
+      // display unexpected error
+      displayErrorToast(error);
     }
 
     setImporting(false);
     setShowFlyout(false);
+    if (typeof onImportComplete === 'function') {
+      onImportComplete();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobType, jobIdObjects, adJobs, dfaJobs]);
 
@@ -346,6 +360,10 @@ export const ImportJobsFlyout: FC<Props> = ({ isDisabled }) => {
       onClick={() => deleteJob(index)}
     />
   );
+
+  if (isADEnabled === false && isDFAEnabled === false) {
+    return null;
+  }
 
   return (
     <>

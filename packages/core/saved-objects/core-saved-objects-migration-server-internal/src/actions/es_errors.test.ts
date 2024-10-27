@@ -1,12 +1,14 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
+  hasAllKeywordsInOrder,
   isClusterShardLimitExceeded,
   isIncompatibleMappingException,
   isIndexNotFoundException,
@@ -106,6 +108,15 @@ describe('isClusterShardLimitExceeded', () => {
       })
     ).toEqual(true);
   });
+  it('returns true with illegal_argument_exception and reason is maximum normal shards open', () => {
+    expect(
+      isClusterShardLimitExceeded({
+        type: 'illegal_argument_exception',
+        reason:
+          'Validation Failed: 1: this action would add [2] shards, but this cluster currently has [3]/[1] maximum normal shards open;',
+      })
+    ).toEqual(true);
+  });
   it('returns false for validation_exception with another reason', () => {
     expect(
       isClusterShardLimitExceeded({
@@ -116,5 +127,33 @@ describe('isClusterShardLimitExceeded', () => {
   });
   it('returns false undefined', () => {
     expect(isClusterShardLimitExceeded(undefined)).toEqual(false);
+  });
+});
+
+describe('hasAllKeywordsInOrder', () => {
+  it('returns false if not all keywords are present', () => {
+    expect(
+      hasAllKeywordsInOrder('some keywords in a message', ['some', 'in', 'message', 'missing'])
+    ).toEqual(false);
+  });
+
+  it('returns false if keywords are not in the right order', () => {
+    expect(
+      hasAllKeywordsInOrder('some keywords in a message', ['some', 'message', 'keywords'])
+    ).toEqual(false);
+  });
+
+  it('returns false if the message is empty', () => {
+    expect(hasAllKeywordsInOrder('', ['some', 'message', 'keywords'])).toEqual(false);
+  });
+
+  it('returns false if the keyword list is empty', () => {
+    expect(hasAllKeywordsInOrder('some keywords in a message', [])).toEqual(false);
+  });
+
+  it('returns true if keywords are present and in the right order', () => {
+    expect(
+      hasAllKeywordsInOrder('some keywords in a message', ['some', 'keywords', 'in', 'message'])
+    ).toEqual(true);
   });
 });

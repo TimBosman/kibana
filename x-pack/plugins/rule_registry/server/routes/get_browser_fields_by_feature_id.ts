@@ -27,6 +27,7 @@ export const getBrowserFieldsByFeatureId = (router: IRouter<RacRequestHandlerCon
         ),
       },
       options: {
+        access: 'internal',
         tags: ['access:rac'],
       },
     },
@@ -35,11 +36,13 @@ export const getBrowserFieldsByFeatureId = (router: IRouter<RacRequestHandlerCon
         const racContext = await context.rac;
         const alertsClient = await racContext.getAlertsClient();
         const { featureIds = [] } = request.query;
-        const indices = await alertsClient.getAuthorizedAlertsIndices(
-          Array.isArray(featureIds) ? featureIds : [featureIds]
+        const onlyO11yFeatureIds = (Array.isArray(featureIds) ? featureIds : [featureIds]).filter(
+          (fId) => fId !== 'siem'
         );
         const o11yIndices =
-          indices?.filter((index) => index.startsWith('.alerts-observability')) ?? [];
+          (onlyO11yFeatureIds
+            ? await alertsClient.getAuthorizedAlertsIndices(onlyO11yFeatureIds)
+            : []) ?? [];
         if (o11yIndices.length === 0) {
           return response.notFound({
             body: {
@@ -51,6 +54,7 @@ export const getBrowserFieldsByFeatureId = (router: IRouter<RacRequestHandlerCon
 
         const fields = await alertsClient.getBrowserFields({
           indices: o11yIndices,
+          featureIds: onlyO11yFeatureIds,
           metaFields: ['_id', '_index'],
           allowNoIndex: true,
         });

@@ -8,11 +8,13 @@
 import React from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
-import {
-  EuiBadge,
+import type {
   EuiTableActionsColumnType,
   EuiTableComputedColumnType,
   EuiTableFieldDataColumnType,
+} from '@elastic/eui';
+import {
+  EuiBadge,
   EuiButtonIcon,
   EuiFlexGroup,
   EuiFlexItem,
@@ -22,23 +24,27 @@ import {
   EuiToolTip,
   RIGHT_ALIGNMENT,
   EuiIcon,
+  EuiLoadingSpinner,
 } from '@elastic/eui';
 
 import { useTransformCapabilities } from '../../../../hooks';
 import { needsReauthorization } from '../../../../common/reauthorization_utils';
+import type { TransformId } from '../../../../../../common/types/transform';
+import { isLatestTransform, isPivotTransform } from '../../../../../../common/types/transform';
 import {
-  isLatestTransform,
-  isPivotTransform,
-  TransformId,
-} from '../../../../../../common/types/transform';
-import { TRANSFORM_STATE } from '../../../../../../common/constants';
+  mapEsHealthStatus2TransformHealthStatus,
+  TRANSFORM_STATE,
+} from '../../../../../../common/constants';
 
-import { getTransformProgress, TransformListRow, TRANSFORM_LIST_COLUMN } from '../../../../common';
+import type { TransformListRow } from '../../../../common';
+import { getTransformProgress, TRANSFORM_LIST_COLUMN } from '../../../../common';
 import { useActions } from './use_actions';
 import { isManagedTransform } from '../../../../common/managed_transforms_utils';
 
 import { TransformHealthColoredDot } from './transform_health_colored_dot';
 import { TransformTaskStateBadge } from './transform_task_state_badge';
+
+const TRUNCATE_TEXT_LINES = 3;
 
 const TRANSFORM_INSUFFICIENT_PERMISSIONS_MSG = i18n.translate(
   'xpack.transform.transformList.needsReauthorizationBadge.insufficientPermissions',
@@ -46,12 +52,20 @@ const TRANSFORM_INSUFFICIENT_PERMISSIONS_MSG = i18n.translate(
     defaultMessage: 'This transform was created with insufficient permissions.',
   }
 );
+
+const StatsUnknown = () => (
+  <EuiText textAlign="center" color="subdued" size="s">
+    <FormattedMessage id="xpack.transform.transformList.statsUnknown" defaultMessage="Unknown" />
+  </EuiText>
+);
 export const useColumns = (
   expandedRowItemIds: TransformId[],
   setExpandedRowItemIds: React.Dispatch<React.SetStateAction<TransformId[]>>,
   transformNodes: number,
-  transformSelection: TransformListRow[]
+  transformSelection: TransformListRow[],
+  transformsStatsLoading: boolean
 ) => {
+  const NoStatsFallbackComponent = transformsStatsLoading ? EuiLoadingSpinner : StatsUnknown;
   const { canStartStopTransform } = useTransformCapabilities();
 
   const { actions, modals } = useActions({
@@ -122,13 +136,22 @@ export const useColumns = (
       'data-test-subj': 'transformListColumnId',
       name: 'ID',
       sortable: true,
-      truncateText: true,
+      truncateText: { lines: TRUNCATE_TEXT_LINES },
       scope: 'row',
       render: (transformId, item) => {
-        if (!isManagedTransform(item)) return transformId;
+        if (!isManagedTransform(item)) return <span title={transformId}>{transformId}</span>;
         return (
           <>
-            {transformId}
+            <span
+              title={`${transformId} (${i18n.translate(
+                'xpack.transform.transformList.managedBadgeLabel',
+                {
+                  defaultMessage: 'Managed',
+                }
+              )})`}
+            >
+              {transformId}
+            </span>
             &nbsp;
             <EuiToolTip
               content={i18n.translate('xpack.transform.transformList.managedBadgeTooltip', {
@@ -213,7 +236,10 @@ export const useColumns = (
       'data-test-subj': 'transformListColumnDescription',
       name: i18n.translate('xpack.transform.description', { defaultMessage: 'Description' }),
       sortable: true,
-      truncateText: true,
+      truncateText: { lines: TRUNCATE_TEXT_LINES },
+      render(text: string) {
+        return <span title={text}>{text}</span>;
+      },
     },
     {
       name: i18n.translate('xpack.transform.type', { defaultMessage: 'Type' }),
@@ -239,10 +265,14 @@ export const useColumns = (
     {
       name: i18n.translate('xpack.transform.status', { defaultMessage: 'Status' }),
       'data-test-subj': 'transformListColumnStatus',
-      sortable: (item: TransformListRow) => item.stats.state,
+      sortable: (item: TransformListRow) => item.stats?.state,
       truncateText: true,
       render(item: TransformListRow) {
-        return <TransformTaskStateBadge state={item.stats.state} reason={item.stats.reason} />;
+        return item.stats ? (
+          <TransformTaskStateBadge state={item.stats.state} reason={item.stats.reason} />
+        ) : (
+          <NoStatsFallbackComponent />
+        );
       },
       width: '100px',
     },
@@ -271,6 +301,7 @@ export const useColumns = (
         if (progress === undefined && isBatchTransform === true) {
           return null;
         }
+        if (!item.stats) return <NoStatsFallbackComponent />;
 
         return (
           <EuiFlexGroup alignItems="center" gutterSize="xs">
@@ -292,7 +323,7 @@ export const useColumns = (
                 </EuiFlexItem>
               </>
             )}
-            {!isBatchTransform && (
+            {!isBatchTransform && item.stats && (
               <>
                 <EuiFlexItem style={{ width: '40px' }} grow={false}>
                   {/* If not stopped, failed or waiting show the animated progress bar */}
@@ -321,10 +352,16 @@ export const useColumns = (
     {
       name: i18n.translate('xpack.transform.health', { defaultMessage: 'Health' }),
       'data-test-subj': 'transformListColumnHealth',
-      sortable: (item: TransformListRow) => item.stats.health.status,
+      sortable: (item: TransformListRow) => item.stats?.health?.status,
       truncateText: true,
       render(item: TransformListRow) {
-        return <TransformHealthColoredDot healthStatus={item.stats.health.status} />;
+        return item.stats?.health ? (
+          <TransformHealthColoredDot
+            healthStatus={mapEsHealthStatus2TransformHealthStatus(item.stats.health.status)}
+          />
+        ) : (
+          <NoStatsFallbackComponent />
+        );
       },
       width: '100px',
     },

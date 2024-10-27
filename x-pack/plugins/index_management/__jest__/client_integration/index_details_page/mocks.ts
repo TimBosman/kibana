@@ -14,10 +14,10 @@ export const testIndexMock: Index = {
   name: testIndexName,
   uuid: 'test1234',
   primary: '1',
-  replica: '1',
+  replica: '2',
   documents: 1,
   documents_deleted: 0,
-  size: '10kb',
+  size: '20kb',
   primary_size: '10kb',
   isFrozen: false,
   aliases: 'none',
@@ -40,6 +40,56 @@ export const testIndexMappings = {
       },
     },
   },
+};
+
+export const testIndexMappingsWithSemanticText = {
+  mappings: {
+    dynamic: 'false',
+    dynamic_templates: [],
+    properties: {
+      '@timestamp': {
+        type: 'date',
+      },
+      semantic_text: {
+        type: 'semantic_text',
+        inference_id: 'inference_id',
+      },
+    },
+  },
+};
+
+// Mocking partial index settings response
+export const testIndexSettings = {
+  settings: {
+    index: {
+      routing: {
+        allocation: {
+          include: {
+            _tier_preference: 'data_content',
+          },
+        },
+      },
+      number_of_shards: '1',
+    },
+  },
+  defaults: {
+    index: {
+      flush_after_merge: '512mb',
+      max_script_fields: '32',
+      query: {
+        default_field: ['*'],
+      },
+      priority: '1',
+    },
+  },
+};
+export const testIndexEditableSettingsAll = {
+  'index.priority': '1',
+  'index.query.default_field': ['*'],
+  'index.routing.allocation.include._tier_preference': 'data_content',
+};
+export const testIndexEditableSettingsLimited = {
+  'index.query.default_field': ['*'],
 };
 
 // Mocking partial index stats response

@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React from 'react';
+import React, { Fragment, FC, PropsWithChildren } from 'react';
 
 import {
   EuiFlexGroup,
@@ -29,7 +30,7 @@ interface OverviewPanelProps {
   overviewPanelProps?: Partial<EuiPanelProps>;
 }
 
-export const OverviewPanel: React.FC<OverviewPanelProps> = ({
+export const OverviewPanel: FC<PropsWithChildren<OverviewPanelProps>> = ({
   children,
   description,
   leftPanelContent,
@@ -41,14 +42,14 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
   return (
     <>
       <EuiSpacer size="xxl" />
-      <EuiFlexGroup alignItems="center">
+      <EuiFlexGroup alignItems="flexStart" gutterSize="xl">
         {leftPanelContent && <EuiFlexItem grow={6}>{leftPanelContent}</EuiFlexItem>}
         <EuiFlexItem grow={4}>
-          <EuiPanel color="subdued" {...overviewPanelProps}>
-            <EuiTitle>
+          <EuiPanel paddingSize="none" color="subdued" {...overviewPanelProps}>
+            <EuiTitle size="s">
               <h2>{title}</h2>
             </EuiTitle>
-            <EuiSpacer />
+            <EuiSpacer size="m" />
             {description && <EuiText>{description}</EuiText>}
             {children}
             {links && links.length > 0 ? (
@@ -59,11 +60,14 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
                 </EuiTitle>
                 <EuiSpacer size="s" />
                 {links.map(({ label, href }, index) => (
-                  <EuiText size="s" key={`overviewPanel.link.${index}`}>
-                    <EuiLink key={index} href={href} target="_blank">
-                      {label}
-                    </EuiLink>
-                  </EuiText>
+                  <Fragment key={`overviewPanel.link.${index}`}>
+                    <EuiText size="s">
+                      <EuiLink key={index} href={href} target="_blank">
+                        {label}
+                      </EuiLink>
+                    </EuiText>
+                    <EuiSpacer size="xs" />
+                  </Fragment>
                 ))}
               </>
             ) : null}

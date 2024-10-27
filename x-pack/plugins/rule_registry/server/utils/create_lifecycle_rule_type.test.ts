@@ -59,6 +59,7 @@ function createRule(shouldWriteAlerts: boolean = true) {
     isExportable: true,
     minimumLicenseRequired: 'basic',
     name: 'ruleTypeName',
+    category: 'test',
     producer: 'producer',
     validate: {
       params: schema.object(
@@ -136,17 +137,23 @@ function createRule(shouldWriteAlerts: boolean = true) {
           savedObjectsClient: {} as any,
           scopedClusterClient: {} as any,
           search: {} as any,
-          searchSourceClient: {} as ISearchStartSearchSource,
+          getMaintenanceWindowIds: async () => [],
+          getSearchSourceClient: async () => ({} as ISearchStartSearchSource),
           shouldStopExecution: () => false,
           shouldWriteAlerts: () => shouldWriteAlerts,
           uiSettingsClient: {} as any,
           share: {} as SharePluginStart,
-          dataViews: dataViewPluginMocks.createStartContract(),
+          getDataViews: async () => dataViewPluginMocks.createStartContract(),
         },
         spaceId: 'spaceId',
         startedAt,
+        startedAtOverridden: false,
         state,
         flappingSettings: DEFAULT_FLAPPING_SETTINGS,
+        getTimeRange: () => {
+          const date = new Date(Date.now()).toISOString();
+          return { dateStart: date, dateEnd: date };
+        },
       })) ?? {}) as Record<string, any>);
 
       previousStartedAt = startedAt;
@@ -248,6 +255,7 @@ describe('createLifecycleRuleTypeFactory', () => {
               "@timestamp": "2021-06-16T09:01:00.000Z",
               "event.action": "open",
               "event.kind": "signal",
+              "kibana.alert.consecutive_matches": 1,
               "kibana.alert.duration.us": 0,
               "kibana.alert.flapping": false,
               "kibana.alert.instance.id": "opbeans-java",
@@ -285,6 +293,7 @@ describe('createLifecycleRuleTypeFactory', () => {
               "@timestamp": "2021-06-16T09:01:00.000Z",
               "event.action": "open",
               "event.kind": "signal",
+              "kibana.alert.consecutive_matches": 1,
               "kibana.alert.duration.us": 0,
               "kibana.alert.flapping": false,
               "kibana.alert.instance.id": "opbeans-node",
@@ -437,7 +446,12 @@ describe('createLifecycleRuleTypeFactory', () => {
         helpers.ruleDataClientMock.getReader().search.mockResolvedValueOnce({
           hits: {
             hits: [
-              { _source: lastOpbeansNodeDoc, _index: 'a', _primary_term: 4, _seq_no: 2 } as any,
+              {
+                _source: lastOpbeansNodeDoc,
+                _index: '.alerts-a',
+                _primary_term: 4,
+                _seq_no: 2,
+              } as any,
             ],
             total: {
               value: 1,

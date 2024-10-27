@@ -388,7 +388,7 @@ describe('Filter Utils', () => {
         ]);
       });
 
-      it('Return Error if filter is using an non-existing key null key', () => {
+      it('Not return error if filter is using an non-existing key null key', () => {
         const validationObject = validateFilterKueryNode({
           astFilter: esKuery.fromKueryExpression('foo.attributes.description: hello AND bye'),
           types: ['foo'],
@@ -405,7 +405,7 @@ describe('Filter Utils', () => {
           },
           {
             astPath: 'arguments.1',
-            error: 'The key is empty and needs to be wrapped by a saved object type like foo',
+            error: null,
             isSavedObjectAttr: false,
             key: null,
             type: null,

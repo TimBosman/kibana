@@ -19,41 +19,32 @@ function isCompressedSream(arg: unknown): arg is zlib.Gzip {
   return typeof arg === 'object' && arg !== null && typeof (arg as zlib.Gzip).flush === 'function';
 }
 
+const FLUSH_KEEP_ALIVE_INTERVAL_MS = 500;
 const FLUSH_PAYLOAD_SIZE = 4 * 1024;
 
-class UncompressedResponseStream extends Stream.PassThrough {}
+export class UncompressedResponseStream extends Stream.PassThrough {}
 
 const DELIMITER = '\n';
 
-type StreamType = 'string' | 'ndjson';
+type StreamTypeUnion = string | object;
+type StreamType<T extends StreamTypeUnion> = T extends string
+  ? string
+  : T extends object
+  ? T
+  : never;
 
-interface StreamFactoryReturnType<T = unknown> {
-  DELIMITER: string;
-  end: () => void;
-  push: (d: T, drain?: boolean) => void;
-  responseWithHeaders: {
-    body: zlib.Gzip | UncompressedResponseStream;
-    headers?: ResponseHeaders;
-  };
+export interface StreamResponseWithHeaders {
+  body: zlib.Gzip | UncompressedResponseStream;
+  headers?: ResponseHeaders;
 }
 
-/**
- * Overload to set up a string based response stream with support
- * for gzip compression depending on provided request headers.
- *
- * @param headers - Request headers.
- * @param logger - Kibana logger.
- * @param compressOverride - Optional flag to override header based compression setting.
- * @param flushFix - Adds an attribute with a random string payload to overcome buffer flushing with certain proxy configurations.
- *
- * @returns An object with stream attributes and methods.
- */
-export function streamFactory<T = string>(
-  headers: Headers,
-  logger: Logger,
-  compressOverride?: boolean,
-  flushFix?: boolean
-): StreamFactoryReturnType<T>;
+export interface StreamFactoryReturnType<T extends StreamTypeUnion> {
+  DELIMITER: string;
+  end: () => void;
+  push: (d: StreamType<T>, drain?: boolean) => void;
+  responseWithHeaders: StreamResponseWithHeaders;
+}
+
 /**
  * Sets up a response stream with support for gzip compression depending on provided
  * request headers. Any non-string data pushed to the stream will be streamed as NDJSON.
@@ -65,22 +56,23 @@ export function streamFactory<T = string>(
  *
  * @returns An object with stream attributes and methods.
  */
-export function streamFactory<T = unknown>(
+export function streamFactory<T extends StreamTypeUnion>(
   headers: Headers,
   logger: Logger,
   compressOverride: boolean = true,
   flushFix: boolean = false
 ): StreamFactoryReturnType<T> {
-  let streamType: StreamType;
+  let streamType: 'string' | 'ndjson';
   const isCompressed = compressOverride && acceptCompression(headers);
   const flushPayload = flushFix
     ? crypto.randomBytes(FLUSH_PAYLOAD_SIZE).toString('hex')
     : undefined;
+  let responseSizeSinceLastKeepAlive = 0;
 
   const stream = isCompressed ? zlib.createGzip() : new UncompressedResponseStream();
 
   // If waiting for draining of the stream, items will be added to this buffer.
-  const backPressureBuffer: T[] = [];
+  const backPressureBuffer: Array<StreamType<T>> = [];
 
   // Flag will be set when the "drain" listener is active so we can avoid setting multiple listeners.
   let waitForDrain = false;
@@ -118,7 +110,7 @@ export function streamFactory<T = unknown>(
     }
   }
 
-  function push(d: T, drain = false) {
+  function push(d: StreamType<T>, drain = false) {
     logDebugMessage(
       `Push to stream. Current backPressure buffer size: ${backPressureBuffer.length}, drain flag: ${drain}`
     );
@@ -132,6 +124,25 @@ export function streamFactory<T = unknown>(
     // otherwise check the integrity of the data to be pushed.
     if (streamType === undefined) {
       streamType = typeof d === 'string' ? 'string' : 'ndjson';
+
+      // This is a fix for ndjson streaming with proxy configurations
+      // that buffer responses up to 4KB in size. We keep track of the
+      // size of the response sent so far and if it's still smaller than
+      // FLUSH_PAYLOAD_SIZE then we'll push an additional keep-alive object
+      // that contains the flush fix payload.
+      if (flushFix && streamType === 'ndjson') {
+        function repeat() {
+          if (!tryToEnd) {
+            if (responseSizeSinceLastKeepAlive < FLUSH_PAYLOAD_SIZE) {
+              push({ flushPayload, type: 'flushPayload' } as StreamType<T>);
+            }
+            responseSizeSinceLastKeepAlive = 0;
+            setTimeout(repeat, FLUSH_KEEP_ALIVE_INTERVAL_MS);
+          }
+        }
+
+        repeat();
+      }
     } else if (streamType === 'string' && typeof d !== 'string') {
       logger.error('Must not push non-string chunks to a string based stream.');
       return;
@@ -148,13 +159,11 @@ export function streamFactory<T = unknown>(
 
     try {
       const line =
-        streamType === 'ndjson'
-          ? `${JSON.stringify({
-              ...d,
-              // This is a temporary fix for response streaming with proxy configurations that buffer responses up to 4KB in size.
-              ...(flushFix ? { flushPayload } : {}),
-            })}${DELIMITER}`
-          : d;
+        streamType === 'ndjson' ? `${JSON.stringify(d)}${DELIMITER}` : (d as unknown as string);
+
+      if (streamType === 'ndjson') {
+        responseSizeSinceLastKeepAlive += new Blob([line]).size;
+      }
 
       waitForCallbacks.push(1);
       const writeOk = stream.write(line, () => {
@@ -203,7 +212,7 @@ export function streamFactory<T = unknown>(
     }
   }
 
-  const responseWithHeaders: StreamFactoryReturnType['responseWithHeaders'] = {
+  const responseWithHeaders: StreamResponseWithHeaders = {
     body: stream,
     headers: {
       ...(isCompressed ? { 'content-encoding': 'gzip' } : {}),
@@ -211,6 +220,7 @@ export function streamFactory<T = unknown>(
       // This disables response buffering on proxy servers (Nginx, uwsgi, fastcgi, etc.)
       // Otherwise, those proxies buffer responses up to 4/8 KiB.
       'X-Accel-Buffering': 'no',
+      'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
       'Transfer-Encoding': 'chunked',

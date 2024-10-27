@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import type { AgentPolicy, FleetProxy } from '../../types';
+import type { AgentPolicy, DownloadSource, FleetProxy } from '../../types';
 
 import type { InstalledIntegrationPolicy } from './use_get_agent_incoming_data';
 
@@ -17,6 +17,7 @@ export type K8sMode =
 
 export type CloudSecurityIntegrationType = 'kspm' | 'vuln_mgmt' | 'cspm';
 export type CloudSecurityIntegrationAwsAccountType = 'single-account' | 'organization-account';
+export type CloudSecurityIntegrationAzureAccountType = 'single-account' | 'organization-account';
 
 export type FlyoutMode = 'managed' | 'standalone';
 export type SelectionType = 'tabs' | 'radio' | undefined;
@@ -26,11 +27,18 @@ export interface CloudFormationProps {
   awsAccountType: CloudSecurityIntegrationAwsAccountType | undefined;
 }
 
+export interface AzureArmTemplateProps {
+  templateUrl: string | undefined;
+  azureAccountType: CloudSecurityIntegrationAzureAccountType | undefined;
+}
+
 export interface CloudSecurityIntegration {
   integrationType: CloudSecurityIntegrationType | undefined;
   isLoading: boolean;
   isCloudFormation: boolean;
+  isAzureArmTemplate: boolean;
   cloudFormationProps?: CloudFormationProps;
+  azureArmTemplateProps?: AzureArmTemplateProps;
   cloudShellUrl: string | undefined;
 }
 
@@ -39,7 +47,6 @@ export interface BaseProps {
    * The user selected policy to be used. If this value is `undefined` a value must be provided for `agentPolicies`.
    */
   agentPolicy?: AgentPolicy;
-
   isFleetServerPolicySelected?: boolean;
 
   isK8s?: K8sMode;
@@ -57,6 +64,7 @@ export interface BaseProps {
 export interface FlyOutProps extends BaseProps {
   onClose: () => void;
   defaultMode?: FlyoutMode;
+  selectedAgentPolicies?: AgentPolicy[];
 }
 
 export interface InstructionProps extends BaseProps {
@@ -72,6 +80,8 @@ export interface InstructionProps extends BaseProps {
   setSelectionType: (type: SelectionType) => void;
   selectedApiKeyId?: string;
   setSelectedAPIKeyId: (key?: string) => void;
-  fleetServerHosts: string[];
+  fleetServerHost: string;
   fleetProxy?: FleetProxy;
+  downloadSource?: DownloadSource;
+  downloadSourceProxy?: FleetProxy;
 }

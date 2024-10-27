@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
@@ -17,21 +18,26 @@ import {
   EuiModalFooter,
   EuiModalHeader,
   EuiModalHeaderTitle,
+  EuiSpacer,
 } from '@elastic/eui';
-import { EuiSpacer } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n-react';
+import type { AnalyticsServiceStart } from '@kbn/core-analytics-browser';
 import type { I18nStart } from '@kbn/core-i18n-browser';
 import type { OverlayStart } from '@kbn/core-overlays-browser';
 import { ThemeServiceStart } from '@kbn/core-theme-browser';
 import { KibanaRenderContextProvider } from '@kbn/react-kibana-context-render';
 
-interface ErrorToastProps {
+interface StartServices {
+  analytics: AnalyticsServiceStart;
+  i18n: I18nStart;
+  theme: ThemeServiceStart;
+}
+
+interface ErrorToastProps extends StartServices {
   title: string;
   error: Error;
   toastMessage: string;
   openModal: OverlayStart['openModal'];
-  i18n: I18nStart;
-  theme: ThemeServiceStart;
 }
 
 interface RequestError extends Error {
@@ -55,9 +61,8 @@ export function showErrorDialog({
   title,
   error,
   openModal,
-  i18n,
-  theme,
-}: Pick<ErrorToastProps, 'error' | 'title' | 'openModal' | 'i18n' | 'theme'>) {
+  ...startServices
+}: Pick<ErrorToastProps, 'error' | 'title' | 'openModal' | 'analytics' | 'i18n' | 'theme'>) {
   let text = '';
 
   if (isRequestError(error)) {
@@ -71,7 +76,7 @@ export function showErrorDialog({
 
   const modal = openModal(
     mount(
-      <KibanaRenderContextProvider i18n={i18n} theme={theme}>
+      <KibanaRenderContextProvider {...startServices}>
         <EuiModalHeader>
           <EuiModalHeaderTitle>{title}</EuiModalHeaderTitle>
         </EuiModalHeader>
@@ -104,18 +109,17 @@ export function ErrorToast({
   error,
   toastMessage,
   openModal,
-  i18n,
-  theme,
+  ...startServices
 }: ErrorToastProps) {
   return (
-    <React.Fragment>
+    <KibanaRenderContextProvider {...startServices}>
       <p data-test-subj="errorToastMessage">{toastMessage}</p>
       <div className="eui-textRight">
         <EuiButton
           size="s"
           color="danger"
           data-test-subj="errorToastBtn"
-          onClick={() => showErrorDialog({ title, error, openModal, i18n, theme })}
+          onClick={() => showErrorDialog({ title, error, openModal, ...startServices })}
         >
           <FormattedMessage
             id="core.toasts.errorToast.seeFullError"
@@ -123,7 +127,7 @@ export function ErrorToast({
           />
         </EuiButton>
       </div>
-    </React.Fragment>
+    </KibanaRenderContextProvider>
   );
 }
 

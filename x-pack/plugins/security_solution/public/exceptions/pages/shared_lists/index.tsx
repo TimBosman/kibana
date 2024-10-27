@@ -28,7 +28,8 @@ import { ExceptionListTypeEnum } from '@kbn/securitysolution-io-ts-list-types';
 import { useApi, useExceptionLists } from '@kbn/securitysolution-list-hooks';
 import { EmptyViewerState, ViewerStatus } from '@kbn/securitysolution-exception-list-components';
 
-import { useHasSecurityCapability } from '../../../helper_hooks';
+import styled from 'styled-components';
+import { euiThemeVars } from '@kbn/ui-theme';
 import { AutoDownload } from '../../../common/components/auto_download/auto_download';
 import { useKibana } from '../../../common/lib/kibana';
 import { useAppToasts } from '../../../common/hooks/use_app_toasts';
@@ -52,6 +53,7 @@ import { MissingPrivilegesCallOut } from '../../../detections/components/callout
 import { ALL_ENDPOINT_ARTIFACT_LIST_IDS } from '../../../../common/endpoint/service/artifacts/constants';
 
 import { AddExceptionFlyout } from '../../../detection_engine/rule_exceptions/components/add_exception_flyout';
+import { useEndpointExceptionsCapability } from '../../hooks/use_endpoint_exceptions_capability';
 
 export type Func = () => Promise<void>;
 
@@ -79,18 +81,17 @@ const SORT_FIELDS: Array<{ field: string; label: string; defaultOrder: 'asc' | '
   },
 ];
 
+const ExceptionsTable = styled(EuiFlexGroup)`
+  padding: ${euiThemeVars.euiSizeL} 0;
+`;
+
 export const SharedLists = React.memo(() => {
   const [{ loading: userInfoLoading, canUserCRUD, canUserREAD }] = useUserData();
 
-  const { loading: listsConfigLoading, needsConfiguration: needsListsConfiguration } =
-    useListsConfig();
+  const { loading: listsConfigLoading } = useListsConfig();
   const loading = userInfoLoading || listsConfigLoading;
-  const canShowEndpointExceptions = useHasSecurityCapability('showEndpointExceptions');
 
-  const canAccessEndpointExceptions = useMemo(
-    () => !listsConfigLoading && !needsListsConfiguration && canShowEndpointExceptions,
-    [canShowEndpointExceptions, listsConfigLoading, needsListsConfiguration]
-  );
+  const canAccessEndpointExceptions = useEndpointExceptionsCapability('showEndpointExceptions');
   const {
     services: {
       http,
@@ -592,24 +593,25 @@ export const SharedLists = React.memo(() => {
               sortFields={SORT_FIELDS}
             />
             {exceptionListsWithRuleRefs.length > 0 && (
-              <div data-test-subj="exceptionsTable">
+              <ExceptionsTable data-test-subj="exceptionsTable" direction="column">
                 {exceptionListsWithRuleRefs.map((excList) => (
-                  <ExceptionsListCard
-                    key={excList.list_id}
-                    data-test-subj="exceptionsListCard"
-                    readOnly={isReadOnly}
-                    exceptionsList={excList}
-                    handleDelete={handleDelete}
-                    handleExport={handleExport}
-                    handleDuplicate={handleDuplicate}
-                  />
+                  <EuiFlexItem key={excList.list_id}>
+                    <ExceptionsListCard
+                      data-test-subj="exceptionsListCard"
+                      readOnly={isReadOnly}
+                      exceptionsList={excList}
+                      handleDelete={handleDelete}
+                      handleExport={handleExport}
+                      handleDuplicate={handleDuplicate}
+                    />
+                  </EuiFlexItem>
                 ))}
-              </div>
+              </ExceptionsTable>
             )}
           </>
         )}
         <EuiFlexGroup>
-          <EuiFlexItem style={{ flex: '1 1 auto' }}>
+          <EuiFlexItem grow={false}>
             <EuiFlexGroup alignItems="flexStart">
               <EuiFlexItem>
                 <EuiPopover

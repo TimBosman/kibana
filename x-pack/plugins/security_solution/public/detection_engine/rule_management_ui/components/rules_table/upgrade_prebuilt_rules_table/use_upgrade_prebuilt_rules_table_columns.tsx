@@ -8,14 +8,15 @@
 import type { EuiBasicTableColumn } from '@elastic/eui';
 import { EuiBadge, EuiButtonEmpty, EuiLink, EuiLoadingSpinner, EuiText } from '@elastic/eui';
 import React, { useMemo } from 'react';
+import type { RuleUpgradeState } from '../../../../rule_management/model/prebuilt_rule_upgrade/rule_upgrade_state';
+import { RulesTableEmptyColumnName } from '../rules_table_empty_column_name';
 import { SHOW_RELATED_INTEGRATIONS_SETTING } from '../../../../../../common/constants';
-import type { RuleUpgradeInfoForReview } from '../../../../../../common/api/detection_engine/prebuilt_rules';
 import type { RuleSignatureId } from '../../../../../../common/api/detection_engine/model/rule_schema';
 import { PopoverItems } from '../../../../../common/components/popover_items';
 import { useUiSetting$ } from '../../../../../common/lib/kibana';
 import { hasUserCRUDPermission } from '../../../../../common/utils/privileges';
 import { IntegrationsPopover } from '../../../../../detections/components/rules/related_integrations/integrations_popover';
-import { SeverityBadge } from '../../../../../detections/components/rules/severity_badge';
+import { SeverityBadge } from '../../../../../common/components/severity_badge';
 import { useUserData } from '../../../../../detections/components/user_info';
 import * as i18n from '../../../../../detections/pages/detection_engine/rules/translations';
 import type { Rule } from '../../../../rule_management/logic';
@@ -23,7 +24,7 @@ import { getNormalizedSeverity } from '../helpers';
 import type { UpgradePrebuiltRulesTableActions } from './upgrade_prebuilt_rules_table_context';
 import { useUpgradePrebuiltRulesTableContext } from './upgrade_prebuilt_rules_table_context';
 
-export type TableColumn = EuiBasicTableColumn<RuleUpgradeInfoForReview>;
+export type TableColumn = EuiBasicTableColumn<RuleUpgradeState>;
 
 interface RuleNameProps {
   name: string;
@@ -40,6 +41,7 @@ const RuleName = ({ name, ruleId }: RuleNameProps) => {
       onClick={() => {
         openRulePreview(ruleId);
       }}
+      data-test-subj="ruleName"
     >
       {name}
     </EuiLink>
@@ -49,10 +51,9 @@ const RuleName = ({ name, ruleId }: RuleNameProps) => {
 const RULE_NAME_COLUMN: TableColumn = {
   field: 'current_rule.name',
   name: i18n.COLUMN_RULE,
-  render: (
-    value: RuleUpgradeInfoForReview['current_rule']['name'],
-    rule: RuleUpgradeInfoForReview
-  ) => <RuleName name={value} ruleId={rule.id} />,
+  render: (value: RuleUpgradeState['current_rule']['name'], ruleUpgradeState: RuleUpgradeState) => (
+    <RuleName name={value} ruleId={ruleUpgradeState.id} />
+  ),
   sortable: true,
   truncateText: true,
   width: '60%',
@@ -61,7 +62,7 @@ const RULE_NAME_COLUMN: TableColumn = {
 
 const TAGS_COLUMN: TableColumn = {
   field: 'current_rule.tags',
-  name: null,
+  name: <RulesTableEmptyColumnName name={i18n.COLUMN_TAGS} />,
   align: 'center',
   render: (tags: Rule['tags']) => {
     if (tags == null || tags.length === 0) {
@@ -90,7 +91,7 @@ const TAGS_COLUMN: TableColumn = {
 
 const INTEGRATIONS_COLUMN: TableColumn = {
   field: 'current_rule.related_integrations',
-  name: null,
+  name: <RulesTableEmptyColumnName name={i18n.COLUMN_INTEGRATIONS} />,
   align: 'center',
   render: (integrations: Rule['related_integrations']) => {
     if (integrations == null || integrations.length === 0) {
@@ -104,23 +105,33 @@ const INTEGRATIONS_COLUMN: TableColumn = {
 };
 
 const createUpgradeButtonColumn = (
-  upgradeOneRule: UpgradePrebuiltRulesTableActions['upgradeOneRule'],
+  upgradeRules: UpgradePrebuiltRulesTableActions['upgradeRules'],
   loadingRules: RuleSignatureId[],
-  isDisabled: boolean
+  isDisabled: boolean,
+  isPrebuiltRulesCustomizationEnabled: boolean
 ): TableColumn => ({
   field: 'rule_id',
-  name: '',
-  render: (ruleId: RuleUpgradeInfoForReview['rule_id']) => {
+  name: <RulesTableEmptyColumnName name={i18n.UPDATE_RULE_BUTTON} />,
+  render: (ruleId: RuleSignatureId, record) => {
     const isRuleUpgrading = loadingRules.includes(ruleId);
-    const isUpgradeButtonDisabled = isRuleUpgrading || isDisabled;
+    const isDisabledByConflicts =
+      isPrebuiltRulesCustomizationEnabled && record.hasUnresolvedConflicts;
+    const isUpgradeButtonDisabled = isRuleUpgrading || isDisabled || isDisabledByConflicts;
+    const spinner = (
+      <EuiLoadingSpinner
+        size="s"
+        data-test-subj={`upgradeSinglePrebuiltRuleButton-loadingSpinner-${ruleId}`}
+      />
+    );
+
     return (
       <EuiButtonEmpty
         size="s"
         disabled={isUpgradeButtonDisabled}
-        onClick={() => upgradeOneRule(ruleId)}
+        onClick={() => upgradeRules([ruleId])}
         data-test-subj={`upgradeSinglePrebuiltRuleButton-${ruleId}`}
       >
-        {isRuleUpgrading ? <EuiLoadingSpinner size="s" /> : i18n.UPDATE_RULE_BUTTON}
+        {isRuleUpgrading ? spinner : i18n.UPDATE_RULE_BUTTON}
       </EuiButtonEmpty>
     );
   },
@@ -133,10 +144,14 @@ export const useUpgradePrebuiltRulesTableColumns = (): TableColumn[] => {
   const hasCRUDPermissions = hasUserCRUDPermission(canUserCRUD);
   const [showRelatedIntegrations] = useUiSetting$<boolean>(SHOW_RELATED_INTEGRATIONS_SETTING);
   const {
-    state: { loadingRules, isRefetching, isUpgradingSecurityPackages },
-    actions: { upgradeOneRule },
+    state: {
+      loadingRules,
+      isRefetching,
+      isUpgradingSecurityPackages,
+      isPrebuiltRulesCustomizationEnabled,
+    },
+    actions: { upgradeRules },
   } = useUpgradePrebuiltRulesTableContext();
-
   const isDisabled = isRefetching || isUpgradingSecurityPackages;
 
   return useMemo(
@@ -160,15 +175,29 @@ export const useUpgradePrebuiltRulesTableColumns = (): TableColumn[] => {
         field: 'current_rule.severity',
         name: i18n.COLUMN_SEVERITY,
         render: (value: Rule['severity']) => <SeverityBadge value={value} />,
-        sortable: ({ current_rule: { severity } }: RuleUpgradeInfoForReview) =>
+        sortable: ({ current_rule: { severity } }: RuleUpgradeState) =>
           getNormalizedSeverity(severity),
         truncateText: true,
         width: '12%',
       },
       ...(hasCRUDPermissions
-        ? [createUpgradeButtonColumn(upgradeOneRule, loadingRules, isDisabled)]
+        ? [
+            createUpgradeButtonColumn(
+              upgradeRules,
+              loadingRules,
+              isDisabled,
+              isPrebuiltRulesCustomizationEnabled
+            ),
+          ]
         : []),
     ],
-    [hasCRUDPermissions, loadingRules, isDisabled, showRelatedIntegrations, upgradeOneRule]
+    [
+      hasCRUDPermissions,
+      loadingRules,
+      isDisabled,
+      showRelatedIntegrations,
+      upgradeRules,
+      isPrebuiltRulesCustomizationEnabled,
+    ]
   );
 };

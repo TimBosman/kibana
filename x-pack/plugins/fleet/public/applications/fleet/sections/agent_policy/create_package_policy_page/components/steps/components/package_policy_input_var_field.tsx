@@ -4,7 +4,6 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-
 import React, { useState, memo, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { i18n } from '@kbn/i18n';
@@ -23,25 +22,37 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiButtonEmpty,
+  EuiLink,
+  EuiIconTip,
 } from '@elastic/eui';
 import styled from 'styled-components';
 
-import { CodeEditor } from '@kbn/kibana-react-plugin/public';
+import { CodeEditor } from '@kbn/code-editor';
 
-import { ExperimentalFeaturesService } from '../../../../../../services';
+import { useFleetStatus, useStartServices } from '../../../../../../../../hooks';
 
 import { DATASET_VAR_NAME } from '../../../../../../../../../common/constants';
 
 import type { DataStream, RegistryVarsEntry } from '../../../../../../types';
 
 import { MultiTextInput } from './multi_text_input';
-import { DatasetComboBox } from './dataset_combo';
+import { DatasetComponent } from './dataset_component';
 
 const FixedHeightDiv = styled.div`
   height: 300px;
 `;
 
-interface InputFieldProps {
+const FormRow = styled(EuiFormRow)`
+  .euiFormRow__label {
+    flex: 1;
+  }
+
+  .euiFormRow__fieldWrapper > .euiPanel {
+    padding: ${(props) => props.theme.eui?.euiSizeXS};
+  }
+`;
+
+export interface InputFieldProps {
   varDef: RegistryVarsEntry;
   value: any;
   onChange: (newValue: any) => void;
@@ -76,6 +87,7 @@ export const PackagePolicyInputVarField: React.FunctionComponent<InputFieldProps
     datastreams = [],
     isEditPage = false,
   }) => {
+    const fleetStatus = useFleetStatus();
     const [isDirty, setIsDirty] = useState<boolean>(false);
     const { required, type, title, name, description } = varDef;
     const isInvalid = Boolean((isDirty || forceShowErrors) && !!varErrors?.length);
@@ -85,11 +97,26 @@ export const PackagePolicyInputVarField: React.FunctionComponent<InputFieldProps
     // Boolean cannot be optional by default set to false
     const isOptional = useMemo(() => type !== 'bool' && !required, [required, type]);
 
-    const { secretsStorage: secretsStorageEnabled } = ExperimentalFeaturesService.get();
+    const secretsStorageEnabled = fleetStatus.isReady && fleetStatus.isSecretsStorageEnabled;
+    const useSecretsUi = secretsStorageEnabled && varDef.secret;
+
+    if (name === DATASET_VAR_NAME && packageType === 'input') {
+      return (
+        <DatasetComponent
+          pkgName={packageName}
+          datastreams={datastreams}
+          value={value}
+          onChange={onChange}
+          isDisabled={isEditPage}
+          fieldLabel={fieldLabel}
+          description={description}
+        />
+      );
+    }
 
     let field: JSX.Element;
 
-    if (secretsStorageEnabled && varDef.secret) {
+    if (useSecretsUi) {
       field = (
         <SecretInputField
           varDef={varDef}
@@ -113,10 +140,6 @@ export const PackagePolicyInputVarField: React.FunctionComponent<InputFieldProps
         value,
         onChange,
         frozen,
-        packageName,
-        packageType,
-        datastreams,
-        isEditPage,
         isInvalid,
         fieldLabel,
         fieldTestSelector,
@@ -125,11 +148,12 @@ export const PackagePolicyInputVarField: React.FunctionComponent<InputFieldProps
       });
     }
 
-    return (
-      <EuiFormRow
+    const formRow = (
+      <FormRow
         isInvalid={isInvalid}
         error={errors}
-        label={fieldLabel}
+        hasChildLabel={!varDef.multi}
+        label={useSecretsUi ? <SecretFieldLabel fieldLabel={fieldLabel} /> : fieldLabel}
         labelAppend={
           isOptional ? (
             <EuiText size="xs" color="subdued">
@@ -138,13 +162,16 @@ export const PackagePolicyInputVarField: React.FunctionComponent<InputFieldProps
                 defaultMessage="Optional"
               />
             </EuiText>
-          ) : null
+          ) : undefined
         }
         helpText={description && <ReactMarkdown children={description} />}
+        fullWidth
       >
         {field}
-      </EuiFormRow>
+      </FormRow>
     );
+
+    return useSecretsUi ? <SecretFieldWrapper>{formRow}</SecretFieldWrapper> : formRow;
   }
 );
 
@@ -153,35 +180,21 @@ function getInputComponent({
   value,
   onChange,
   frozen,
-  packageName,
-  packageType,
-  datastreams = [],
-  isEditPage,
   isInvalid,
   fieldLabel,
   fieldTestSelector,
   setIsDirty,
 }: InputComponentProps) {
-  const { multi, type, name, options } = varDef;
+  const { multi, type, options, full_width: fullWidth } = varDef;
   if (multi) {
     return (
       <MultiTextInput
+        fieldLabel={fieldLabel}
         value={value ?? []}
         onChange={onChange}
         onBlur={() => setIsDirty(true)}
         isDisabled={frozen}
         data-test-subj={`multiTextInput-${fieldTestSelector}`}
-      />
-    );
-  }
-  if (name === DATASET_VAR_NAME && packageType === 'input') {
-    return (
-      <DatasetComboBox
-        pkgName={packageName}
-        datastreams={datastreams}
-        value={value}
-        onChange={onChange}
-        isDisabled={isEditPage}
       />
     );
   }
@@ -195,6 +208,7 @@ function getInputComponent({
           onBlur={() => setIsDirty(true)}
           disabled={frozen}
           resize="vertical"
+          fullWidth={fullWidth}
           data-test-subj={`textAreaInput-${fieldTestSelector}`}
         />
       );
@@ -296,6 +310,53 @@ function getInputComponent({
   }
 }
 
+const SecretFieldWrapper = ({ children }: { children: React.ReactNode }) => {
+  const { docLinks } = useStartServices();
+
+  return (
+    <EuiPanel hasShadow={false} color="subdued" paddingSize="m">
+      {children}
+
+      <EuiSpacer size="l" />
+
+      <EuiText size="xs">
+        <EuiLink href={docLinks.links.fleet.policySecrets} target="_blank">
+          <FormattedMessage
+            id="xpack.fleet.createPackagePolicy.stepConfigure.secretLearnMoreText"
+            defaultMessage="Learn more about policy secrets."
+          />
+        </EuiLink>
+      </EuiText>
+    </EuiPanel>
+  );
+};
+
+const SecretFieldLabel = ({ fieldLabel }: { fieldLabel: string }) => {
+  return (
+    <>
+      <EuiFlexGroup alignItems="flexEnd" gutterSize="xs">
+        <EuiFlexItem grow={false} aria-label={fieldLabel}>
+          {fieldLabel}
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiIconTip
+            type="iInCircle"
+            position="top"
+            content={
+              <FormattedMessage
+                id="xpack.fleet.createPackagePolicy.stepConfigure.secretLearnMorePopoverContent"
+                defaultMessage="This value is a secret. After you save this integration policy, you won't be able to view the value again."
+              />
+            }
+          />
+        </EuiFlexItem>
+      </EuiFlexGroup>
+
+      <EuiSpacer size="s" />
+    </>
+  );
+};
+
 function SecretInputField({
   varDef,
   value,
@@ -311,45 +372,17 @@ function SecretInputField({
   setIsDirty,
   isDirty,
 }: InputComponentProps) {
-  const [editMode, setEditMode] = useState(isEditPage && !value);
+  const [isReplacing, setIsReplacing] = useState(isEditPage && !value);
   const valueOnFirstRender = useRef(value);
-  const lowercaseTitle = varDef.title?.toLowerCase();
-  if (isEditPage && !editMode) {
-    return (
-      <EuiPanel color="subdued" borderRadius="none" hasShadow={false}>
-        <EuiText size="s" color="subdued">
-          <FormattedMessage
-            id="xpack.fleet.editPackagePolicy.stepConfigure.fieldSecretValueSet"
-            defaultMessage="The saved {varName} is hidden. You can only replace the {varName}."
-            values={{
-              varName: lowercaseTitle,
-            }}
-          />
-        </EuiText>
-        <EuiSpacer size="s" />
-        <EuiButtonEmpty
-          onClick={() => setEditMode(true)}
-          color="primary"
-          iconType="refresh"
-          iconSide="left"
-          size="xs"
-        >
-          <FormattedMessage
-            id="xpack.fleet.editPackagePolicy.stepConfigure.fieldSecretValueSetEditButton"
-            defaultMessage="Replace {varName}"
-            values={{
-              varName: lowercaseTitle,
-            }}
-          />
-        </EuiButtonEmpty>
-      </EuiPanel>
-    );
-  }
 
+  const hasExistingValue = !!valueOnFirstRender.current;
+  const lowercaseTitle = varDef.title?.toLowerCase();
+  const showInactiveReplaceUi = isEditPage && !isReplacing && hasExistingValue;
   const valueIsSecretRef = value && value?.isSecretRef;
-  const field = getInputComponent({
+
+  const inputComponent = getInputComponent({
     varDef,
-    value: editMode && valueIsSecretRef ? '' : value,
+    value: isReplacing && valueIsSecretRef ? '' : value,
     onChange,
     frozen,
     packageName,
@@ -363,11 +396,50 @@ function SecretInputField({
     setIsDirty,
   });
 
-  if (editMode) {
+  // If there's no value for this secret, display the input as its "brand new" creation state
+  // instead of the "replace" state
+  if (!hasExistingValue) {
+    return inputComponent;
+  }
+
+  if (showInactiveReplaceUi) {
+    return (
+      <>
+        <EuiText size="s" color="subdued">
+          <FormattedMessage
+            id="xpack.fleet.editPackagePolicy.stepConfigure.fieldSecretValueSet"
+            defaultMessage="The saved {varName} is hidden. You can only replace the {varName}."
+            values={{
+              varName: lowercaseTitle,
+            }}
+          />
+        </EuiText>
+        <EuiSpacer size="s" />
+        <EuiButtonEmpty
+          onClick={() => setIsReplacing(true)}
+          color="primary"
+          iconType="refresh"
+          iconSide="left"
+          size="xs"
+          data-test-subj={`button-replace-${fieldTestSelector}`}
+        >
+          <FormattedMessage
+            id="xpack.fleet.editPackagePolicy.stepConfigure.fieldSecretValueSetEditButton"
+            defaultMessage="Replace {varName}"
+            values={{
+              varName: lowercaseTitle,
+            }}
+          />
+        </EuiButtonEmpty>
+      </>
+    );
+  }
+
+  if (isReplacing) {
     const cancelButton = (
       <EuiButtonEmpty
         onClick={() => {
-          setEditMode(false);
+          setIsReplacing(false);
           setIsDirty(false);
           onChange(valueOnFirstRender.current);
         }}
@@ -388,12 +460,12 @@ function SecretInputField({
     return (
       <EuiFlexGroup direction="column" gutterSize="s" alignItems="flexStart">
         <EuiFlexItem grow={false} style={{ width: '100%' }}>
-          {field}
+          {inputComponent}
         </EuiFlexItem>
         <EuiFlexItem grow={false}>{cancelButton}</EuiFlexItem>
       </EuiFlexGroup>
     );
   }
 
-  return field;
+  return inputComponent;
 }

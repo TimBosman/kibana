@@ -6,8 +6,8 @@
  */
 
 import type { QueryDslQueryContainer } from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
-import type { ISearchRequestParams } from '@kbn/data-plugin/common';
-import type { ObservedUserDetailsRequestOptions } from '../../../../../../common/search_strategy/security_solution/users/observed_details';
+import type { ISearchRequestParams } from '@kbn/search-types';
+import type { ObservedUserDetailsRequestOptions } from '../../../../../../common/api/search_strategy';
 import { createQueryFilterClauses } from '../../../../../utils/build_query';
 import { buildFieldsTermAggregation } from '../../hosts/details/helpers';
 import { USER_FIELDS } from './helpers';

@@ -5,10 +5,12 @@
  * 2.0.
  */
 
-import { i18n } from '@kbn/i18n';
+import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 
-import { LicenseType } from '@kbn/licensing-plugin/common/types';
-import { TransformHealthTests } from './types/alerting';
+import { i18n } from '@kbn/i18n';
+import type { LicenseType } from '@kbn/licensing-plugin/common/types';
+import { ALERT_NAMESPACE } from '@kbn/rule-data-utils';
+import type { TransformHealthTests } from './types/alerting';
 
 export const DEFAULT_REFRESH_INTERVAL_MS = 30000;
 export const MINIMUM_REFRESH_INTERVAL_MS = 1000;
@@ -35,6 +37,7 @@ export const addExternalBasePath = (uri: string): string => `${EXTERNAL_API_BASE
 export const TRANSFORM_REACT_QUERY_KEYS = {
   DATA_SEARCH: 'transform.data_search',
   DATA_VIEW_EXISTS: 'transform.data_view_exists',
+  GET_DATA_VIEW_IDS_WITH_TITLE: 'transform.get_data_view_ids_with_title',
   GET_DATA_VIEW_TITLES: 'transform.get_data_view_titles',
   GET_ES_INDICES: 'transform.get_es_indices',
   GET_ES_INGEST_PIPELINES: 'transform.get_es_ingest_pipelines',
@@ -43,6 +46,7 @@ export const TRANSFORM_REACT_QUERY_KEYS = {
   GET_TRANSFORM_NODES: 'transform.get_transform_nodes',
   GET_TRANSFORM_AUDIT_MESSAGES: 'transform.get_transform_audit_messages',
   GET_TRANSFORM_STATS: 'transform.get_transform_stats',
+  GET_TRANSFORMS_STATS: 'transform.get_transforms_stats',
   GET_TRANSFORMS: 'transform.get_transforms',
   GET_TRANSFORMS_PREVIEW: 'transform.get_transforms_preview',
 } as const;
@@ -99,16 +103,23 @@ export const TRANSFORM_STATE = {
   WAITING: 'waiting',
 } as const;
 
-export type TransformState = typeof TRANSFORM_STATE[keyof typeof TRANSFORM_STATE];
+export type TransformState = (typeof TRANSFORM_STATE)[keyof typeof TRANSFORM_STATE];
 
-export const TRANSFORM_HEALTH = {
+export const TRANSFORM_HEALTH_STATUS = {
   green: 'green',
-  unknown: 'unknown',
   yellow: 'yellow',
   red: 'red',
+  unknown: 'unknown',
 } as const;
-
-export type TransformHealth = typeof TRANSFORM_HEALTH[keyof typeof TRANSFORM_HEALTH];
+export type TransformHealthStatus = keyof typeof TRANSFORM_HEALTH_STATUS;
+export const isTransformHealthStatus = (arg: unknown): arg is TransformHealthStatus =>
+  typeof arg === 'string' && Object.keys(TRANSFORM_HEALTH_STATUS).includes(arg);
+export const mapEsHealthStatus2TransformHealthStatus = (
+  healthStatus?: estypes.HealthStatus
+): TransformHealthStatus =>
+  typeof healthStatus === 'string' && isTransformHealthStatus(healthStatus.toLowerCase())
+    ? (healthStatus.toLowerCase() as TransformHealthStatus)
+    : TRANSFORM_HEALTH_STATUS.unknown;
 
 export const TRANSFORM_HEALTH_COLOR = {
   green: 'success',
@@ -153,18 +164,23 @@ export const TRANSFORM_MODE = {
   CONTINUOUS: 'continuous',
 } as const;
 
-export type TransformMode = typeof TRANSFORM_MODE[keyof typeof TRANSFORM_MODE];
+export type TransformMode = (typeof TRANSFORM_MODE)[keyof typeof TRANSFORM_MODE];
 
 export const TRANSFORM_FUNCTION = {
   PIVOT: 'pivot',
   LATEST: 'latest',
 } as const;
 
-export type TransformFunction = typeof TRANSFORM_FUNCTION[keyof typeof TRANSFORM_FUNCTION];
+export type TransformFunction = (typeof TRANSFORM_FUNCTION)[keyof typeof TRANSFORM_FUNCTION];
+
+// Alerting
 
 export const TRANSFORM_RULE_TYPE = {
   TRANSFORM_HEALTH: 'transform_health',
 } as const;
+
+const TRANSFORM_ALERT_NAMESPACE = ALERT_NAMESPACE;
+export const TRANSFORM_HEALTH_RESULTS = `${TRANSFORM_ALERT_NAMESPACE}.results` as const;
 
 export const ALL_TRANSFORMS_SELECTION = '*';
 
@@ -215,3 +231,5 @@ export const DEFAULT_TRANSFORM_SETTINGS_MAX_PAGE_SEARCH_SIZE = 500;
 
 // Used in the transform list's expanded row for the messages and issues table.
 export const TIME_FORMAT = 'YYYY-MM-DD HH:mm:ss';
+
+export const TRANSFORM_NOTIFICATIONS_INDEX = '.transform-notifications-read';

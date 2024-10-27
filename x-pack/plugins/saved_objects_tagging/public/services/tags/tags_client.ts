@@ -5,16 +5,16 @@
  * 2.0.
  */
 
-import { HttpSetup, AnalyticsServiceStart } from '@kbn/core/public';
+import type { HttpSetup, AnalyticsServiceStart } from '@kbn/core/public';
 import { reportPerformanceMetricEvent } from '@kbn/ebt-tools';
-import {
+import type {
   Tag,
   TagAttributes,
   GetAllTagsOptions,
   ITagsClient,
   TagWithRelations,
 } from '../../../common/types';
-import { ITagsChangeListener } from './tags_cache';
+import type { ITagsChangeListener } from './tags_cache';
 
 const BULK_DELETE_TAG_EVENT = 'bulkDeleteTag';
 const CREATE_TAG_EVENT = 'createTag';
@@ -171,6 +171,15 @@ export class TagsClient implements ITagInternalClient {
     });
 
     return response;
+  }
+
+  public async findByName(name: string, { exact }: { exact?: boolean } = { exact: false }) {
+    const { tags = [] } = await this.find({ page: 1, perPage: 10000, search: name });
+    if (exact) {
+      const tag = tags.find((t) => t.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      return tag ?? null;
+    }
+    return tags.length > 0 ? tags[0] : null;
   }
 
   public async bulkDelete(tagIds: string[]) {

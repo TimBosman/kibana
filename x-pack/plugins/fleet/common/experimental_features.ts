@@ -7,11 +7,7 @@
 
 export type ExperimentalFeatures = typeof allowedExperimentalValues;
 
-/**
- * A list of allowed values that can be used in `xpack.fleet.enableExperimental`.
- * This object is then used to validate and parse the value entered.
- */
-export const allowedExperimentalValues = Object.freeze({
+const _allowedExperimentalValues = {
   createPackagePolicyMultiPageLayout: true,
   packageVerification: true,
   showDevtoolsRequest: true,
@@ -20,15 +16,32 @@ export const allowedExperimentalValues = Object.freeze({
   showIntegrationsSubcategories: true,
   agentFqdnMode: true,
   showExperimentalShipperOptions: false,
-  agentTamperProtectionEnabled: false,
+  agentTamperProtectionEnabled: true,
   secretsStorage: true,
   kafkaOutput: true,
-});
+  outputSecretsStorage: true,
+  remoteESOutput: true,
+  agentless: false,
+  enableStrictKQLValidation: true,
+  subfeaturePrivileges: false,
+  advancedPolicySettings: true,
+  useSpaceAwareness: false,
+  enableReusableIntegrationPolicies: true,
+  asyncDeployPolicies: true,
+};
 
-type ExperimentalConfigKeys = Array<keyof ExperimentalFeatures>;
+/**
+ * A list of allowed values that can be used in `xpack.fleet.enableExperimental`.
+ * This object is then used to validate and parse the value entered.
+ */
+export const allowedExperimentalValues = Object.freeze<
+  Record<keyof typeof _allowedExperimentalValues, boolean>
+>({ ..._allowedExperimentalValues });
+
+type ExperimentalConfigKey = keyof ExperimentalFeatures;
+type ExperimentalConfigKeys = ExperimentalConfigKey[];
 type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
-const FleetInvalidExperimentalValue = class extends Error {};
 const allowedKeys = Object.keys(allowedExperimentalValues) as Readonly<ExperimentalConfigKeys>;
 
 /**
@@ -36,18 +49,14 @@ const allowedKeys = Object.keys(allowedExperimentalValues) as Readonly<Experimen
  * which should be a string of values delimited by a comma (`,`)
  *
  * @param configValue
- * @throws FleetInvalidExperimentalValue
  */
 export const parseExperimentalConfigValue = (configValue: string[]): ExperimentalFeatures => {
-  const enabledFeatures: Mutable<Partial<ExperimentalFeatures>> = {};
+  const enabledFeatures: Mutable<ExperimentalFeatures> = { ...allowedExperimentalValues };
 
   for (const value of configValue) {
-    if (!isValidExperimentalValue(value)) {
-      throw new FleetInvalidExperimentalValue(`[${value}] is not a supported experimental feature`);
+    if (isValidExperimentalValue(value)) {
+      enabledFeatures[value] = true;
     }
-
-    // @ts-expect-error ts upgrade v4.7.4
-    enabledFeatures[value as keyof ExperimentalFeatures] = true;
   }
 
   return {
@@ -56,8 +65,8 @@ export const parseExperimentalConfigValue = (configValue: string[]): Experimenta
   };
 };
 
-export const isValidExperimentalValue = (value: string) => {
-  return allowedKeys.includes(value as keyof ExperimentalFeatures);
+export const isValidExperimentalValue = (value: string): value is ExperimentalConfigKey => {
+  return (allowedKeys as string[]).includes(value);
 };
 
 export const getExperimentalAllowedValues = (): string[] => [...allowedKeys];

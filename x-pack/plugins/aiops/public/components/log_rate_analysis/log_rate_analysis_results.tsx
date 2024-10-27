@@ -5,8 +5,9 @@
  * 2.0.
  */
 
-import React, { useEffect, useMemo, useState, FC } from 'react';
-import { isEqual, uniq } from 'lodash';
+import type { FC } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { isEqual } from 'lodash';
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 
 import {
@@ -16,34 +17,59 @@ import {
   EuiEmptyPrompt,
   EuiFlexGroup,
   EuiFlexItem,
-  EuiFormRow,
   EuiSpacer,
   EuiText,
 } from '@elastic/eui';
 
-import type { DataView } from '@kbn/data-views-plugin/public';
+import { reportPerformanceMetricEvent } from '@kbn/ebt-tools';
 import { ProgressControls } from '@kbn/aiops-components';
-import { useFetchStream } from '@kbn/ml-response-stream/client';
+import { cancelStream, startStream } from '@kbn/ml-response-stream/client';
 import {
+  clearAllRowState,
+  useAppDispatch,
+  useAppSelector,
+} from '@kbn/aiops-log-rate-analysis/state';
+import {
+  getSwappedWindowParameters,
   LOG_RATE_ANALYSIS_TYPE,
   type LogRateAnalysisType,
-  type WindowParameters,
-} from '@kbn/aiops-utils';
+} from '@kbn/aiops-log-rate-analysis';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
-import type { SignificantTerm, SignificantTermGroup } from '@kbn/ml-agg-utils';
+import type { SignificantItem, SignificantItemGroup } from '@kbn/ml-agg-utils';
+import { useStorage } from '@kbn/ml-local-storage';
+import { AIOPS_ANALYSIS_RUN_ORIGIN } from '@kbn/aiops-common/constants';
+import type { AiopsLogRateAnalysisSchema } from '@kbn/aiops-log-rate-analysis/api/schema';
+import type { AiopsLogRateAnalysisSchemaSignificantItem } from '@kbn/aiops-log-rate-analysis/api/schema_v3';
+import {
+  setCurrentAnalysisType,
+  setCurrentAnalysisWindowParameters,
+  resetResults,
+} from '@kbn/aiops-log-rate-analysis/api/stream_reducer';
+import { fetchFieldCandidates } from '@kbn/aiops-log-rate-analysis/state/log_rate_analysis_field_candidates_slice';
 
 import { useAiopsAppContext } from '../../hooks/use_aiops_app_context';
-import { initialState, streamReducer } from '../../../common/api/stream_reducer';
-import type { AiopsApiLogRateAnalysis } from '../../../common/api';
+import { useDataSource } from '../../hooks/use_data_source';
+import {
+  commonColumns,
+  significantItemColumns,
+} from '../log_rate_analysis_results_table/use_columns';
+import {
+  AIOPS_LOG_RATE_ANALYSIS_RESULT_COLUMNS,
+  type AiOpsKey,
+  type AiOpsStorageMapped,
+} from '../../types/storage';
+
 import {
   getGroupTableItems,
   LogRateAnalysisResultsTable,
   LogRateAnalysisResultsGroupsTable,
 } from '../log_rate_analysis_results_table';
-import { useLogRateAnalysisResultsTableRowContext } from '../log_rate_analysis_results_table/log_rate_analysis_results_table_row_provider';
 
-import { FieldFilterPopover } from './field_filter_popover';
+import { ItemFilterPopover as FieldFilterPopover } from './item_filter_popover';
+import { ItemFilterPopover as ColumnFilterPopover } from './item_filter_popover';
+import { LogRateAnalysisInfoPopover } from './log_rate_analysis_info_popover';
+import type { ColumnNames } from '../log_rate_analysis_results_table';
 
 const groupResultsMessage = i18n.translate(
   'xpack.aiops.logRateAnalysis.resultsTable.groupedSwitchLabel.groupResults',
@@ -71,6 +97,37 @@ const groupResultsOnMessage = i18n.translate(
 );
 const resultsGroupedOffId = 'aiopsLogRateAnalysisGroupingOff';
 const resultsGroupedOnId = 'aiopsLogRateAnalysisGroupingOn';
+const fieldFilterHelpText = i18n.translate('xpack.aiops.logRateAnalysis.page.fieldFilterHelpText', {
+  defaultMessage:
+    'Deselect non-relevant fields to remove them from the analysis and click the Apply button to rerun the analysis.  Use the search bar to filter the list, then select/deselect multiple fields with the actions below.',
+});
+const columnsFilterHelpText = i18n.translate(
+  'xpack.aiops.logRateAnalysis.page.columnsFilterHelpText',
+  {
+    defaultMessage: 'Configure visible columns.',
+  }
+);
+const disabledFieldFilterApplyButtonTooltipContent = i18n.translate(
+  'xpack.aiops.analysis.fieldSelectorNotEnoughFieldsSelected',
+  {
+    defaultMessage: 'Grouping requires at least 2 fields to be selected.',
+  }
+);
+const disabledColumnFilterApplyButtonTooltipContent = i18n.translate(
+  'xpack.aiops.analysis.columnSelectorNotEnoughColumnsSelected',
+  {
+    defaultMessage: 'At least one column must be selected.',
+  }
+);
+const columnSearchAriaLabel = i18n.translate('xpack.aiops.analysis.columnSelectorAriaLabel', {
+  defaultMessage: 'Filter columns',
+});
+const columnsButton = i18n.translate('xpack.aiops.logRateAnalysis.page.columnsFilterButtonLabel', {
+  defaultMessage: 'Columns',
+});
+const fieldsButton = i18n.translate('xpack.aiops.analysis.fieldsButtonLabel', {
+  defaultMessage: 'Fields',
+});
 
 /**
  * Interface for log rate analysis results data.
@@ -79,151 +136,152 @@ export interface LogRateAnalysisResultsData {
   /** The type of analysis, whether it's a spike or dip */
   analysisType: LogRateAnalysisType;
   /** Statistically significant field/value items. */
-  significantTerms: SignificantTerm[];
+  significantItems: SignificantItem[];
   /** Statistically significant groups of field/value items. */
-  significantTermsGroups: SignificantTermGroup[];
+  significantItemsGroups: SignificantItemGroup[];
 }
 
 /**
  * LogRateAnalysis props require a data view.
  */
 interface LogRateAnalysisResultsProps {
-  /** The data view to analyze. */
-  dataView: DataView;
-  /** The type of analysis, whether it's a spike or dip */
-  analysisType?: LogRateAnalysisType;
-  /** Start timestamp filter */
-  earliest: number;
-  /** End timestamp filter */
-  latest: number;
-  isBrushCleared: boolean;
-  /** Option to make main histogram sticky */
-  stickyHistogram?: boolean;
   /** Callback for resetting the analysis */
   onReset: () => void;
-  /** Window parameters for the analysis */
-  windowParameters: WindowParameters;
   /** The search query to be applied to the analysis as a filter */
   searchQuery: estypes.QueryDslQueryContainer;
-  /** Sample probability to be applied to random sampler aggregations */
-  sampleProbability: number;
   /** Optional color override for the default bar color for charts */
   barColorOverride?: string;
   /** Optional color override for the highlighted bar color for charts */
   barHighlightColorOverride?: string;
-  /** Optional callback that exposes data of the completed analysis */
-  onAnalysisCompleted?: (d: LogRateAnalysisResultsData) => void;
 }
 
 export const LogRateAnalysisResults: FC<LogRateAnalysisResultsProps> = ({
-  dataView,
-  analysisType = LOG_RATE_ANALYSIS_TYPE.SPIKE,
-  earliest,
-  isBrushCleared,
-  latest,
-  stickyHistogram,
   onReset,
-  windowParameters,
   searchQuery,
-  sampleProbability,
   barColorOverride,
   barHighlightColorOverride,
-  onAnalysisCompleted,
 }) => {
-  const { http } = useAiopsAppContext();
+  const { analytics, http, embeddingOrigin } = useAiopsAppContext();
+  const { dataView } = useDataSource();
 
-  const { clearAllRowState } = useLogRateAnalysisResultsTableRowContext();
+  const dispatch = useAppDispatch();
+  const {
+    analysisType,
+    earliest,
+    latest,
+    chartWindowParameters,
+    documentStats: { sampleProbability },
+    stickyHistogram,
+    isBrushCleared,
+  } = useAppSelector((s) => s.logRateAnalysis);
+  const { isRunning, errors: streamErrors } = useAppSelector((s) => s.logRateAnalysisStream);
+  const data = useAppSelector((s) => s.logRateAnalysisResults);
+  const fieldCandidates = useAppSelector((s) => s.logRateAnalysisFieldCandidates);
+  const { currentAnalysisWindowParameters } = data;
 
-  const [currentAnalysisType, setCurrentAnalysisType] = useState<LogRateAnalysisType | undefined>();
-  const [currentAnalysisWindowParameters, setCurrentAnalysisWindowParameters] = useState<
-    WindowParameters | undefined
-  >();
+  // Store the performance metric's start time using a ref
+  // to be able to track it across rerenders.
+  const analysisStartTime = useRef<number | undefined>(window.performance.now());
+  const abortCtrl = useRef(new AbortController());
+
   const [groupResults, setGroupResults] = useState<boolean>(false);
-  const [groupSkipFields, setGroupSkipFields] = useState<string[]>([]);
-  const [uniqueFieldNames, setUniqueFieldNames] = useState<string[]>([]);
-  const [overrides, setOverrides] = useState<
-    AiopsApiLogRateAnalysis['body']['overrides'] | undefined
-  >(undefined);
+  const [overrides, setOverrides] = useState<AiopsLogRateAnalysisSchema['overrides'] | undefined>(
+    undefined
+  );
   const [shouldStart, setShouldStart] = useState(false);
   const [toggleIdSelected, setToggleIdSelected] = useState(resultsGroupedOffId);
+  const [skippedColumns, setSkippedColumns] = useStorage<
+    AiOpsKey,
+    AiOpsStorageMapped<typeof AIOPS_LOG_RATE_ANALYSIS_RESULT_COLUMNS>
+  >(AIOPS_LOG_RATE_ANALYSIS_RESULT_COLUMNS, ['p-value', 'Baseline rate', 'Deviation rate']);
+  // null is used as the uninitialized state to identify the first load.
+  const [skippedFields, setSkippedFields] = useState<string[] | null>(null);
 
   const onGroupResultsToggle = (optionId: string) => {
     setToggleIdSelected(optionId);
     setGroupResults(optionId === resultsGroupedOnId);
 
     // When toggling the group switch, clear all row selections
-    clearAllRowState();
+    dispatch(clearAllRowState());
   };
 
-  const onFieldsFilterChange = (skippedFields: string[]) => {
-    setGroupSkipFields(skippedFields);
+  const {
+    fieldFilterUniqueItems,
+    fieldFilterSkippedItems,
+    keywordFieldCandidates,
+    textFieldCandidates,
+  } = fieldCandidates;
+  const fieldFilterButtonDisabled =
+    isRunning || fieldCandidates.isLoading || fieldFilterUniqueItems.length === 0;
+
+  // Set skipped fields only on first load, otherwise we'd overwrite the user's selection.
+  useEffect(() => {
+    if (skippedFields === null && fieldFilterSkippedItems.length > 0)
+      setSkippedFields(fieldFilterSkippedItems);
+  }, [fieldFilterSkippedItems, skippedFields]);
+
+  const onFieldsFilterChange = (skippedFieldsUpdate: string[]) => {
+    dispatch(resetResults());
+    setSkippedFields(skippedFieldsUpdate);
     setOverrides({
       loaded: 0,
-      remainingFieldCandidates: [],
-      significantTerms: data.significantTerms.filter((d) => !skippedFields.includes(d.fieldName)),
-      regroupOnly: true,
+      remainingKeywordFieldCandidates: keywordFieldCandidates.filter(
+        (d) => !skippedFieldsUpdate.includes(d)
+      ),
+      remainingTextFieldCandidates: textFieldCandidates.filter(
+        (d) => !skippedFieldsUpdate.includes(d)
+      ),
+      regroupOnly: false,
     });
     startHandler(true, false);
   };
 
-  const {
-    cancel,
-    start,
-    data,
-    isRunning,
-    errors: streamErrors,
-  } = useFetchStream(
-    http,
-    '/internal/aiops/log_rate_analysis',
-    '1',
-    {
-      start: earliest,
-      end: latest,
-      searchQuery: JSON.stringify(searchQuery),
-      // TODO Handle data view without time fields.
-      timeFieldName: dataView.timeFieldName ?? '',
-      index: dataView.getIndexPattern(),
-      grouping: true,
-      flushFix: true,
-      // If analysis type is `spike`, pass on window parameters as is,
-      // if it's `dip`, swap baseline and deviation.
-      ...(analysisType === LOG_RATE_ANALYSIS_TYPE.SPIKE
-        ? windowParameters
-        : {
-            baselineMin: windowParameters.deviationMin,
-            baselineMax: windowParameters.deviationMax,
-            deviationMin: windowParameters.baselineMin,
-            deviationMax: windowParameters.baselineMax,
-          }),
-      overrides,
-      sampleProbability,
-    },
-    { reducer: streamReducer, initialState }
-  );
+  const onVisibleColumnsChange = (columns: ColumnNames[]) => {
+    setSkippedColumns(columns);
+  };
 
-  const { significantTerms } = data;
-  useEffect(
-    () => setUniqueFieldNames(uniq(significantTerms.map((d) => d.fieldName)).sort()),
-    [significantTerms]
-  );
+  function cancelHandler() {
+    abortCtrl.current.abort();
+    dispatch(cancelStream());
+  }
 
   useEffect(() => {
     if (!isRunning) {
-      const { loaded, remainingFieldCandidates, groupsMissing } = data;
+      const {
+        loaded,
+        remainingKeywordFieldCandidates,
+        remainingTextFieldCandidates,
+        groupsMissing,
+      } = data;
 
       if (
         loaded < 1 &&
-        ((Array.isArray(remainingFieldCandidates) && remainingFieldCandidates.length > 0) ||
+        ((Array.isArray(remainingKeywordFieldCandidates) &&
+          remainingKeywordFieldCandidates.length > 0) ||
+          (Array.isArray(remainingTextFieldCandidates) &&
+            remainingTextFieldCandidates.length > 0) ||
           groupsMissing)
       ) {
-        setOverrides({ loaded, remainingFieldCandidates, significantTerms: data.significantTerms });
-      } else {
+        setOverrides({
+          loaded,
+          remainingKeywordFieldCandidates,
+          remainingTextFieldCandidates,
+          significantItems: data.significantItems as AiopsLogRateAnalysisSchemaSignificantItem[],
+        });
+      } else if (loaded > 0) {
+        // Reset all overrides.
         setOverrides(undefined);
-        if (onAnalysisCompleted) {
-          onAnalysisCompleted({
-            analysisType,
-            significantTerms: data.significantTerms,
-            significantTermsGroups: data.significantTermsGroups,
+
+        // Track performance metric
+        if (analysisStartTime.current !== undefined) {
+          const analysisDuration = window.performance.now() - analysisStartTime.current;
+
+          // Set this to undefined so reporting the metric gets triggered only once.
+          analysisStartTime.current = undefined;
+
+          reportPerformanceMetricEvent(analytics, {
+            eventName: 'aiopsLogRateAnalysisCompleted',
+            duration: analysisDuration,
           });
         }
       }
@@ -234,65 +292,116 @@ export const LogRateAnalysisResults: FC<LogRateAnalysisResultsProps> = ({
   const errors = useMemo(() => [...streamErrors, ...data.errors], [streamErrors, data.errors]);
 
   // Start handler clears possibly hovered or pinned
-  // significant terms on analysis refresh.
+  // significant items on analysis refresh.
   function startHandler(continueAnalysis = false, resetGroupButton = true) {
     if (!continueAnalysis) {
-      setOverrides(undefined);
-      setUniqueFieldNames([]);
+      dispatch(resetResults());
+      setOverrides({
+        remainingKeywordFieldCandidates: keywordFieldCandidates.filter(
+          (d) => skippedFields === null || !skippedFields.includes(d)
+        ),
+        remainingTextFieldCandidates: textFieldCandidates.filter(
+          (d) => skippedFields === null || !skippedFields.includes(d)
+        ),
+      });
     }
 
     // Reset grouping to false and clear all row selections when restarting the analysis.
     if (resetGroupButton) {
       setGroupResults(false);
       setToggleIdSelected(resultsGroupedOffId);
-      clearAllRowState();
+      dispatch(clearAllRowState());
     }
 
-    setCurrentAnalysisType(analysisType);
-    setCurrentAnalysisWindowParameters(windowParameters);
+    dispatch(setCurrentAnalysisType(analysisType));
+    dispatch(setCurrentAnalysisWindowParameters(chartWindowParameters));
 
     // We trigger hooks updates above so we cannot directly call `start()` here
     // because it would be run with stale arguments.
     setShouldStart(true);
   }
 
+  const startParams = useMemo(() => {
+    if (!chartWindowParameters || !earliest || !latest) {
+      return undefined;
+    }
+
+    return {
+      http,
+      endpoint: '/internal/aiops/log_rate_analysis',
+      apiVersion: '3',
+      abortCtrl,
+      body: {
+        start: earliest,
+        end: latest,
+        searchQuery: JSON.stringify(searchQuery),
+        // TODO Handle data view without time fields.
+        timeFieldName: dataView.timeFieldName ?? '',
+        index: dataView.getIndexPattern(),
+        grouping: true,
+        flushFix: true,
+        // If analysis type is `spike`, pass on window parameters as is,
+        // if it's `dip`, swap baseline and deviation.
+        ...(analysisType === LOG_RATE_ANALYSIS_TYPE.SPIKE
+          ? chartWindowParameters
+          : getSwappedWindowParameters(chartWindowParameters)),
+        overrides,
+        sampleProbability,
+      },
+      headers: { [AIOPS_ANALYSIS_RUN_ORIGIN]: embeddingOrigin },
+    };
+  }, [
+    analysisType,
+    earliest,
+    latest,
+    http,
+    searchQuery,
+    dataView,
+    chartWindowParameters,
+    sampleProbability,
+    overrides,
+    embeddingOrigin,
+  ]);
+
   useEffect(() => {
-    if (shouldStart) {
-      start();
+    if (shouldStart && startParams) {
+      dispatch(startStream(startParams));
       setShouldStart(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldStart]);
 
   useEffect(() => {
-    setCurrentAnalysisType(analysisType);
-    setCurrentAnalysisWindowParameters(windowParameters);
-    start();
+    if (startParams) {
+      dispatch(fetchFieldCandidates(startParams));
+      dispatch(setCurrentAnalysisType(analysisType));
+      dispatch(setCurrentAnalysisWindowParameters(chartWindowParameters));
+      dispatch(startStream(startParams));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const groupTableItems = useMemo(
-    () => getGroupTableItems(data.significantTermsGroups),
-    [data.significantTermsGroups]
+    () => getGroupTableItems(data.significantItemsGroups),
+    [data.significantItemsGroups]
   );
 
   const shouldRerunAnalysis = useMemo(
     () =>
       currentAnalysisWindowParameters !== undefined &&
-      !isEqual(currentAnalysisWindowParameters, windowParameters),
-    [currentAnalysisWindowParameters, windowParameters]
+      !isEqual(currentAnalysisWindowParameters, chartWindowParameters),
+    [currentAnalysisWindowParameters, chartWindowParameters]
   );
 
-  const showLogRateAnalysisResultsTable = data?.significantTerms.length > 0;
+  const showLogRateAnalysisResultsTable = data?.significantItems.length > 0;
   const groupItemCount = groupTableItems.reduce((p, c) => {
     return p + c.groupItemsSortedByUniqueness.length;
   }, 0);
   const foundGroups = groupTableItems.length > 0 && groupItemCount > 0;
-  const timeRangeMs = { from: earliest, to: latest };
 
   // Disable the grouping switch toggle only if no groups were found,
   // the toggle wasn't enabled already and no fields were selected to be skipped.
-  const disabledGroupResultsSwitch = !foundGroups && !groupResults && groupSkipFields.length === 0;
+  const disabledGroupResultsSwitch = !foundGroups && !groupResults;
 
   const toggleButtons = [
     {
@@ -315,75 +424,65 @@ export const LogRateAnalysisResults: FC<LogRateAnalysisResultsProps> = ({
         progressMessage={data.loadingState ?? ''}
         isRunning={isRunning}
         onRefresh={() => startHandler(false)}
-        onCancel={cancel}
+        onCancel={cancelHandler}
         onReset={onReset}
         shouldRerunAnalysis={shouldRerunAnalysis}
+        analysisInfo={<LogRateAnalysisInfoPopover />}
       >
         <EuiFlexItem grow={false}>
-          <EuiFormRow display="columnCompressedSwitch">
-            <EuiFlexGroup gutterSize="s" alignItems="center">
-              <EuiFlexItem grow={false}>
-                <EuiText size="xs">{groupResultsMessage}</EuiText>
-              </EuiFlexItem>
-              <EuiFlexItem grow={false}>
-                <EuiButtonGroup
-                  data-test-subj={`aiopsLogRateAnalysisGroupSwitch${
-                    groupResults ? ' checked' : ''
-                  }`}
-                  buttonSize="s"
-                  isDisabled={disabledGroupResultsSwitch}
-                  legend="Smart grouping"
-                  options={toggleButtons}
-                  idSelected={toggleIdSelected}
-                  onChange={onGroupResultsToggle}
-                />
-              </EuiFlexItem>
-            </EuiFlexGroup>
-          </EuiFormRow>
+          <EuiFlexGroup gutterSize="s" alignItems="center">
+            <EuiFlexItem grow={false}>
+              <EuiText size="xs">{groupResultsMessage}</EuiText>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiButtonGroup
+                data-test-subj={`aiopsLogRateAnalysisGroupSwitch${groupResults ? ' checked' : ''}`}
+                buttonSize="s"
+                isDisabled={disabledGroupResultsSwitch}
+                legend="Smart grouping"
+                options={toggleButtons}
+                idSelected={toggleIdSelected}
+                onChange={onGroupResultsToggle}
+              />
+            </EuiFlexItem>
+          </EuiFlexGroup>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
           <FieldFilterPopover
-            disabled={!groupResults || isRunning}
-            disabledApplyButton={isRunning}
-            uniqueFieldNames={uniqueFieldNames}
+            dataTestSubj="aiopsFieldFilterButton"
+            disabled={fieldFilterButtonDisabled}
+            disabledApplyButton={fieldFilterButtonDisabled}
+            disabledApplyTooltipContent={disabledFieldFilterApplyButtonTooltipContent}
+            helpText={fieldFilterHelpText}
+            itemSearchAriaLabel={fieldsButton}
+            popoverButtonTitle={fieldsButton}
+            selectedItemLimit={1}
+            uniqueItemNames={fieldFilterUniqueItems}
+            initialSkippedItems={fieldFilterSkippedItems}
             onChange={onFieldsFilterChange}
           />
         </EuiFlexItem>
-      </ProgressControls>
-      {showLogRateAnalysisResultsTable && (
-        <>
-          <EuiSpacer size="s" />
-          <EuiCallOut
-            title={
-              <span data-test-subj="aiopsAnalysisTypeCalloutTitle">
-                {currentAnalysisType === LOG_RATE_ANALYSIS_TYPE.SPIKE
-                  ? i18n.translate('xpack.aiops.analysis.analysisTypeSpikeCallOutTitle', {
-                      defaultMessage: 'Analysis type: Log rate spike',
-                    })
-                  : i18n.translate('xpack.aiops.analysis.analysisTypeDipCallOutTitle', {
-                      defaultMessage: 'Analysis type: Log rate dip',
-                    })}
-              </span>
+        <EuiFlexItem grow={false}>
+          <ColumnFilterPopover
+            dataTestSubj="aiopsColumnFilterButton"
+            disabled={isRunning}
+            disabledApplyButton={isRunning}
+            disabledApplyTooltipContent={disabledColumnFilterApplyButtonTooltipContent}
+            helpText={columnsFilterHelpText}
+            itemSearchAriaLabel={columnSearchAriaLabel}
+            initialSkippedItems={skippedColumns}
+            popoverButtonTitle={columnsButton}
+            selectedItemLimit={1}
+            uniqueItemNames={
+              (groupResults
+                ? Object.values(commonColumns)
+                : Object.values(significantItemColumns)) as string[]
             }
-            color="primary"
-            iconType="pin"
-            size="s"
-          >
-            <EuiText size="s">
-              {currentAnalysisType === LOG_RATE_ANALYSIS_TYPE.SPIKE
-                ? i18n.translate('xpack.aiops.analysis.analysisTypeSpikeCallOutContent', {
-                    defaultMessage:
-                      'The median log rate in the selected deviation time range is higher than the baseline. Therefore, the analysis results table shows statistically significant items within the deviation time range that are contributors to the spike. The "doc count" column refers to the amount of documents in the deviation time range.',
-                  })
-                : i18n.translate('xpack.aiops.analysis.analysisTypeDipCallOutContent', {
-                    defaultMessage:
-                      'The median log rate in the selected deviation time range is lower than the baseline. Therefore, the analysis results table shows statistically significant items within the baseline time range that are less in number or missing within the deviation time range. The "doc count" column refers to the amount of documents in the baseline time range.',
-                  })}
-            </EuiText>
-          </EuiCallOut>
-          <EuiSpacer size="xs" />
-        </>
-      )}
+            onChange={onVisibleColumnsChange as (columns: string[]) => void}
+          />
+        </EuiFlexItem>
+      </ProgressControls>
+
       {errors.length > 0 ? (
         <>
           <EuiSpacer size="xs" />
@@ -409,7 +508,11 @@ export const LogRateAnalysisResults: FC<LogRateAnalysisResultsProps> = ({
               )}
               {overrides !== undefined ? (
                 <p>
-                  <EuiButton size="s" onClick={() => startHandler(true)}>
+                  <EuiButton
+                    data-test-subj="aiopsLogRateAnalysisResultsTryToContinueAnalysisButton"
+                    size="s"
+                    onClick={() => startHandler(true)}
+                  >
                     <FormattedMessage
                       id="xpack.aiops.logRateAnalysis.page.tryToContinueAnalysisButtonText"
                       defaultMessage="Try to continue analysis"
@@ -428,7 +531,7 @@ export const LogRateAnalysisResults: FC<LogRateAnalysisResultsProps> = ({
           <EuiText size="xs">{groupResults ? groupResultsHelpMessage : undefined}</EuiText>
         </>
       )}
-      <EuiSpacer size="xs" />
+      <EuiSpacer size="s" />
       {!isRunning && !showLogRateAnalysisResultsTable && (
         <EuiEmptyPrompt
           data-test-subj="aiopsNoResultsFoundEmptyPrompt"
@@ -466,11 +569,9 @@ export const LogRateAnalysisResults: FC<LogRateAnalysisResultsProps> = ({
       >
         {showLogRateAnalysisResultsTable && groupResults ? (
           <LogRateAnalysisResultsGroupsTable
-            significantTerms={data.significantTerms}
+            skippedColumns={skippedColumns}
+            significantItems={data.significantItems}
             groupTableItems={groupTableItems}
-            loading={isRunning}
-            dataView={dataView}
-            timeRangeMs={timeRangeMs}
             searchQuery={searchQuery}
             barColorOverride={barColorOverride}
             barHighlightColorOverride={barHighlightColorOverride}
@@ -478,10 +579,7 @@ export const LogRateAnalysisResults: FC<LogRateAnalysisResultsProps> = ({
         ) : null}
         {showLogRateAnalysisResultsTable && !groupResults ? (
           <LogRateAnalysisResultsTable
-            significantTerms={data.significantTerms}
-            loading={isRunning}
-            dataView={dataView}
-            timeRangeMs={timeRangeMs}
+            skippedColumns={skippedColumns}
             searchQuery={searchQuery}
             barColorOverride={barColorOverride}
             barHighlightColorOverride={barHighlightColorOverride}

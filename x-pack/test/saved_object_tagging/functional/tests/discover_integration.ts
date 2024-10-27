@@ -48,6 +48,8 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
       const searchTitles = await Promise.all(
         searchTitleWrappers.map((entry) => entry.getVisibleText())
       );
+      searchTitles.sort();
+      savedSearchTitles.sort();
       expect(searchTitles).to.eql(savedSearchTitles);
     });
   };
@@ -142,6 +144,7 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
           },
           {
             submit: true,
+            clearWithKeyboard: true,
           }
         );
         expect(await tagModal.isOpened()).to.be(false);

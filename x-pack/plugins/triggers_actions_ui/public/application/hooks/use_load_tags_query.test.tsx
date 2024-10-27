@@ -10,7 +10,7 @@ import { useLoadTagsQuery } from './use_load_tags_query';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useKibana } from '../../common/lib/kibana';
 import { IToasts } from '@kbn/core-notifications-browser';
-import { waitFor } from '@testing-library/dom';
+import { waitFor } from '@testing-library/react';
 
 const MOCK_TAGS = ['a', 'b', 'c'];
 
@@ -30,7 +30,7 @@ const queryClient = new QueryClient({
     },
   },
 });
-const wrapper = ({ children }: { children: Node }) => (
+const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 );
 

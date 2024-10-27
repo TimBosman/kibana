@@ -5,64 +5,75 @@
  * 2.0.
  */
 
-import React, { FC, useCallback, useEffect, useMemo, useState } from 'react';
+import type { SearchFilterConfig } from '@elastic/eui';
 import {
   EuiBadge,
   EuiButton,
   EuiButtonIcon,
+  EuiCallOut,
   EuiFlexGroup,
   EuiFlexItem,
+  EuiIcon,
   EuiInMemoryTable,
-  EuiSearchBarProps,
+  EuiLink,
+  EuiProgress,
   EuiSpacer,
+  EuiSwitch,
+  EuiText,
   EuiTitle,
-  SearchFilterConfig,
+  EuiToolTip,
+  type EuiSearchBarProps,
 } from '@elastic/eui';
-import { groupBy } from 'lodash';
+import type { EuiBasicTableColumn } from '@elastic/eui/src/components/basic_table/basic_table';
+import type { EuiTableSelectionType } from '@elastic/eui/src/components/basic_table/table_types';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
-import { EuiBasicTableColumn } from '@elastic/eui/src/components/basic_table/basic_table';
-import { EuiTableSelectionType } from '@elastic/eui/src/components/basic_table/table_types';
-import { FIELD_FORMAT_IDS } from '@kbn/field-formats-plugin/common';
-import { isPopulatedObject } from '@kbn/ml-is-populated-object';
-import { usePageUrlState } from '@kbn/ml-url-state';
 import { useTimefilter } from '@kbn/ml-date-picker';
-import {
-  BUILT_IN_MODEL_TYPE,
-  BUILT_IN_MODEL_TAG,
-  DEPLOYMENT_STATE,
-} from '@kbn/ml-trained-models-utils';
 import { isDefined } from '@kbn/ml-is-defined';
+import { isPopulatedObject } from '@kbn/ml-is-populated-object';
+import { useStorage } from '@kbn/ml-local-storage';
 import {
-  ELASTIC_MODEL_DEFINITIONS,
+  BUILT_IN_MODEL_TAG,
+  BUILT_IN_MODEL_TYPE,
   ELASTIC_MODEL_TAG,
   ELASTIC_MODEL_TYPE,
+  ELSER_ID_V1,
   MODEL_STATE,
-  ModelState,
-} from '@kbn/ml-trained-models-utils/src/constants/trained_models';
-import { TechnicalPreviewBadge } from '../components/technical_preview_badge';
-import { useModelActions } from './model_actions';
-import { ModelsTableToConfigMapping } from '.';
-import { ModelsBarStats, StatsBar } from '../components/stats_bar';
-import { useMlKibana } from '../contexts/kibana';
-import { useTrainedModelsApiService } from '../services/ml_api_service/trained_models';
+  type ModelState,
+} from '@kbn/ml-trained-models-utils';
+import type { ListingPageUrlState } from '@kbn/ml-url-state';
+import { usePageUrlState } from '@kbn/ml-url-state';
+import { dynamic } from '@kbn/shared-ux-utility';
+import { cloneDeep, groupBy, isEmpty, memoize } from 'lodash';
+import type { FC } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import useMountedState from 'react-use/lib/useMountedState';
+import { ML_PAGES } from '../../../common/constants/locator';
+import { ML_ELSER_CALLOUT_DISMISSED } from '../../../common/types/storage';
 import type {
+  ModelDownloadState,
   ModelPipelines,
   TrainedModelConfigResponse,
   TrainedModelDeploymentStatsResponse,
   TrainedModelStat,
 } from '../../../common/types/trained_models';
-import { DeleteModelsModal } from './delete_models_modal';
-import { ML_PAGES } from '../../../common/constants/locator';
-import { ListingPageUrlState } from '../../../common/types/common';
-import { ExpandedRow } from './expanded_row';
-import { useTableSettings } from '../data_frame_analytics/pages/analytics_management/components/analytics_list/use_table_settings';
-import { useToastNotificationService } from '../services/toast_notification_service';
-import { useFieldFormatter } from '../contexts/kibana/use_field_formatter';
-import { useRefresh } from '../routing/use_refresh';
-import { SavedObjectsWarning } from '../components/saved_objects_warning';
-import { TestTrainedModelFlyout } from './test_models';
 import { AddInferencePipelineFlyout } from '../components/ml_inference';
+import { SavedObjectsWarning } from '../components/saved_objects_warning';
+import type { ModelsBarStats } from '../components/stats_bar';
+import { StatsBar } from '../components/stats_bar';
+import { TechnicalPreviewBadge } from '../components/technical_preview_badge';
+import { useMlKibana } from '../contexts/kibana';
+import { useEnabledFeatures } from '../contexts/ml';
+import { useTableSettings } from '../data_frame_analytics/pages/analytics_management/components/analytics_list/use_table_settings';
+import { useRefresh } from '../routing/use_refresh';
+import { useTrainedModelsApiService } from '../services/ml_api_service/trained_models';
+import { useToastNotificationService } from '../services/toast_notification_service';
+import { ModelsTableToConfigMapping } from './config_mapping';
+import { DeleteModelsModal } from './delete_models_modal';
+import { getModelDeploymentState, getModelStateColor } from './get_model_state';
+import { useModelActions } from './model_actions';
+import { TestDfaModelsFlyout } from './test_dfa_models_flyout';
+import { TestModelAndPipelineCreationFlyout } from './test_models';
 
 type Stats = Omit<TrainedModelStat, 'model_id' | 'deployment_stats'>;
 
@@ -70,9 +81,26 @@ export type ModelItem = TrainedModelConfigResponse & {
   type?: string[];
   stats?: Stats & { deployment_stats: TrainedModelDeploymentStatsResponse[] };
   pipelines?: ModelPipelines['pipelines'] | null;
+  origin_job_exists?: boolean;
   deployment_ids: string[];
   putModelConfig?: object;
-  state: ModelState;
+  state: ModelState | undefined;
+  /**
+   * Description of the current model state
+   */
+  stateDescription?: string;
+  recommended?: boolean;
+  supported: boolean;
+  /**
+   * Model name, e.g. elser
+   */
+  modelName?: string;
+  os?: string;
+  arch?: string;
+  softwareLicense?: string;
+  licenseUrl?: string;
+  downloadState?: ModelDownloadState;
+  disclaimer?: string;
 };
 
 export type ModelItemFull = Required<ModelItem>;
@@ -82,11 +110,24 @@ interface PageUrlState {
   pageUrlState: ListingPageUrlState;
 }
 
+const ExpandedRow = dynamic(async () => ({
+  default: (await import('./expanded_row')).ExpandedRow,
+}));
+
+const AddModelFlyout = dynamic(async () => ({
+  default: (await import('./add_model_flyout')).AddModelFlyout,
+}));
+
+const modelIdColumnName = i18n.translate('xpack.ml.trainedModels.modelsList.modelIdHeader', {
+  defaultMessage: 'ID',
+});
+
 export const getDefaultModelsListState = (): ListingPageUrlState => ({
   pageIndex: 0,
   pageSize: 10,
-  sortField: ModelsTableToConfigMapping.id,
+  sortField: modelIdColumnName,
   sortDirection: 'asc',
+  showAll: false,
 });
 
 interface Props {
@@ -94,19 +135,30 @@ interface Props {
   updatePageState?: (update: Partial<ListingPageUrlState>) => void;
 }
 
+const DOWNLOAD_POLL_INTERVAL = 3000;
+
 export const ModelsList: FC<Props> = ({
   pageState: pageStateExternal,
   updatePageState: updatePageStateExternal,
 }) => {
+  const isMounted = useMountedState();
+
   const {
     services: {
       application: { capabilities },
+      docLinks,
     },
   } = useMlKibana();
 
-  useTimefilter({ timeRangeSelector: false, autoRefreshSelector: true });
+  const nlpElserDocUrl = docLinks.links.ml.nlpElser;
 
-  const dateFormatter = useFieldFormatter(FIELD_FORMAT_IDS.DATE);
+  const { isNLPEnabled } = useEnabledFeatures();
+  const [isElserCalloutDismissed, setIsElserCalloutDismissed] = useStorage(
+    ML_ELSER_CALLOUT_DISMISSED,
+    false
+  );
+
+  useTimefilter({ timeRangeSelector: false, autoRefreshSelector: true });
 
   // allow for an internally controlled page state which stores the state in the URL
   // or an external page state, which is passed in as a prop.
@@ -141,6 +193,8 @@ export const ModelsList: FC<Props> = ({
     {}
   );
   const [modelToTest, setModelToTest] = useState<ModelItem | null>(null);
+  const [dfaModelToTest, setDfaModelToTest] = useState<ModelItem | null>(null);
+  const [isAddModelFlyoutVisible, setIsAddModelFlyoutVisible] = useState(false);
 
   const isBuiltInModel = useCallback(
     (item: ModelItem) => item.tags.includes(BUILT_IN_MODEL_TAG),
@@ -152,29 +206,15 @@ export const ModelsList: FC<Props> = ({
     []
   );
 
+  // List of downloaded/existing models
+  const existingModels = useMemo(() => {
+    return items.filter((i) => !i.putModelConfig);
+  }, [items]);
+
   /**
-   * Checks if the model download complete.
+   * Fetch of model definitions available for download needs to happen only once
    */
-  const isDownloadComplete = useCallback(
-    async (modelId: string): Promise<boolean> => {
-      try {
-        const response = await trainedModelsApiService.getTrainedModels(modelId, {
-          include: 'definition_status',
-        });
-        // @ts-ignore
-        return !!response[0]?.fully_defined;
-      } catch (error) {
-        displayErrorToast(
-          error,
-          i18n.translate('xpack.ml.trainedModels.modelsList.downloadStatusCheckErrorMessage', {
-            defaultMessage: 'Failed to check download status',
-          })
-        );
-      }
-      return false;
-    },
-    [trainedModelsApiService, displayErrorToast]
-  );
+  const getTrainedModelDownloads = memoize(trainedModelsApiService.getTrainedModelDownloads);
 
   /**
    * Fetches trained models.
@@ -184,6 +224,7 @@ export const ModelsList: FC<Props> = ({
     try {
       const response = await trainedModelsApiService.getTrainedModels(undefined, {
         with_pipelines: true,
+        with_indices: true,
       });
 
       const newItems: ModelItem[] = [];
@@ -215,30 +256,83 @@ export const ModelsList: FC<Props> = ({
       // TODO combine fetching models definitions and stats into a single function
       await fetchModelsStats(newItems);
 
-      setItems(newItems);
-
-      if (expandedItemsToRefresh.length > 0) {
-        await fetchModelsStats(expandedItemsToRefresh);
-
-        setItemIdToExpandedRowMap(
-          expandedItemsToRefresh.reduce((acc, item) => {
-            acc[item.model_id] = <ExpandedRow item={item as ModelItemFull} />;
-            return acc;
-          }, {} as Record<string, JSX.Element>)
+      let resultItems = newItems;
+      // don't add any of the built-in models (e.g. elser) if NLP is disabled
+      if (isNLPEnabled) {
+        const idMap = new Map<string, ModelItem>(
+          resultItems.map((model) => [model.model_id, model])
         );
+        /**
+         * Fetches model definitions available for download
+         */
+        const forDownload = await getTrainedModelDownloads();
+
+        const notDownloaded: ModelItem[] = forDownload
+          .filter(({ model_id: modelId, hidden, recommended, supported, disclaimer }) => {
+            if (idMap.has(modelId)) {
+              const model = idMap.get(modelId)!;
+              if (recommended) {
+                model.recommended = true;
+              }
+              model.supported = supported;
+              model.disclaimer = disclaimer;
+            }
+            return !idMap.has(modelId) && !hidden;
+          })
+          .map<ModelItem>((modelDefinition) => {
+            return {
+              model_id: modelDefinition.model_id,
+              type: modelDefinition.type,
+              tags: modelDefinition.type?.includes(ELASTIC_MODEL_TAG) ? [ELASTIC_MODEL_TAG] : [],
+              putModelConfig: modelDefinition.config,
+              description: modelDefinition.description,
+              state: MODEL_STATE.NOT_DOWNLOADED,
+              recommended: !!modelDefinition.recommended,
+              modelName: modelDefinition.modelName,
+              os: modelDefinition.os,
+              arch: modelDefinition.arch,
+              softwareLicense: modelDefinition.license,
+              licenseUrl: modelDefinition.licenseUrl,
+              supported: modelDefinition.supported,
+              disclaimer: modelDefinition.disclaimer,
+            } as ModelItem;
+          });
+        resultItems = [...resultItems, ...notDownloaded];
       }
+
+      setItems((prevItems) => {
+        // Need to merge existing items with new items
+        // to preserve state and download status
+        return resultItems.map((item) => {
+          const prevItem = prevItems.find((i) => i.model_id === item.model_id);
+          return {
+            ...item,
+            ...(prevItem?.state === MODEL_STATE.DOWNLOADING
+              ? {
+                  state: prevItem.state,
+                  downloadState: prevItem.downloadState,
+                }
+              : {}),
+          };
+        });
+      });
     } catch (error) {
       displayErrorToast(
         error,
         i18n.translate('xpack.ml.trainedModels.modelsList.fetchFailedErrorMessage', {
-          defaultMessage: 'Models fetch failed',
+          defaultMessage: 'Error loading trained models',
         })
       );
     }
+
     setIsInitialized(true);
+
     setIsLoading(false);
+
+    await fetchDownloadStatus();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemIdToExpandedRowMap]);
+  }, [itemIdToExpandedRowMap, isNLPEnabled]);
 
   useEffect(
     function updateOnTimerRefresh() {
@@ -253,13 +347,13 @@ export const ModelsList: FC<Props> = ({
     return {
       total: {
         show: true,
-        value: items.length,
+        value: existingModels.length,
         label: i18n.translate('xpack.ml.trainedModels.modelsList.totalAmountLabel', {
           defaultMessage: 'Total trained models',
         }),
       },
     };
-  }, [items]);
+  }, [existingModels]);
 
   /**
    * Fetches models stats and update the original object
@@ -279,29 +373,18 @@ export const ModelsList: FC<Props> = ({
             ...modelStats[0],
             deployment_stats: modelStats.map((d) => d.deployment_stats).filter(isDefined),
           };
+
+          // Extract deployment ids from deployment stats
           model.deployment_ids = modelStats
             .map((v) => v.deployment_stats?.deployment_id)
             .filter(isDefined);
-          model.state = model.stats.deployment_stats?.some(
-            (v) => v.state === DEPLOYMENT_STATE.STARTED
-          )
-            ? DEPLOYMENT_STATE.STARTED
-            : null;
-        });
 
-        const elasticModels = models.filter((model) =>
-          ELASTIC_MODEL_DEFINITIONS.hasOwnProperty(model.model_id)
-        );
-        if (elasticModels.length > 0) {
-          for (const model of elasticModels) {
-            if (model.state === MODEL_STATE.STARTED) {
-              // no need to check for the download status if the model has been deployed
-              continue;
-            }
-            const isDownloaded = await isDownloadComplete(model.model_id);
-            model.state = isDownloaded ? MODEL_STATE.DOWNLOADED : MODEL_STATE.DOWNLOADING;
-          }
-        }
+          model.state = getModelDeploymentState(model);
+          model.stateDescription = model.stats.deployment_stats.reduce((acc, c) => {
+            if (acc) return acc;
+            return c.reason ?? '';
+          }, '');
+        });
       }
 
       return true;
@@ -309,7 +392,7 @@ export const ModelsList: FC<Props> = ({
       displayErrorToast(
         error,
         i18n.translate('xpack.ml.trainedModels.modelsList.fetchModelStatsErrorMessage', {
-          defaultMessage: 'Fetch model stats failed',
+          defaultMessage: 'Error loading trained models statistics',
         })
       );
       return false;
@@ -317,11 +400,85 @@ export const ModelsList: FC<Props> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const downLoadStatusFetchInProgress = useRef(false);
+  const abortedDownload = useRef(new Set<string>());
+
+  /**
+   * Updates model list with download status
+   */
+  const fetchDownloadStatus = useCallback(
+    /**
+     * @param downloadInProgress Set of model ids that reports download in progress
+     */
+    async (downloadInProgress: Set<string> = new Set<string>()) => {
+      // Allows only single fetch to be in progress
+      if (downLoadStatusFetchInProgress.current && downloadInProgress.size === 0) return;
+
+      try {
+        downLoadStatusFetchInProgress.current = true;
+
+        const downloadStatus = await trainedModelsApiService.getModelsDownloadStatus();
+
+        if (isMounted()) {
+          setItems((prevItems) => {
+            return prevItems.map((item) => {
+              if (!item.type?.includes('pytorch')) {
+                return item;
+              }
+              const newItem = cloneDeep(item);
+
+              if (downloadStatus[item.model_id]) {
+                newItem.state = MODEL_STATE.DOWNLOADING;
+                newItem.downloadState = downloadStatus[item.model_id];
+              } else {
+                /* Unfortunately, model download status does not report 100% download state, only from 1 to 99. Hence, there might be 3 cases
+                 * 1. Model is not downloaded at all
+                 * 2. Model download was in progress and finished
+                 * 3. Model download was in progress and aborted
+                 */
+                delete newItem.downloadState;
+
+                if (abortedDownload.current.has(item.model_id)) {
+                  // Change downloading state to not downloaded
+                  newItem.state = MODEL_STATE.NOT_DOWNLOADED;
+                  abortedDownload.current.delete(item.model_id);
+                } else if (downloadInProgress.has(item.model_id) || !newItem.state) {
+                  // Change downloading state to downloaded
+                  newItem.state = MODEL_STATE.DOWNLOADED;
+                }
+
+                downloadInProgress.delete(item.model_id);
+              }
+              return newItem;
+            });
+          });
+        }
+
+        Object.keys(downloadStatus).forEach((modelId) => {
+          if (downloadStatus[modelId]) {
+            downloadInProgress.add(modelId);
+          }
+        });
+
+        if (isEmpty(downloadStatus)) {
+          downLoadStatusFetchInProgress.current = false;
+          return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, DOWNLOAD_POLL_INTERVAL));
+        await fetchDownloadStatus(downloadInProgress);
+      } catch (e) {
+        downLoadStatusFetchInProgress.current = false;
+      }
+    },
+    [trainedModelsApiService, isMounted]
+  );
+
   /**
    * Unique inference types from models
    */
   const inferenceTypesOptions = useMemo(() => {
-    const result = items.reduce((acc, item) => {
+    const result = existingModels.reduce((acc, item) => {
       const type = item.inference_config && Object.keys(item.inference_config)[0];
       if (type) {
         acc.add(type);
@@ -335,13 +492,37 @@ export const ModelsList: FC<Props> = ({
         value: v,
         name: v,
       }));
-  }, [items]);
+  }, [existingModels]);
 
   const modelAndDeploymentIds = useMemo(
     () => [
-      ...new Set([...items.flatMap((v) => v.deployment_ids), ...items.map((i) => i.model_id)]),
+      ...new Set([
+        ...existingModels.flatMap((v) => v.deployment_ids),
+        ...existingModels.map((i) => i.model_id),
+      ]),
     ],
-    [items]
+    [existingModels]
+  );
+
+  const onModelDownloadRequest = useCallback(
+    async (modelId: string) => {
+      try {
+        setIsLoading(true);
+        await trainedModelsApiService.installElasticTrainedModelConfig(modelId);
+        // Need to fetch model state updates
+        await fetchModelsData();
+      } catch (e) {
+        displayErrorToast(
+          e,
+          i18n.translate('xpack.ml.trainedModels.modelsList.downloadFailed', {
+            defaultMessage: 'Failed to download "{modelId}"',
+            values: { modelId },
+          })
+        );
+        setIsLoading(true);
+      }
+    },
+    [displayErrorToast, fetchModelsData, trainedModelsApiService]
   );
 
   /**
@@ -351,10 +532,12 @@ export const ModelsList: FC<Props> = ({
     isLoading,
     fetchModels: fetchModelsData,
     onTestAction: setModelToTest,
+    onDfaTestAction: setDfaModelToTest,
     onModelsDeleteRequest: setModelsToDelete,
     onModelDeployRequest: setModelToDeploy,
     onLoading: setIsLoading,
     modelAndDeploymentIds,
+    onModelDownloadRequest,
   });
 
   const toggleDetails = async (item: ModelItem) => {
@@ -362,7 +545,6 @@ export const ModelsList: FC<Props> = ({
     if (itemIdToExpandedRowMapValues[item.model_id]) {
       delete itemIdToExpandedRowMapValues[item.model_id];
     } else {
-      await fetchModelsStats([item]);
       itemIdToExpandedRowMapValues[item.model_id] = <ExpandedRow item={item as ModelItemFull} />;
     }
     setItemIdToExpandedRowMap(itemIdToExpandedRowMapValues);
@@ -370,9 +552,8 @@ export const ModelsList: FC<Props> = ({
 
   const columns: Array<EuiBasicTableColumn<ModelItem>> = [
     {
-      align: 'left',
-      width: '40px',
       isExpander: true,
+      align: 'center',
       render: (item: ModelItem) => {
         if (!item.stats) {
           return null;
@@ -396,81 +577,143 @@ export const ModelsList: FC<Props> = ({
       'data-test-subj': 'mlModelsTableRowDetailsToggle',
     },
     {
-      field: ModelsTableToConfigMapping.id,
-      name: i18n.translate('xpack.ml.trainedModels.modelsList.modelIdHeader', {
-        defaultMessage: 'ID',
-      }),
-      sortable: true,
+      name: modelIdColumnName,
+      sortable: ({ model_id: modelId }: ModelItem) => modelId,
       truncateText: false,
+      textOnly: false,
       'data-test-subj': 'mlModelsTableColumnId',
-    },
-    {
-      field: ModelsTableToConfigMapping.description,
-      width: '350px',
-      name: i18n.translate('xpack.ml.trainedModels.modelsList.modelDescriptionHeader', {
-        defaultMessage: 'Description',
-      }),
-      sortable: false,
-      truncateText: false,
-      'data-test-subj': 'mlModelsTableColumnDescription',
-      render: (description: string) => {
-        if (!description) return null;
-        const isTechPreview = description.includes('(Tech Preview)');
+      render: ({
+        description,
+        model_id: modelId,
+        recommended,
+        supported,
+        type,
+        disclaimer,
+      }: ModelItem) => {
+        const isTechPreview = description?.includes('(Tech Preview)');
+
+        let descriptionText = description?.replace('(Tech Preview)', '');
+
+        if (disclaimer) {
+          descriptionText += '. ' + disclaimer;
+        }
+
+        const tooltipContent =
+          supported === false ? (
+            <FormattedMessage
+              id="xpack.ml.trainedModels.modelsList.notSupportedDownloadContent"
+              defaultMessage="Model version is not supported by your cluster's hardware configuration"
+            />
+          ) : recommended === false ? (
+            <FormattedMessage
+              id="xpack.ml.trainedModels.modelsList.notRecommendedDownloadContent"
+              defaultMessage="Model version is not optimized for your cluster's hardware configuration"
+            />
+          ) : null;
+
         return (
-          <>
-            {description.replace('(Tech Preview)', '')}
-            {isTechPreview ? <TechnicalPreviewBadge compressed /> : null}
-          </>
+          <EuiFlexGroup gutterSize={'xs'} direction={'column'}>
+            <EuiFlexGroup gutterSize={'s'} alignItems={'center'} wrap={true}>
+              <EuiFlexItem grow={false}>
+                <strong data-test-subj="mlModelsTableColumnIdValueId">{modelId}</strong>
+              </EuiFlexItem>
+              {isTechPreview ? (
+                <EuiFlexItem grow={false}>
+                  <TechnicalPreviewBadge compressed />
+                </EuiFlexItem>
+              ) : null}
+            </EuiFlexGroup>
+
+            {descriptionText ? (
+              <EuiText
+                color={'subdued'}
+                size={'xs'}
+                data-test-subj="mlModelsTableColumnIdValueDescription"
+              >
+                {descriptionText}
+                {tooltipContent ? (
+                  <>
+                    &nbsp;
+                    <EuiToolTip content={tooltipContent}>
+                      <EuiIcon type={'warning'} color="warning" />
+                    </EuiToolTip>
+                  </>
+                ) : null}
+              </EuiText>
+            ) : null}
+
+            {Array.isArray(type) && type.length > 0 ? (
+              <EuiFlexGroup gutterSize={'xs'} direction={'row'}>
+                {type.map((t) => (
+                  <EuiFlexItem key={t} grow={false}>
+                    <span>
+                      <EuiBadge color="hollow" data-test-subj="mlModelType">
+                        {t}
+                      </EuiBadge>
+                    </span>
+                  </EuiFlexItem>
+                ))}
+              </EuiFlexGroup>
+            ) : null}
+          </EuiFlexGroup>
         );
       },
     },
     {
-      field: ModelsTableToConfigMapping.type,
-      name: i18n.translate('xpack.ml.trainedModels.modelsList.typeHeader', {
-        defaultMessage: 'Type',
-      }),
-      sortable: true,
-      truncateText: true,
-      align: 'left',
-      render: (types: string[]) => (
-        <EuiFlexGroup gutterSize={'xs'} wrap>
-          {types.map((type) => (
-            <EuiFlexItem key={type} grow={false}>
-              <EuiBadge color="hollow" data-test-subj="mlModelType">
-                {type}
-              </EuiBadge>
-            </EuiFlexItem>
-          ))}
-        </EuiFlexGroup>
-      ),
-      'data-test-subj': 'mlModelsTableColumnType',
-    },
-    {
-      field: 'state',
       name: i18n.translate('xpack.ml.trainedModels.modelsList.stateHeader', {
         defaultMessage: 'State',
       }),
-      align: 'left',
       truncateText: false,
-      render: (state: string) => {
-        return state ? <EuiBadge color="hollow">{state}</EuiBadge> : null;
+      width: '150px',
+      render: ({ state, downloadState }: ModelItem) => {
+        const config = getModelStateColor(state);
+        if (!config) return null;
+
+        const isProgressbarVisible = state === MODEL_STATE.DOWNLOADING && downloadState;
+
+        const label = (
+          <EuiText size="xs" color={config.color}>
+            {config.name}
+          </EuiText>
+        );
+
+        return (
+          <EuiFlexGroup direction={'column'} gutterSize={'none'} css={{ width: '100%' }}>
+            {isProgressbarVisible ? (
+              <EuiFlexItem>
+                <EuiProgress
+                  label={config.name}
+                  valueText={
+                    <>
+                      {downloadState
+                        ? (
+                            (downloadState.downloaded_parts / downloadState.total_parts) *
+                            100
+                          ).toFixed(0) + '%'
+                        : '100%'}
+                    </>
+                  }
+                  value={downloadState?.downloaded_parts ?? 1}
+                  max={downloadState?.total_parts ?? 1}
+                  size="xs"
+                  color={config.color}
+                />
+              </EuiFlexItem>
+            ) : (
+              <EuiFlexItem grow={false}>
+                <span>{config.component ?? label}</span>
+              </EuiFlexItem>
+            )}
+          </EuiFlexGroup>
+        );
       },
       'data-test-subj': 'mlModelsTableColumnDeploymentState',
-    },
-    {
-      field: ModelsTableToConfigMapping.createdAt,
-      name: i18n.translate('xpack.ml.trainedModels.modelsList.createdAtHeader', {
-        defaultMessage: 'Created at',
-      }),
-      dataType: 'date',
-      render: (v: number) => dateFormatter(v),
-      sortable: true,
-      'data-test-subj': 'mlModelsTableColumnCreatedAt',
     },
     {
       name: i18n.translate('xpack.ml.trainedModels.modelsList.actionsHeader', {
         defaultMessage: 'Actions',
       }),
+      width: '200px',
       actions,
       'data-test-subj': 'mlModelsTableColumnActions',
     },
@@ -506,7 +749,11 @@ export const ModelsList: FC<Props> = ({
           </EuiTitle>
         </EuiFlexItem>
         <EuiFlexItem>
-          <EuiButton color="danger" onClick={setModelsToDelete.bind(null, selectedModels)}>
+          <EuiButton
+            color="danger"
+            onClick={setModelsToDelete.bind(null, selectedModels)}
+            data-test-subj="mlTrainedModelsDeleteSelectedModelsButton"
+          >
             <FormattedMessage
               id="xpack.ml.trainedModels.modelsList.deleteModelsButtonLabel"
               defaultMessage="Delete"
@@ -554,7 +801,8 @@ export const ModelsList: FC<Props> = ({
   const { onTableChange, pagination, sorting } = useTableSettings<ModelItem>(
     items.length,
     pageState,
-    updatePageState
+    updatePageState,
+    true
   );
 
   const search: EuiSearchBarProps = {
@@ -581,21 +829,17 @@ export const ModelsList: FC<Props> = ({
       : {}),
   };
 
-  const resultItems = useMemo<ModelItem[]>(() => {
-    const idSet = new Set(items.map((i) => i.model_id));
-    const notDownloaded: ModelItem[] = Object.entries(ELASTIC_MODEL_DEFINITIONS)
-      .filter(([modelId]) => !idSet.has(modelId))
-      .map(([modelId, modelDefinition]) => {
-        return {
-          model_id: modelId,
-          type: [ELASTIC_MODEL_TYPE],
-          tags: [ELASTIC_MODEL_TAG],
-          putModelConfig: modelDefinition.config,
-          description: modelDefinition.description,
-        } as ModelItem;
-      });
-    return [...items, ...notDownloaded];
-  }, [items]);
+  const isElserCalloutVisible =
+    !isElserCalloutDismissed && items.findIndex((i) => i.model_id === ELSER_ID_V1) >= 0;
+
+  const tableItems = useMemo(() => {
+    if (pageState.showAll) {
+      return items;
+    } else {
+      // by default show only deployed models or recommended for download
+      return items.filter((item) => item.create_time || item.recommended);
+    }
+  }, [items, pageState.showAll]);
 
   if (!isInitialized) return null;
 
@@ -603,24 +847,52 @@ export const ModelsList: FC<Props> = ({
     <>
       <SavedObjectsWarning onCloseFlyout={fetchModelsData} forceRefresh={isLoading} />
       <EuiFlexGroup justifyContent="spaceBetween">
-        {modelsStats && (
-          <>
-            <EuiFlexItem grow={false}>
-              <StatsBar stats={modelsStats} dataTestSub={'mlInferenceModelsStatsBar'} />
-            </EuiFlexItem>
-          </>
-        )}
+        {modelsStats ? (
+          <EuiFlexItem>
+            <EuiFlexGroup alignItems="center">
+              <EuiFlexItem grow={false}>
+                <StatsBar stats={modelsStats} dataTestSub={'mlInferenceModelsStatsBar'} />
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiSwitch
+                  label={
+                    <FormattedMessage
+                      id="xpack.ml.trainedModels.modelsList.showAllLabel"
+                      defaultMessage="Show all"
+                    />
+                  }
+                  checked={!!pageState.showAll}
+                  onChange={(e) => updatePageState({ showAll: e.target.checked })}
+                  data-test-subj="mlModelsShowAllSwitch"
+                />
+              </EuiFlexItem>
+            </EuiFlexGroup>
+          </EuiFlexItem>
+        ) : null}
+        <EuiFlexItem grow={false}>
+          <EuiButton
+            fill
+            iconType={'plusInCircle'}
+            color={'primary'}
+            onClick={setIsAddModelFlyoutVisible.bind(null, true)}
+            data-test-subj="mlModelsAddTrainedModelButton"
+          >
+            <FormattedMessage
+              id="xpack.ml.trainedModels.modelsList.addModelButtonLabel"
+              defaultMessage="Add trained model"
+            />
+          </EuiButton>
+        </EuiFlexItem>
       </EuiFlexGroup>
       <EuiSpacer size="m" />
       <div data-test-subj="mlModelsTableContainer">
         <EuiInMemoryTable<ModelItem>
+          tableLayout={'auto'}
+          responsiveBreakpoint={'xl'}
           allowNeutralSort={false}
           columns={columns}
-          hasActions={true}
-          isExpandable={true}
           itemIdToExpandedRowMap={itemIdToExpandedRowMap}
-          isSelectable={false}
-          items={resultItems}
+          items={tableItems}
           itemId={ModelsTableToConfigMapping.id}
           loading={isLoading}
           search={search}
@@ -632,12 +904,51 @@ export const ModelsList: FC<Props> = ({
           onTableChange={onTableChange}
           sorting={sorting}
           data-test-subj={isLoading ? 'mlModelsTable loading' : 'mlModelsTable loaded'}
+          childrenBetween={
+            isElserCalloutVisible ? (
+              <>
+                <EuiCallOut
+                  size="s"
+                  title={
+                    <FormattedMessage
+                      id="xpack.ml.trainedModels.modelsList.newElserModelTitle"
+                      defaultMessage="New ELSER model now available"
+                    />
+                  }
+                  onDismiss={setIsElserCalloutDismissed.bind(null, true)}
+                >
+                  <FormattedMessage
+                    id="xpack.ml.trainedModels.modelsList.newElserModelDescription"
+                    defaultMessage="A new version of ELSER that shows faster performance and improved relevance is now available. {docLink} for information on how to start using it."
+                    values={{
+                      docLink: (
+                        <EuiLink href={nlpElserDocUrl} external target={'_blank'}>
+                          <FormattedMessage
+                            id="xpack.ml.trainedModels.modelsList.startDeployment.viewElserDocLink"
+                            defaultMessage="View documentation"
+                          />
+                        </EuiLink>
+                      ),
+                    }}
+                  />
+                </EuiCallOut>
+                <EuiSpacer size="m" />
+              </>
+            ) : null
+          }
         />
       </div>
       {modelsToDelete.length > 0 && (
         <DeleteModelsModal
           onClose={(refreshList) => {
+            modelsToDelete.forEach((model) => {
+              if (model.state === MODEL_STATE.DOWNLOADING) {
+                abortedDownload.current.add(model.model_id);
+              }
+            });
+
             setModelsToDelete([]);
+
             if (refreshList) {
               fetchModelsData();
             }
@@ -646,12 +957,33 @@ export const ModelsList: FC<Props> = ({
         />
       )}
       {modelToTest === null ? null : (
-        <TestTrainedModelFlyout model={modelToTest} onClose={setModelToTest.bind(null, null)} />
+        <TestModelAndPipelineCreationFlyout
+          model={modelToTest}
+          onClose={(refreshList?: boolean) => {
+            setModelToTest(null);
+            if (refreshList) {
+              fetchModelsData();
+            }
+          }}
+        />
+      )}
+      {dfaModelToTest === null ? null : (
+        <TestDfaModelsFlyout model={dfaModelToTest} onClose={setDfaModelToTest.bind(null, null)} />
       )}
       {modelToDeploy !== undefined ? (
         <AddInferencePipelineFlyout
           onClose={setModelToDeploy.bind(null, undefined)}
           model={modelToDeploy}
+        />
+      ) : null}
+      {isAddModelFlyoutVisible ? (
+        <AddModelFlyout
+          modelDownloads={items.filter((i) => i.state === MODEL_STATE.NOT_DOWNLOADED)}
+          onClose={setIsAddModelFlyoutVisible.bind(null, false)}
+          onSubmit={(modelId) => {
+            onModelDownloadRequest(modelId);
+            setIsAddModelFlyoutVisible(false);
+          }}
         />
       ) : null}
     </>

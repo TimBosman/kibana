@@ -45,6 +45,8 @@ import {
   getFieldsByValidationState,
   isSortableByColumn,
   isPercentileRankSortable,
+  isPercentileSortable,
+  getOtherBucketSwitchDefault,
 } from './helpers';
 import {
   DEFAULT_MAX_DOC_COUNT,
@@ -204,12 +206,11 @@ export const termsOperation: OperationDefinition<
     }
   },
   getErrorMessage: (layer, columnId, indexPattern) => {
-    const messages = [
-      ...(getInvalidFieldMessage(layer, columnId, indexPattern) || []),
-      getDisallowedTermsMessage(layer, columnId, indexPattern) || '',
-      getMultiTermsScriptedFieldErrorMessage(layer, columnId, indexPattern) || '',
-    ].filter(Boolean);
-    return messages.length ? messages : undefined;
+    return [
+      ...getInvalidFieldMessage(layer, columnId, indexPattern),
+      ...getDisallowedTermsMessage(layer, columnId, indexPattern),
+      ...getMultiTermsScriptedFieldErrorMessage(layer, columnId, indexPattern),
+    ];
   },
   getNonTransferableFields: (column, newIndexPattern) => {
     return getFieldsByValidationState(newIndexPattern, column).invalidFields;
@@ -310,7 +311,11 @@ export const termsOperation: OperationDefinition<
       const orderColumn = layer.columns[column.params.orderBy.columnId];
       orderBy = String(orderedColumnIds.indexOf(column.params.orderBy.columnId));
       // percentile rank with non integer value should default to alphabetical order
-      if (!orderColumn || !isPercentileRankSortable(orderColumn)) {
+      if (
+        !orderColumn ||
+        !isPercentileRankSortable(orderColumn) ||
+        !isPercentileSortable(orderColumn)
+      ) {
         orderBy = '_key';
       }
     }
@@ -380,9 +385,9 @@ export const termsOperation: OperationDefinition<
       }),
     }).toAst();
   },
-  getDefaultLabel: (column, indexPattern) =>
+  getDefaultLabel: (column, columns, indexPattern) =>
     ofName(
-      indexPattern.getFieldByName(column.sourceField)?.displayName,
+      indexPattern?.getFieldByName(column.sourceField)?.displayName,
       column.params.secondaryFields?.length,
       column.params.orderBy.type === 'rare',
       column.params.orderBy.type === 'significant',
@@ -568,9 +573,8 @@ export const termsOperation: OperationDefinition<
       return <FieldInputBase {...props} />;
     }
 
-    const showScriptedFieldError = Boolean(
-      getMultiTermsScriptedFieldErrorMessage(layer, columnId, indexPattern)
-    );
+    const showScriptedFieldError =
+      getMultiTermsScriptedFieldErrorMessage(layer, columnId, indexPattern).length > 0;
     const { invalidFields } = getFieldsByValidationState(indexPattern, selectedColumn);
 
     return (
@@ -728,6 +732,7 @@ The top values of a specified field ranked by the chosen metric.
                   params: {
                     ...currentColumn.params,
                     size: value,
+                    otherBucket: getOtherBucketSwitchDefault(currentColumn, value),
                   },
                 },
               } as Record<string, TermsIndexPatternColumn>,
@@ -953,7 +958,6 @@ The top values of a specified field ranked by the chosen metric.
               defaultMessage: 'Rank direction',
             })}
             data-test-subj="indexPattern-terms-orderDirection-groups"
-            name="orderDirection"
             buttonSize="compressed"
             aria-label={i18n.translate('xpack.lens.indexPattern.terms.orderDirection', {
               defaultMessage: 'Rank direction',

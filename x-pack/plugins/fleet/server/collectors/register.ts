@@ -10,6 +10,8 @@ import type { CoreSetup } from '@kbn/core/server';
 
 import type { FleetConfigType } from '..';
 
+import { appContextService } from '../services';
+
 import { getIsAgentsEnabled } from './config_collectors';
 import { getAgentUsage, getAgentData } from './agent_collectors';
 import type { AgentUsage, AgentData } from './agent_collectors';
@@ -22,6 +24,10 @@ import { getAgentPoliciesUsage } from './agent_policies';
 import type { AgentPanicLogsData } from './agent_logs_panics';
 import { getPanicLogsLastHour } from './agent_logs_panics';
 import { getAgentLogsTopErrors } from './agent_logs_top_errors';
+import type { AgentsPerOutputType } from './agents_per_output';
+import { getAgentsPerOutput } from './agents_per_output';
+import type { IntegrationsDetails } from './integrations_collector';
+import { getIntegrationsDetails } from './integrations_collector';
 
 export interface Usage {
   agents_enabled: boolean;
@@ -36,6 +42,8 @@ export interface FleetUsage extends Usage, AgentData {
   agent_logs_panics_last_hour: AgentPanicLogsData['agent_logs_panics_last_hour'];
   agent_logs_top_errors?: string[];
   fleet_server_logs_top_errors?: string[];
+  agents_per_output_type: AgentsPerOutputType[];
+  integrations_details: IntegrationsDetails[];
 }
 
 export const fetchFleetUsage = async (
@@ -57,6 +65,10 @@ export const fetchFleetUsage = async (
     agent_policies: await getAgentPoliciesUsage(soClient),
     ...(await getPanicLogsLastHour(esClient)),
     ...(await getAgentLogsTopErrors(esClient)),
+    agents_per_output_type: await getAgentsPerOutput(soClient, esClient),
+    license_issued_to: (await esClient.license.get()).license.issued_to,
+    deployment_id: appContextService.getCloud()?.deploymentId,
+    integrations_details: await getIntegrationsDetails(soClient),
   };
   return usage;
 };
@@ -79,6 +91,8 @@ export const fetchAgentsUsage = async (core: CoreSetup, config: FleetConfigType)
     agents_enabled: getIsAgentsEnabled(config),
     agents: await getAgentUsage(soClient, esClient),
     fleet_server: await getFleetServerUsage(soClient, esClient),
+    license_issued_to: (await esClient.license.get()).license.issued_to,
+    deployment_id: appContextService.getCloud()?.deploymentId,
   };
   return usage;
 };
@@ -187,6 +201,18 @@ export function registerFleetUsageCollector(
           type: 'long',
           _meta: {
             description: 'The total number of enrolled Fleet Server agents currently offline',
+          },
+        },
+        inactive: {
+          type: 'long',
+          _meta: {
+            description: 'The total number of enrolled Fleet Server agents currently inactive',
+          },
+        },
+        unenrolled: {
+          type: 'long',
+          _meta: {
+            description: 'The total number of unenrolled Fleet Server agents',
           },
         },
         num_host_urls: {

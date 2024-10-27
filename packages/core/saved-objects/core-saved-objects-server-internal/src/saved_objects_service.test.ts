@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { setImmediate } from 'timers/promises';
@@ -18,8 +19,8 @@ import {
   typeRegistryInstanceMock,
   applyTypeDefaultsMock,
 } from './saved_objects_service.test.mocks';
-import { BehaviorSubject, firstValueFrom } from 'rxjs';
-import { skip } from 'rxjs/operators';
+import { BehaviorSubject, firstValueFrom, EMPTY } from 'rxjs';
+import { skip } from 'rxjs';
 import { type RawPackageInfo, Env } from '@kbn/config';
 import { ByteSizeValue } from '@kbn/config-schema';
 import { REPO_ROOT } from '@kbn/repo-info';
@@ -549,6 +550,24 @@ describe('SavedObjectsService', () => {
       expect(migratorInstanceMock.runMigrations).toHaveBeenCalledTimes(1);
     });
 
+    it('does not start the migration if esNodesCompatibility$ is closed before calling `start`', async () => {
+      expect.assertions(2);
+      const coreContext = createCoreContext({ skipMigration: false });
+      const soService = new SavedObjectsService(coreContext);
+      const setupDeps = createSetupDeps();
+      // Create an new subject so that we can control when isCompatible=true
+      // is emitted.
+      setupDeps.elasticsearch.esNodesCompatibility$ = EMPTY;
+      await soService.setup(setupDeps);
+      await expect(() =>
+        soService.start(createStartDeps())
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `"esNodesCompatibility$ was closed before emitting"`
+      );
+
+      expect(migratorInstanceMock.runMigrations).not.toHaveBeenCalled();
+    });
+
     it('resolves with KibanaMigrator after waiting for migrations to complete', async () => {
       const coreContext = createCoreContext({ skipMigration: false });
       const soService = new SavedObjectsService(coreContext);
@@ -581,6 +600,21 @@ describe('SavedObjectsService', () => {
       }).toThrowErrorMatchingInlineSnapshot(
         `"cannot call \`registerType\` after service startup."`
       );
+    });
+
+    it('returns the information about the time spent migrating', async () => {
+      const coreContext = createCoreContext({ skipMigration: false });
+      const soService = new SavedObjectsService(coreContext);
+
+      migratorInstanceMock.runMigrations.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 5));
+        return [];
+      });
+
+      await soService.setup(createSetupDeps());
+      const startContract = await soService.start(createStartDeps());
+
+      expect(startContract.metrics.migrationDuration).toBeGreaterThan(0);
     });
 
     describe('#getTypeRegistry', () => {

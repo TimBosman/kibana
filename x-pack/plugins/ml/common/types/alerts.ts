@@ -44,6 +44,35 @@ interface BaseAnomalyAlertDoc {
   unique_key: string;
 }
 
+export interface TopRecordAADDoc {
+  job_id: string;
+  record_score: number;
+  initial_record_score: number;
+  timestamp: number;
+  is_interim: boolean;
+  function: string;
+  field_name?: string;
+  by_field_name?: string;
+  by_field_value?: string | number;
+  over_field_name?: string;
+  over_field_value?: string | number;
+  partition_field_name?: string;
+  partition_field_value?: string | number;
+  typical: number[];
+  actual: number[];
+  detector_index: number;
+}
+
+export interface TopInfluencerAADDoc {
+  job_id: string;
+  influencer_score: number;
+  initial_influencer_score: number;
+  is_interim: boolean;
+  timestamp: number;
+  influencer_field_name: string;
+  influencer_field_value: string | number;
+}
+
 export interface RecordAnomalyAlertDoc extends BaseAnomalyAlertDoc {
   result_type: typeof ML_ANOMALY_RESULT_TYPE.RECORD;
   function: string;
@@ -76,15 +105,15 @@ export interface InfluencerAnomalyAlertDoc extends BaseAnomalyAlertDoc {
 export type AlertHitDoc = RecordAnomalyAlertDoc | BucketAnomalyAlertDoc | InfluencerAnomalyAlertDoc;
 
 export function isRecordAnomalyAlertDoc(arg: any): arg is RecordAnomalyAlertDoc {
-  return arg.hasOwnProperty('result_type') && arg.result_type === ML_ANOMALY_RESULT_TYPE.RECORD;
+  return Object.hasOwn(arg, 'result_type') && arg.result_type === ML_ANOMALY_RESULT_TYPE.RECORD;
 }
 
 export function isBucketAnomalyAlertDoc(arg: any): arg is BucketAnomalyAlertDoc {
-  return arg.hasOwnProperty('result_type') && arg.result_type === ML_ANOMALY_RESULT_TYPE.BUCKET;
+  return Object.hasOwn(arg, 'result_type') && arg.result_type === ML_ANOMALY_RESULT_TYPE.BUCKET;
 }
 
 export function isInfluencerAnomalyAlertDoc(arg: any): arg is InfluencerAnomalyAlertDoc {
-  return arg.hasOwnProperty('result_type') && arg.result_type === ML_ANOMALY_RESULT_TYPE.INFLUENCER;
+  return Object.hasOwn(arg, 'result_type') && arg.result_type === ML_ANOMALY_RESULT_TYPE.INFLUENCER;
 }
 
 export type MlAnomalyDetectionAlertParams = {

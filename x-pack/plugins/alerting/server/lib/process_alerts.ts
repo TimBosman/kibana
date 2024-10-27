@@ -22,8 +22,8 @@ interface ProcessAlertsOpts<
   hasReachedAlertLimit: boolean;
   alertLimit: number;
   autoRecoverAlerts: boolean;
+  startedAt?: string | null;
   flappingSettings: RulesSettingsFlappingProperties;
-  maintenanceWindowIds: string[];
 }
 interface ProcessAlertsResult<
   State extends AlertInstanceState,
@@ -51,7 +51,7 @@ export function processAlerts<
   alertLimit,
   autoRecoverAlerts,
   flappingSettings,
-  maintenanceWindowIds,
+  startedAt,
 }: ProcessAlertsOpts<State, Context>): ProcessAlertsResult<
   State,
   Context,
@@ -65,7 +65,7 @@ export function processAlerts<
         previouslyRecoveredAlerts,
         alertLimit,
         flappingSettings,
-        maintenanceWindowIds
+        startedAt
       )
     : processAlertsHelper(
         alerts,
@@ -73,7 +73,7 @@ export function processAlerts<
         previouslyRecoveredAlerts,
         autoRecoverAlerts,
         flappingSettings,
-        maintenanceWindowIds
+        startedAt
       );
 }
 
@@ -88,19 +88,19 @@ function processAlertsHelper<
   previouslyRecoveredAlerts: Record<string, Alert<State, Context>>,
   autoRecoverAlerts: boolean,
   flappingSettings: RulesSettingsFlappingProperties,
-  maintenanceWindowIds: string[]
+  startedAt?: string | null
 ): ProcessAlertsResult<State, Context, ActionGroupIds, RecoveryActionGroupId> {
   const existingAlertIds = new Set(Object.keys(existingAlerts));
   const previouslyRecoveredAlertsIds = new Set(Object.keys(previouslyRecoveredAlerts));
 
-  const currentTime = new Date().toISOString();
+  const currentTime = startedAt ?? new Date().toISOString();
   const newAlerts: Record<string, Alert<State, Context, ActionGroupIds>> = {};
   const activeAlerts: Record<string, Alert<State, Context, ActionGroupIds>> = {};
   const currentRecoveredAlerts: Record<string, Alert<State, Context, RecoveryActionGroupId>> = {};
   const recoveredAlerts: Record<string, Alert<State, Context, RecoveryActionGroupId>> = {};
 
   for (const id in alerts) {
-    if (alerts.hasOwnProperty(id)) {
+    if (Object.hasOwn(alerts, id)) {
       // alerts with scheduled actions are considered "active"
       if (alerts[id].hasScheduledActions()) {
         activeAlerts[id] = alerts[id];
@@ -119,7 +119,6 @@ function processAlertsHelper<
             }
             updateAlertFlappingHistory(flappingSettings, newAlerts[id], true);
           }
-          newAlerts[id].setMaintenanceWindowIds(maintenanceWindowIds);
         } else {
           // this alert did exist in previous run
           // calculate duration to date for active alerts
@@ -183,7 +182,7 @@ function processAlertsLimitReached<
   previouslyRecoveredAlerts: Record<string, Alert<State, Context>>,
   alertLimit: number,
   flappingSettings: RulesSettingsFlappingProperties,
-  maintenanceWindowIds: string[]
+  startedAt?: string | null
 ): ProcessAlertsResult<State, Context, ActionGroupIds, RecoveryActionGroupId> {
   const existingAlertIds = new Set(Object.keys(existingAlerts));
   const previouslyRecoveredAlertsIds = new Set(Object.keys(previouslyRecoveredAlerts));
@@ -193,7 +192,7 @@ function processAlertsLimitReached<
   // - pass through all existing alerts as active
   // - add any new alerts, up to the max allowed
 
-  const currentTime = new Date().toISOString();
+  const currentTime = startedAt ?? new Date().toISOString();
   const newAlerts: Record<string, Alert<State, Context, ActionGroupIds>> = {};
 
   // all existing alerts stay active
@@ -203,8 +202,8 @@ function processAlertsLimitReached<
 
   // update duration for existing alerts
   for (const id in activeAlerts) {
-    if (activeAlerts.hasOwnProperty(id)) {
-      if (alerts.hasOwnProperty(id)) {
+    if (Object.hasOwn(activeAlerts, id)) {
+      if (Object.hasOwn(alerts, id)) {
         activeAlerts[id] = alerts[id];
       }
       const state = existingAlerts[id].getState();
@@ -235,7 +234,7 @@ function processAlertsLimitReached<
 
   // look for new alerts and add until we hit capacity
   for (const id in alerts) {
-    if (alerts.hasOwnProperty(id) && alerts[id].hasScheduledActions()) {
+    if (Object.hasOwn(alerts, id) && alerts[id].hasScheduledActions()) {
       // if this alert did not exist in previous run, it is considered "new"
       if (!existingAlertIds.has(id)) {
         activeAlerts[id] = alerts[id];
@@ -251,8 +250,6 @@ function processAlertsLimitReached<
           }
           updateAlertFlappingHistory(flappingSettings, newAlerts[id], true);
         }
-
-        newAlerts[id].setMaintenanceWindowIds(maintenanceWindowIds);
 
         if (!hasCapacityForNewAlerts()) {
           break;

@@ -6,54 +6,51 @@
  */
 
 import type { IScopedClusterClient } from '@kbn/core/server';
-import type { DataViewsService } from '@kbn/data-views-plugin/common';
+import type { RuntimeField } from '@kbn/data-views-plugin/common';
 import type { Field, Aggregation } from '@kbn/ml-anomaly-utils';
 import {
   JOB_MAP_NODE_TYPES,
   type DeleteDataFrameAnalyticsWithIndexStatus,
 } from '@kbn/ml-data-frame-analytics-utils';
-import { ML_INTERNAL_BASE_PATH } from '../../common/constants/app';
+import type { CloudSetup } from '@kbn/cloud-plugin/server';
+import { dataViewCreateQuerySchema } from '@kbn/ml-data-view-utils/schemas/api_create_query_schema';
+import { createDataViewFn } from '@kbn/ml-data-view-utils/actions/create';
+import { deleteDataViewFn } from '@kbn/ml-data-view-utils/actions/delete';
+
+import { type MlFeatures, ML_INTERNAL_BASE_PATH } from '../../common/constants/app';
 import { wrapError } from '../client/error_wrapper';
 import { analyticsAuditMessagesProvider } from '../models/data_frame_analytics/analytics_audit_messages';
 import type { RouteInitialization } from '../types';
 import {
-  dataAnalyticsJobConfigSchema,
-  dataAnalyticsJobUpdateSchema,
-  dataAnalyticsEvaluateSchema,
-  dataAnalyticsExplainSchema,
-  analyticsIdSchema,
-  analyticsMapQuerySchema,
+  dataFrameAnalyticsJobConfigSchema,
+  dataFrameAnalyticsJobUpdateSchema,
+  dataFrameAnalyticsEvaluateSchema,
+  dataFrameAnalyticsExplainSchema,
+  dataFrameAnalyticsIdSchema,
+  dataFrameAnalyticsMapQuerySchema,
   stopsDataFrameAnalyticsJobQuerySchema,
   deleteDataFrameAnalyticsJobSchema,
-  jobsExistSchema,
-  analyticsQuerySchema,
-  analyticsNewJobCapsParamsSchema,
-  analyticsNewJobCapsQuerySchema,
-} from './schemas/data_analytics_schema';
+  dataFrameAnalyticsJobsExistSchema,
+  dataFrameAnalyticsQuerySchema,
+  dataFrameAnalyticsNewJobCapsParamsSchema,
+  dataFrameAnalyticsNewJobCapsQuerySchema,
+  type PutDataFrameAnalyticsResponseSchema,
+} from './schemas/data_frame_analytics_schema';
 import type { ExtendAnalyticsMapArgs } from '../models/data_frame_analytics/types';
-import { DataViewHandler } from '../models/data_frame_analytics/index_patterns';
 import { AnalyticsManager } from '../models/data_frame_analytics/analytics_manager';
 import { validateAnalyticsJob } from '../models/data_frame_analytics/validation';
 import { fieldServiceProvider } from '../models/job_service/new_job_caps/field_service';
 import { getAuthorizationHeader } from '../lib/request_authorization';
 import type { MlClient } from '../lib/ml_client';
 
-function getDataViewId(dataViewsService: DataViewsService, patternName: string) {
-  const iph = new DataViewHandler(dataViewsService);
-  return iph.getDataViewId(patternName);
-}
-
-function deleteDestDataViewById(dataViewsService: DataViewsService, dataViewId: string) {
-  const iph = new DataViewHandler(dataViewsService);
-  return iph.deleteDataViewById(dataViewId);
-}
-
 function getExtendedMap(
   mlClient: MlClient,
   client: IScopedClusterClient,
-  idOptions: ExtendAnalyticsMapArgs
+  idOptions: ExtendAnalyticsMapArgs,
+  enabledFeatures: MlFeatures,
+  cloud: CloudSetup
 ) {
-  const analytics = new AnalyticsManager(mlClient, client);
+  const analytics = new AnalyticsManager(mlClient, client, enabledFeatures, cloud);
   return analytics.extendAnalyticsMapForAnalyticsJob(idOptions);
 }
 
@@ -63,15 +60,12 @@ function getExtendedModelsMap(
   idOptions: {
     analyticsId?: string;
     modelId?: string;
-  }
+  },
+  enabledFeatures: MlFeatures,
+  cloud: CloudSetup
 ) {
-  const analytics = new AnalyticsManager(mlClient, client);
+  const analytics = new AnalyticsManager(mlClient, client, enabledFeatures, cloud);
   return analytics.extendModelsMap(idOptions);
-}
-
-export function getAnalyticsManager(mlClient: MlClient, client: IScopedClusterClient) {
-  const analytics = new AnalyticsManager(mlClient, client);
-  return analytics;
 }
 
 // replace the recursive field and agg references with a
@@ -95,7 +89,10 @@ function convertForStringify(aggs: Aggregation[], fields: Field[]): void {
 /**
  * Routes for the data frame analytics
  */
-export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: RouteInitialization) {
+export function dataFrameAnalyticsRoutes(
+  { router, mlLicense, routeGuard, getEnabledFeatures }: RouteInitialization,
+  cloud: CloudSetup
+) {
   async function userCanDeleteIndex(
     client: IScopedClusterClient,
     destinationIndex: string
@@ -118,16 +115,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
     return body?.has_all_requested === true;
   }
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {get} /internal/ml/data_frame/analytics Get analytics data
-   * @apiName GetDataFrameAnalytics
-   * @apiDescription Returns the list of data frame analytics jobs.
-   *
-   * @apiSuccess {Number} count
-   * @apiSuccess {Object[]} data_frame_analytics
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics`,
@@ -135,13 +122,15 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetDataFrameAnalytics'],
       },
+      summary: 'Gets data frame analytics',
+      description: 'Returns the list of data frame analytics jobs.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            query: analyticsQuerySchema,
+            query: dataFrameAnalyticsQuerySchema,
           },
         },
       },
@@ -160,15 +149,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {get} /internal/ml/data_frame/analytics/:analyticsId Get analytics data by id
-   * @apiName GetDataFrameAnalyticsById
-   * @apiDescription Returns the data frame analytics job.
-   *
-   * @apiSchema (params) analyticsIdSchema
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/{analyticsId}`,
@@ -176,14 +156,16 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetDataFrameAnalytics'],
       },
+      summary: 'Gets data frame analytics by id',
+      description: 'Returns the data frame analytics job by id.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
-            query: analyticsQuerySchema,
+            params: dataFrameAnalyticsIdSchema,
+            query: dataFrameAnalyticsQuerySchema,
           },
         },
       },
@@ -205,13 +187,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {get} /internal/ml/data_frame/analytics/_stats Get analytics stats
-   * @apiName GetDataFrameAnalyticsStats
-   * @apiDescription Returns data frame analytics jobs statistics.
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/_stats`,
@@ -219,6 +194,8 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetDataFrameAnalytics'],
       },
+      summary: 'Gets data frame analytics stats',
+      description: 'Returns the data frame analytics job statistics.',
     })
     .addVersion(
       {
@@ -237,15 +214,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {get} /internal/ml/data_frame/analytics/:analyticsId/_stats Get stats for requested analytics job
-   * @apiName GetDataFrameAnalyticsStatsById
-   * @apiDescription Returns data frame analytics job statistics.
-   *
-   * @apiSchema (params) analyticsIdSchema
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/{analyticsId}/_stats`,
@@ -253,13 +221,15 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetDataFrameAnalytics'],
       },
+      summary: 'Gets data frame analytics stats by id',
+      description: 'Returns the data frame analytics job statistics by id.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
+            params: dataFrameAnalyticsIdSchema,
           },
         },
       },
@@ -278,17 +248,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {put} /internal/ml/data_frame/analytics/:analyticsId Instantiate a data frame analytics job
-   * @apiName UpdateDataFrameAnalytics
-   * @apiDescription This API creates a data frame analytics job that performs an analysis
-   *                 on the source index and stores the outcome in a destination index.
-   *
-   * @apiSchema (params) analyticsIdSchema
-   * @apiSchema (body) dataAnalyticsJobConfigSchema
-   */
   router.versioned
     .put({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/{analyticsId}`,
@@ -296,46 +255,76 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canCreateDataFrameAnalytics'],
       },
+      summary: 'Updates data frame analytics job',
+      description:
+        'This API creates a data frame analytics job that performs an analysis on the source index and stores the outcome in a destination index.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
-            body: dataAnalyticsJobConfigSchema,
+            params: dataFrameAnalyticsIdSchema,
+            query: dataViewCreateQuerySchema,
+            body: dataFrameAnalyticsJobConfigSchema,
           },
         },
       },
-      routeGuard.fullLicenseAPIGuard(async ({ mlClient, request, response }) => {
-        try {
+      routeGuard.fullLicenseAPIGuard(
+        async ({ mlClient, request, response, getDataViewsService }) => {
           const { analyticsId } = request.params;
-          const body = await mlClient.putDataFrameAnalytics(
-            {
+          const { createDataView, timeFieldName } = request.query;
+
+          const fullResponse: PutDataFrameAnalyticsResponseSchema = {
+            dataFrameAnalyticsJobsCreated: [],
+            dataFrameAnalyticsJobsErrors: [],
+            dataViewsCreated: [],
+            dataViewsErrors: [],
+          };
+
+          try {
+            const resp = await mlClient.putDataFrameAnalytics(
+              {
+                id: analyticsId,
+                // @ts-expect-error @elastic-elasticsearch Data frame types incomplete
+                body: request.body,
+              },
+              getAuthorizationHeader(request)
+            );
+
+            if (resp.id && resp.create_time) {
+              fullResponse.dataFrameAnalyticsJobsCreated.push({ id: analyticsId });
+            } else {
+              fullResponse.dataFrameAnalyticsJobsErrors.push({
+                id: analyticsId,
+                error: wrapError(resp),
+              });
+            }
+          } catch (e) {
+            fullResponse.dataFrameAnalyticsJobsErrors.push({
               id: analyticsId,
-              // @ts-expect-error @elastic-elasticsearch Data frame types incomplete
-              body: request.body,
-            },
-            getAuthorizationHeader(request)
-          );
-          return response.ok({
-            body,
-          });
-        } catch (e) {
-          return response.customError(wrapError(e));
+              error: wrapError(e),
+            });
+          }
+
+          if (createDataView) {
+            const { dataViewsCreated, dataViewsErrors } = await createDataViewFn({
+              dataViewsService: await getDataViewsService(),
+              dataViewName: request.body.dest.index,
+              runtimeMappings: request.body.source.runtime_mappings as Record<string, RuntimeField>,
+              timeFieldName,
+              errorFallbackId: analyticsId,
+            });
+
+            fullResponse.dataViewsCreated = dataViewsCreated;
+            fullResponse.dataViewsErrors = dataViewsErrors;
+          }
+
+          return response.ok({ body: fullResponse });
         }
-      })
+      )
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {post} /internal/ml/data_frame/_evaluate Evaluate the data frame analytics for an annotated index
-   * @apiName EvaluateDataFrameAnalytics
-   * @apiDescription Evaluates the data frame analytics for an annotated index.
-   *
-   * @apiSchema (body) dataAnalyticsEvaluateSchema
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/_evaluate`,
@@ -343,13 +332,15 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetDataFrameAnalytics'],
       },
+      summary: 'Evaluates the data frame analytics',
+      description: 'Evaluates the data frame analytics for an annotated index.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            body: dataAnalyticsEvaluateSchema,
+            body: dataFrameAnalyticsEvaluateSchema,
           },
         },
       },
@@ -371,16 +362,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {post} /internal/ml/data_frame/_explain Explain a data frame analytics config
-   * @apiName ExplainDataFrameAnalytics
-   * @apiDescription This API provides explanations for a data frame analytics config
-   *                 that either exists already or one that has not been created yet.
-   *
-   * @apiSchema (body) dataAnalyticsExplainSchema
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/_explain`,
@@ -388,13 +369,16 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canCreateDataFrameAnalytics'],
       },
+      summary: 'Explains a data frame analytics job config',
+      description:
+        'This API provides explanations for a data frame analytics job config that either exists already or one that has not been created yet.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            body: dataAnalyticsExplainSchema,
+            body: dataFrameAnalyticsExplainSchema,
           },
         },
       },
@@ -415,15 +399,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {delete} /internal/ml/data_frame/analytics/:analyticsId Delete specified analytics job
-   * @apiName DeleteDataFrameAnalytics
-   * @apiDescription Deletes specified data frame analytics job.
-   *
-   * @apiSchema (params) analyticsIdSchema
-   */
   router.versioned
     .delete({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/{analyticsId}`,
@@ -431,13 +406,15 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canDeleteDataFrameAnalytics'],
       },
+      summary: 'Deletes data frame analytics job',
+      description: 'Deletes specified data frame analytics job.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
+            params: dataFrameAnalyticsIdSchema,
             query: deleteDataFrameAnalyticsJobSchema,
           },
         },
@@ -446,11 +423,11 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
         async ({ mlClient, client, request, response, getDataViewsService }) => {
           try {
             const { analyticsId } = request.params;
-            const { deleteDestIndex, deleteDestIndexPattern } = request.query;
+            const { deleteDestIndex, deleteDestDataView, force } = request.query;
             let destinationIndex: string | undefined;
             const analyticsJobDeleted: DeleteDataFrameAnalyticsWithIndexStatus = { success: false };
             const destIndexDeleted: DeleteDataFrameAnalyticsWithIndexStatus = { success: false };
-            const destIndexPatternDeleted: DeleteDataFrameAnalyticsWithIndexStatus = {
+            let destDataViewDeleted: DeleteDataFrameAnalyticsWithIndexStatus = {
               success: false,
             };
 
@@ -466,11 +443,11 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
                 destinationIndex = body.data_frame_analytics[0].dest.index;
               }
             } catch (e) {
-              // exist early if the job doesn't exist
+              // exit early if the job doesn't exist
               return response.customError(wrapError(e));
             }
 
-            if (deleteDestIndex || deleteDestIndexPattern) {
+            if (deleteDestIndex || deleteDestDataView) {
               // If user checks box to delete the destinationIndex associated with the job
               if (destinationIndex && deleteDestIndex) {
                 // Verify if user has privilege to delete the destination index
@@ -490,18 +467,12 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
                 }
               }
 
-              // Delete the index pattern if there's an index pattern that matches the name of dest index
-              if (destinationIndex && deleteDestIndexPattern) {
-                try {
-                  const dataViewsService = await getDataViewsService();
-                  const dataViewId = await getDataViewId(dataViewsService, destinationIndex);
-                  if (dataViewId) {
-                    await deleteDestDataViewById(dataViewsService, dataViewId);
-                  }
-                  destIndexPatternDeleted.success = true;
-                } catch (deleteDestIndexPatternError) {
-                  destIndexPatternDeleted.error = deleteDestIndexPatternError;
-                }
+              // Delete the data view if there's a data view that matches the name of dest index
+              if (destinationIndex && deleteDestDataView) {
+                destDataViewDeleted = await deleteDataViewFn({
+                  dataViewsService: await getDataViewsService(),
+                  dataViewName: destinationIndex,
+                });
               }
             }
             // Grab the target index from the data frame analytics job id
@@ -510,6 +481,7 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
             try {
               await mlClient.deleteDataFrameAnalytics({
                 id: analyticsId,
+                force,
               });
               analyticsJobDeleted.success = true;
             } catch ({ body }) {
@@ -518,7 +490,7 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
             const results = {
               analyticsJobDeleted,
               destIndexDeleted,
-              destIndexPatternDeleted,
+              destDataViewDeleted,
             };
             return response.ok({
               body: results,
@@ -530,15 +502,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       )
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {post} /internal/ml/data_frame/analytics/:analyticsId/_start Start specified analytics job
-   * @apiName StartDataFrameAnalyticsJob
-   * @apiDescription Starts a data frame analytics job.
-   *
-   * @apiSchema (params) analyticsIdSchema
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/{analyticsId}/_start`,
@@ -546,13 +509,15 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canStartStopDataFrameAnalytics'],
       },
+      summary: 'Starts specified analytics job',
+      description: 'Starts a data frame analytics job.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
+            params: dataFrameAnalyticsIdSchema,
           },
         },
       },
@@ -571,16 +536,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {post} /internal/ml/data_frame/analytics/:analyticsId/_stop Stop specified analytics job
-   * @apiName StopsDataFrameAnalyticsJob
-   * @apiDescription Stops a data frame analytics job.
-   *
-   * @apiSchema (params) analyticsIdSchema
-   * @apiSchema (query) stopsDataFrameAnalyticsJobQuerySchema
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/{analyticsId}/_stop`,
@@ -588,13 +543,15 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canStartStopDataFrameAnalytics'],
       },
+      summary: 'Stops specified analytics job',
+      description: 'Stops a data frame analytics job.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
+            params: dataFrameAnalyticsIdSchema,
             query: stopsDataFrameAnalyticsJobQuerySchema,
           },
         },
@@ -615,15 +572,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {post} /internal/ml/data_frame/analytics/:analyticsId/_update Update specified analytics job
-   * @apiName UpdateDataFrameAnalyticsJob
-   * @apiDescription Updates a data frame analytics job.
-   *
-   * @apiSchema (params) analyticsIdSchema
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/{analyticsId}/_update`,
@@ -631,14 +579,16 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canCreateDataFrameAnalytics'],
       },
+      summary: 'Updates specified analytics job',
+      description: 'Updates a data frame analytics job.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
-            body: dataAnalyticsJobUpdateSchema,
+            params: dataFrameAnalyticsIdSchema,
+            body: dataFrameAnalyticsJobUpdateSchema,
           },
         },
       },
@@ -661,15 +611,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {get} /internal/ml/data_frame/analytics/:analyticsId/messages Get analytics job messages
-   * @apiName GetDataFrameAnalyticsMessages
-   * @apiDescription Returns the list of audit messages for data frame analytics jobs.
-   *
-   * @apiSchema (params) analyticsIdSchema
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/{analyticsId}/messages`,
@@ -677,13 +618,15 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetDataFrameAnalytics'],
       },
+      summary: 'Gets data frame analytics messages',
+      description: 'Returns the list of audit messages for data frame analytics jobs.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
+            params: dataFrameAnalyticsIdSchema,
           },
         },
       },
@@ -702,16 +645,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {post} /internal/ml/data_frame/analytics/jobs_exist Check whether jobs exist in current or any space
-   * @apiName JobsExist
-   * @apiDescription Checks if each of the jobs in the specified list of IDs exists.
-   *                 If allSpaces is true, the check will look across all spaces.
-   *
-   * @apiSchema (params) jobsExistSchema
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/jobs_exist`,
@@ -719,20 +652,23 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetDataFrameAnalytics'],
       },
+      summary: 'Checks if jobs exist',
+      description:
+        'Checks if each of the jobs in the specified list of IDs exists. If allSpaces is true, the check will look across all spaces.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            body: jobsExistSchema,
+            body: dataFrameAnalyticsJobsExistSchema,
           },
         },
       },
       routeGuard.fullLicenseAPIGuard(async ({ client, mlClient, request, response }) => {
         try {
           const { analyticsIds, allSpaces } = request.body;
-          const results: { [id: string]: { exists: boolean } } = {};
+          const results: { [id: string]: { exists: boolean } } = Object.create(null);
           for (const id of analyticsIds) {
             try {
               const body = allSpaces
@@ -760,15 +696,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {get} /internal/ml/data_frame/analytics/map/:analyticsId Get objects leading up to analytics job
-   * @apiName GetDataFrameAnalyticsIdMap
-   * @apiDescription Returns map of objects leading up to analytics job.
-   *
-   * @apiParam {String} analyticsId Analytics ID.
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/map/{analyticsId}`,
@@ -776,14 +703,16 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetDataFrameAnalytics'],
       },
+      summary: 'Gets a data frame analytics jobs map',
+      description: 'Returns map of objects leading up to analytics job.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsIdSchema,
-            query: analyticsMapQuerySchema,
+            params: dataFrameAnalyticsIdSchema,
+            query: dataFrameAnalyticsMapQuerySchema,
           },
         },
       },
@@ -795,16 +724,28 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
 
           let results;
           if (treatAsRoot === 'true' || treatAsRoot === true) {
-            // @ts-expect-error never used as analyticsId
-            results = await getExtendedMap(mlClient, client, {
-              analyticsId: type !== JOB_MAP_NODE_TYPES.INDEX ? analyticsId : undefined,
-              index: type === JOB_MAP_NODE_TYPES.INDEX ? analyticsId : undefined,
-            });
+            results = await getExtendedMap(
+              mlClient,
+              client,
+              // @ts-expect-error never used as analyticsId
+              {
+                analyticsId: type !== JOB_MAP_NODE_TYPES.INDEX ? analyticsId : undefined,
+                index: type === JOB_MAP_NODE_TYPES.INDEX ? analyticsId : undefined,
+              },
+              getEnabledFeatures(),
+              cloud
+            );
           } else {
-            results = await getExtendedModelsMap(mlClient, client, {
-              analyticsId: type !== JOB_MAP_NODE_TYPES.TRAINED_MODEL ? analyticsId : undefined,
-              modelId: type === JOB_MAP_NODE_TYPES.TRAINED_MODEL ? analyticsId : undefined,
-            });
+            results = await getExtendedModelsMap(
+              mlClient,
+              client,
+              {
+                analyticsId: type !== JOB_MAP_NODE_TYPES.TRAINED_MODEL ? analyticsId : undefined,
+                modelId: type === JOB_MAP_NODE_TYPES.TRAINED_MODEL ? analyticsId : undefined,
+              },
+              getEnabledFeatures(),
+              cloud
+            );
           }
 
           return response.ok({
@@ -816,13 +757,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {get} /internal/ml/data_frame/analytics/new_job_caps/:indexPattern Get fields for a pattern of indices used for analytics
-   * @apiName AnalyticsNewJobCaps
-   * @apiDescription Retrieve the index fields for analytics
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/new_job_caps/{indexPattern}`,
@@ -830,14 +764,16 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canGetJobs'],
       },
+      summary: 'Get fields for a pattern of indices used for analytics',
+      description: 'Returns the fields for a pattern of indices used for analytics.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            params: analyticsNewJobCapsParamsSchema,
-            query: analyticsNewJobCapsQuerySchema,
+            params: dataFrameAnalyticsNewJobCapsParamsSchema,
+            query: dataFrameAnalyticsNewJobCapsQuerySchema,
           },
         },
       },
@@ -869,15 +805,6 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       })
     );
 
-  /**
-   * @apiGroup DataFrameAnalytics
-   *
-   * @api {post} /internal/ml/data_frame/validate Validate the data frame analytics job config
-   * @apiName ValidateDataFrameAnalytics
-   * @apiDescription Validates the data frame analytics job config.
-   *
-   * @apiSchema (body) dataAnalyticsJobConfigSchema
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/data_frame/analytics/validate`,
@@ -885,13 +812,15 @@ export function dataFrameAnalyticsRoutes({ router, mlLicense, routeGuard }: Rout
       options: {
         tags: ['access:ml:canCreateDataFrameAnalytics'],
       },
+      summary: 'Validates the data frame analytics job config',
+      description: 'Validates the data frame analytics job config.',
     })
     .addVersion(
       {
         version: '1',
         validate: {
           request: {
-            body: dataAnalyticsJobConfigSchema,
+            body: dataFrameAnalyticsJobConfigSchema,
           },
         },
       },

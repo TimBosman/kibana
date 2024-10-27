@@ -5,6 +5,12 @@
  * 2.0.
  */
 
+import type { OnBoardingDefaultSolution } from '@kbn/cloud-plugin/common';
+
+import type { SOLUTION_VIEW_CLASSIC } from '../../constants';
+
+export type SolutionView = OnBoardingDefaultSolution | typeof SOLUTION_VIEW_CLASSIC;
+
 /**
  * A Space.
  */
@@ -58,6 +64,11 @@ export interface Space {
    * @private
    */
   _reserved?: boolean;
+
+  /**
+   * Solution selected for this space.
+   */
+  solution?: SolutionView;
 }
 
 /**

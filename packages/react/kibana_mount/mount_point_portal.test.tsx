@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { FC } from 'react';
@@ -56,6 +57,23 @@ describe('MountPointPortal', () => {
     await refresh();
 
     expect(setMountPoint).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls the provided `setMountPoint` with undefined during unmount', async () => {
+    dom = mount(
+      <MountPointPortal setMountPoint={setMountPoint}>
+        <span>portal content</span>
+      </MountPointPortal>
+    );
+
+    await refresh();
+
+    dom.unmount();
+
+    await refresh();
+
+    expect(setMountPoint).toHaveBeenCalledTimes(2);
+    expect(setMountPoint).toHaveBeenLastCalledWith(undefined);
   });
 
   it('renders the portal content when calling the mountPoint ', async () => {
@@ -127,7 +145,7 @@ describe('MountPointPortal', () => {
 
   it('updates the content of the portal element when the content of MountPointPortal changes', async () => {
     const Wrapper: FC<{
-      setMount: (mountPoint: MountPoint<HTMLElement>) => void;
+      setMount: (mountPoint: MountPoint<HTMLElement> | undefined) => void;
       portalContent: string;
     }> = ({ setMount, portalContent }) => {
       return (

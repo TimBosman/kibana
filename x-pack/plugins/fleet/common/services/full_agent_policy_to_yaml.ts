@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import type { safeDump } from 'js-yaml';
+import type { dump } from 'js-yaml';
 
 import type { FullAgentPolicy } from '../types';
 
@@ -28,18 +28,23 @@ const POLICY_KEYS_ORDER = [
   'signed',
 ];
 
-export const fullAgentPolicyToYaml = (policy: FullAgentPolicy, toYaml: typeof safeDump): string => {
+export const fullAgentPolicyToYaml = (
+  policy: FullAgentPolicy,
+  toYaml: typeof dump,
+  apiKey?: string
+): string => {
   const yaml = toYaml(policy, {
     skipInvalid: true,
     sortKeys: _sortYamlKeys,
   });
+  const formattedYml = apiKey ? replaceApiKey(yaml, apiKey) : yaml;
 
-  if (!policy?.secret_references?.length) return yaml;
+  if (!policy?.secret_references?.length) return formattedYml;
 
-  return _formatSecrets(policy.secret_references, yaml);
+  return _formatSecrets(policy.secret_references, formattedYml);
 };
 
-function _sortYamlKeys(keyA: string, keyB: string) {
+export function _sortYamlKeys(keyA: string, keyB: string) {
   const indexA = POLICY_KEYS_ORDER.indexOf(keyA);
   const indexB = POLICY_KEYS_ORDER.indexOf(keyB);
   if (indexA >= 0 && indexB < 0) {
@@ -66,4 +71,9 @@ function _formatSecrets(
   });
 
   return formattedText;
+}
+
+function replaceApiKey(ymlText: string, apiKey: string) {
+  const regex = new RegExp(/\'\${API_KEY}\'/, 'g');
+  return ymlText.replace(regex, `'${apiKey}'`);
 }

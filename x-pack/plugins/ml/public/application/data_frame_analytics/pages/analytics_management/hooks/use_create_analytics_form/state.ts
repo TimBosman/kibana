@@ -16,12 +16,13 @@ import {
   type DataFrameAnalysisConfigType,
   type FeatureProcessor,
 } from '@kbn/ml-data-frame-analytics-utils';
-import { DeepPartial, DeepReadonly } from '../../../../../../../common/types/common';
+import type { DeepPartial } from '@kbn/utility-types';
+import type { DeepReadonly } from '../../../../../../../common/types/common';
 import { checkPermission } from '../../../../../capabilities/check_capabilities';
 import { mlNodesAvailable } from '../../../../../ml_nodes_check';
 
 import { defaultSearchQuery } from '../../../../common/analytics';
-import { CloneDataFrameAnalyticsConfig } from '../../components/action_clone';
+import type { CloneDataFrameAnalyticsConfig } from '../../components/action_clone';
 
 export enum DEFAULT_MODEL_MEMORY_LIMIT {
   regression = '100mb',
@@ -35,13 +36,10 @@ export const UNSET_CONFIG_ITEM = '--';
 
 export type EsIndexName = string;
 export type DependentVariable = string;
-export type IndexPatternTitle = string;
+export type DataViewTitle = string;
 export type AnalyticsJobType = DataFrameAnalysisConfigType | undefined;
-type IndexPatternId = string;
-export type SourceIndexMap = Record<
-  IndexPatternTitle,
-  { label: IndexPatternTitle; value: IndexPatternId }
->;
+type DataViewId = string;
+export type SourceIndexMap = Record<DataViewTitle, { label: DataViewTitle; value: DataViewId }>;
 
 export interface FormMessage {
   error?: string;
@@ -54,8 +52,8 @@ export interface State {
   disableSwitchToForm: boolean;
   form: {
     alpha: undefined | number;
-    computeFeatureInfluence: string;
-    createIndexPattern: boolean;
+    computeFeatureInfluence: boolean;
+    createDataView: boolean;
     classAssignmentObjective: undefined | string;
     dependentVariable: DependentVariable;
     description: string;
@@ -63,7 +61,7 @@ export interface State {
     destinationIndexNameExists: boolean;
     destinationIndexNameEmpty: boolean;
     destinationIndexNameValid: boolean;
-    destinationIndexPatternTitleExists: boolean;
+    destinationDataViewTitleExists: boolean;
     downsampleFactor: undefined | number;
     earlyStoppingEnabled: undefined | boolean;
     eta: undefined | number;
@@ -114,13 +112,13 @@ export interface State {
     sourceIndexNameValid: boolean;
     sourceIndexContainsNumericalFields: boolean;
     sourceIndexFieldsCheckFailed: boolean;
-    standardizationEnabled: undefined | string;
+    standardizationEnabled: undefined | boolean;
     timeFieldName: undefined | string;
     trainingPercent: number;
     useEstimatedMml: boolean;
   };
   disabled: boolean;
-  indexPatternsMap: SourceIndexMap;
+  dataViewsMap: SourceIndexMap;
   isAdvancedEditorEnabled: boolean;
   isAdvancedEditorValidJson: boolean;
   hasSwitchedToEditor: boolean;
@@ -140,8 +138,8 @@ export const getInitialState = (): State => ({
   disableSwitchToForm: false,
   form: {
     alpha: undefined,
-    computeFeatureInfluence: 'true',
-    createIndexPattern: true,
+    computeFeatureInfluence: true,
+    createDataView: true,
     classAssignmentObjective: undefined,
     dependentVariable: '',
     description: '',
@@ -149,7 +147,7 @@ export const getInitialState = (): State => ({
     destinationIndexNameExists: false,
     destinationIndexNameEmpty: true,
     destinationIndexNameValid: false,
-    destinationIndexPatternTitleExists: false,
+    destinationDataViewTitleExists: false,
     earlyStoppingEnabled: undefined,
     downsampleFactor: undefined,
     eta: undefined,
@@ -200,7 +198,7 @@ export const getInitialState = (): State => ({
     sourceIndexNameValid: false,
     sourceIndexContainsNumericalFields: true,
     sourceIndexFieldsCheckFailed: false,
-    standardizationEnabled: 'true',
+    standardizationEnabled: true,
     timeFieldName: undefined,
     trainingPercent: 80,
     useEstimatedMml: true,
@@ -210,7 +208,7 @@ export const getInitialState = (): State => ({
     !mlNodesAvailable() ||
     !checkPermission('canCreateDataFrameAnalytics') ||
     !checkPermission('canStartStopDataFrameAnalytics'),
-  indexPatternsMap: {},
+  dataViewsMap: {},
   isAdvancedEditorEnabled: false,
   isAdvancedEditorValidJson: true,
   hasSwitchedToEditor: false,
@@ -391,7 +389,7 @@ export function getFormStateFromJobConfig(
   const analysisConfig = analyticsJobConfig.analysis[jobType];
 
   for (const key in analysisConfig) {
-    if (analysisConfig.hasOwnProperty(key)) {
+    if (Object.hasOwn(analysisConfig, key)) {
       const camelCased = toCamelCase(key);
       // @ts-ignore
       resultState[camelCased] = analysisConfig[key];

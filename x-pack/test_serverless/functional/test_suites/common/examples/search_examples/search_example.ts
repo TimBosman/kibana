@@ -10,33 +10,34 @@ import type { FtrProviderContext } from '../../../../ftr_provider_context';
 
 export default function ({ getService, getPageObjects }: FtrProviderContext) {
   const testSubjects = getService('testSubjects');
-  const PageObjects = getPageObjects(['common', 'timePicker']);
+  const PageObjects = getPageObjects(['common', 'timePicker', 'svlCommonPage']);
   const retry = getService('retry');
   const comboBox = getService('comboBox');
   const toasts = getService('toasts');
 
   describe('Search example', () => {
-    describe('with bfetch', () => {
-      testSearchExample();
+    before(async () => {
+      await PageObjects.svlCommonPage.loginAsAdmin();
     });
+
+    // bfetch is disabled in serverless
+    // describe('with bfetch', () => {
+    //   testSearchExample();
+    // });
 
     describe('no bfetch', () => {
-      const kibanaServer = getService('kibanaServer');
-      before(async () => {
-        await kibanaServer.uiSettings.replace({
-          'bfetch:disable': true,
-        });
-      });
-      after(async () => {
-        await kibanaServer.uiSettings.unset('bfetch:disable');
-      });
+      // No need to disable since it is disabled in serverless.yml
+      // const kibanaServer = getService('kibanaServer');
+      // before(async () => {
+      //   await kibanaServer.uiSettings.replace({
+      //     'bfetch:disable': true,
+      //   });
+      // });
+      // after(async () => {
+      //   await kibanaServer.uiSettings.unset('bfetch:disable');
+      // });
+      const appId = 'searchExamples';
 
-      testSearchExample();
-    });
-
-    const appId = 'searchExamples';
-
-    function testSearchExample() {
       before(async function () {
         await PageObjects.common.navigateToApp(appId, { insertTimestamp: false });
         await comboBox.setCustom('dataViewSelector', 'logstash-*');
@@ -49,9 +50,9 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
       });
 
       beforeEach(async () => {
-        await toasts.dismissAllToasts();
+        await toasts.dismissAll();
         await retry.waitFor('toasts gone', async () => {
-          return (await toasts.getToastCount()) === 0;
+          return (await toasts.getCount()) === 0;
         });
       });
 
@@ -81,17 +82,19 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
         });
       });
 
-      it('should handle warnings', async () => {
+      // TODO: This test fails in Serverless because it relies on
+      // `error_query` which doesn't seem to be supported in Serverless
+      it.skip('should handle warnings', async () => {
         await testSubjects.click('searchWithWarning');
         await retry.waitFor('', async () => {
-          const toastCount = await toasts.getToastCount();
+          const toastCount = await toasts.getCount();
           return toastCount > 1;
         });
-        const warningToast = await toasts.getToastElement(2);
+        const warningToast = await toasts.getElementByIndex(2);
         const textEl = await warningToast.findByTestSubject('euiToastBody');
         const text: string = await textEl.getVisibleText();
         expect(text).to.contain('Watch out!');
       });
-    }
+    });
   });
 }

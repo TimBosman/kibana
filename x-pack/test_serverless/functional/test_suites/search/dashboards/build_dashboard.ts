@@ -16,6 +16,7 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
     'common',
     'header',
     'lens',
+    'svlCommonPage',
   ]);
 
   const pieChart = getService('pieChart');
@@ -27,6 +28,8 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
 
   describe('Building a new dashboard', function () {
     before(async () => {
+      await PageObjects.svlCommonPage.loginWithPrivilegedRole();
+      await kibanaServer.savedObjects.cleanStandardList();
       await esArchiver.loadIfNeeded('x-pack/test/functional/es_archives/logstash_functional');
       await kibanaServer.importExport.load(
         'x-pack/test/functional/fixtures/kbn_archiver/lens/lens_basic.json'
@@ -42,6 +45,7 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
       await kibanaServer.importExport.unload(
         'x-pack/test/functional/fixtures/kbn_archiver/lens/lens_basic.json'
       );
+      await kibanaServer.savedObjects.cleanStandardList();
     });
 
     it('can add a lens panel by value', async () => {
@@ -52,9 +56,8 @@ export default function ({ getPageObjects, getService }: FtrProviderContext) {
 
     it('can edit a Lens panel by value and save changes', async () => {
       await PageObjects.dashboard.waitForRenderComplete();
-      await dashboardPanelActions.openContextMenu();
       await dashboardPanelActions.clickEdit();
-      await PageObjects.lens.switchToVisualization('donut');
+      await PageObjects.lens.switchToVisualization('pie');
       await PageObjects.lens.saveAndReturn();
       await PageObjects.dashboard.waitForRenderComplete();
 

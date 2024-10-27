@@ -7,7 +7,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { Subject, Observable } from 'rxjs';
-import { take, bufferCount, skip, map } from 'rxjs/operators';
+import { take, bufferCount, skip, map } from 'rxjs';
 import { ConcreteTaskInstance, TaskStatus } from '../task';
 import {
   asTaskRunEvent,
@@ -647,6 +647,7 @@ const mockTaskRunEvent = (
       persistence:
         persistence ?? (task.schedule ? TaskPersistence.Recurring : TaskPersistence.NonRecurring),
       result,
+      isExpired: false,
     }),
     timing
   );

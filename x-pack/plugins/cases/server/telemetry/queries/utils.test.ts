@@ -6,6 +6,7 @@
  */
 
 import { savedObjectsRepositoryMock } from '@kbn/core/server/mocks';
+import { CustomFieldTypes } from '../../../common/types/domain';
 import type {
   AttachmentAggregationResult,
   AttachmentFrameworkAggsResult,
@@ -21,12 +22,14 @@ import {
   getCountsAggregationQuery,
   getCountsAndMaxData,
   getCountsFromBuckets,
+  getCustomFieldsTelemetry,
   getMaxBucketOnCaseAggregationQuery,
   getOnlyAlertsCommentsFilter,
   getOnlyConnectorsFilter,
   getReferencesAggregationQuery,
   getSolutionValues,
 } from './utils';
+import { TelemetrySavedObjectsClient } from '../telemetry_saved_objects_client';
 
 describe('utils', () => {
   describe('getSolutionValues', () => {
@@ -1015,7 +1018,12 @@ describe('utils', () => {
     });
 
     it('returns the correct counts and max data', async () => {
-      const res = await getCountsAndMaxData({ savedObjectsClient, savedObjectType: 'test' });
+      const telemetrySavedObjectsClient = new TelemetrySavedObjectsClient(savedObjectsClient);
+
+      const res = await getCountsAndMaxData({
+        savedObjectsClient: telemetrySavedObjectsClient,
+        savedObjectType: 'test',
+      });
       expect(res).toEqual({
         all: {
           total: 5,
@@ -1028,6 +1036,7 @@ describe('utils', () => {
     });
 
     it('returns zero data if the response aggregation is not as expected', async () => {
+      const telemetrySavedObjectsClient = new TelemetrySavedObjectsClient(savedObjectsClient);
       savedObjectsClient.find.mockResolvedValue({
         total: 5,
         saved_objects: [],
@@ -1035,7 +1044,10 @@ describe('utils', () => {
         page: 1,
       });
 
-      const res = await getCountsAndMaxData({ savedObjectsClient, savedObjectType: 'test' });
+      const res = await getCountsAndMaxData({
+        savedObjectsClient: telemetrySavedObjectsClient,
+        savedObjectType: 'test',
+      });
       expect(res).toEqual({
         all: {
           total: 5,
@@ -1048,7 +1060,13 @@ describe('utils', () => {
     });
 
     it('should call find with correct arguments', async () => {
-      await getCountsAndMaxData({ savedObjectsClient, savedObjectType: 'test' });
+      const telemetrySavedObjectsClient = new TelemetrySavedObjectsClient(savedObjectsClient);
+
+      await getCountsAndMaxData({
+        savedObjectsClient: telemetrySavedObjectsClient,
+        savedObjectType: 'test',
+      });
+
       expect(savedObjectsClient.find).toBeCalledWith({
         aggs: {
           counts: {
@@ -1102,6 +1120,7 @@ describe('utils', () => {
         page: 0,
         perPage: 0,
         type: 'test',
+        namespaces: ['*'],
       });
     });
   });
@@ -1197,6 +1216,63 @@ describe('utils', () => {
         ],
         function: 'is',
         type: 'function',
+      });
+    });
+  });
+
+  describe('getCustomFieldsTelemetry', () => {
+    const customFieldsMock = [
+      {
+        key: 'foobar1',
+        label: 'foobar1',
+        type: CustomFieldTypes.TEXT,
+        required: false,
+      },
+      {
+        key: 'foobar2',
+        label: 'foobar2',
+        type: CustomFieldTypes.TOGGLE,
+        required: true,
+      },
+      {
+        key: 'foobar3',
+        label: 'foobar3',
+        type: 'foo',
+        required: true,
+      },
+      {
+        key: 'foobar4',
+        label: 'foobar4',
+        type: CustomFieldTypes.TOGGLE,
+        required: true,
+      },
+    ];
+
+    it('returns customFields telemetry correctly', () => {
+      expect(getCustomFieldsTelemetry(customFieldsMock)).toEqual({
+        totalsByType: {
+          text: 1,
+          toggle: 2,
+          foo: 1,
+        },
+        totals: 4,
+        required: 3,
+      });
+    });
+
+    it('returns correctly when customFields undefined', () => {
+      expect(getCustomFieldsTelemetry(undefined)).toEqual({
+        totalsByType: {},
+        totals: 0,
+        required: 0,
+      });
+    });
+
+    it('returns correctly when customFields empty', () => {
+      expect(getCustomFieldsTelemetry([])).toEqual({
+        totalsByType: {},
+        totals: 0,
+        required: 0,
       });
     });
   });

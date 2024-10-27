@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { SavedObjectUnsanitizedDoc } from '@kbn/core-saved-objects-server';
@@ -153,5 +154,41 @@ describe('downgradeRequired', () => {
     const latestVersions = {} as Record<TransformType, string>;
 
     expect(downgradeRequired(doc, latestVersions)).toEqual(false);
+  });
+
+  it('returns true when targetTypeVersion is specified and lower than the document version', () => {
+    const doc = createDoc({
+      typeMigrationVersion: '8.0.0',
+    });
+    const latestVersions = {
+      [TransformType.Migrate]: '8.5.0',
+    } as Record<TransformType, string>;
+    const targetTypeVersion = '7.9.0';
+
+    expect(downgradeRequired(doc, latestVersions, targetTypeVersion)).toEqual(true);
+  });
+
+  it('returns false when targetTypeVersion is specified and higher than the document version', () => {
+    const doc = createDoc({
+      typeMigrationVersion: '8.0.0',
+    });
+    const latestVersions = {
+      [TransformType.Migrate]: '7.9.0',
+    } as Record<TransformType, string>;
+    const targetTypeVersion = '8.5.0';
+
+    expect(downgradeRequired(doc, latestVersions, targetTypeVersion)).toEqual(false);
+  });
+
+  it('returns false when targetTypeVersion is specified and the same as the document version', () => {
+    const doc = createDoc({
+      typeMigrationVersion: '8.0.0',
+    });
+    const latestVersions = {
+      [TransformType.Migrate]: '7.9.0',
+    } as Record<TransformType, string>;
+    const targetTypeVersion = '8.0.0';
+
+    expect(downgradeRequired(doc, latestVersions, targetTypeVersion)).toEqual(false);
   });
 });

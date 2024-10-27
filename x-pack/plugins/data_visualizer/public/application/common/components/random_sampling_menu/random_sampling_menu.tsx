@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, useCallback, useMemo, useState } from 'react';
+import type { FC } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import useObservable from 'react-use/lib/useObservable';
 import { i18n } from '@kbn/i18n';
 import {
@@ -18,22 +19,24 @@ import {
   EuiSelect,
   EuiSpacer,
 } from '@elastic/eui';
-import { RandomSampler } from '@kbn/ml-random-sampler-utils';
+import type { RandomSampler } from '@kbn/ml-random-sampler-utils';
+import { getDataTestSubject } from '../../util/get_data_test_subject';
 import { RandomSamplerRangeSlider } from './random_sampler_range_slider';
+import type { RandomSamplerOption } from '../../../index_data_visualizer/constants/random_sampler';
 import {
   MIN_SAMPLER_PROBABILITY,
   RANDOM_SAMPLER_OPTION,
   RANDOM_SAMPLER_SELECT_OPTIONS,
-  RandomSamplerOption,
 } from '../../../index_data_visualizer/constants/random_sampler';
 import { ProbabilityUsedMessage } from './probability_used';
 
 interface Props {
   randomSampler: RandomSampler;
   reload: () => void;
+  id?: string;
 }
 
-export const SamplingMenu: FC<Props> = ({ randomSampler, reload }) => {
+export const SamplingMenu: FC<Props> = ({ randomSampler, reload, id }) => {
   const [showSamplingOptionsPopover, setShowSamplingOptionsPopover] = useState(false);
 
   const samplingProbability = useObservable(
@@ -129,13 +132,15 @@ export const SamplingMenu: FC<Props> = ({ randomSampler, reload }) => {
 
   return (
     <EuiPopover
-      data-test-subj="aiopsRandomSamplerOptionsPopover"
+      data-test-subj={getDataTestSubject('aiopsRandomSamplerOptionsPopover', id)}
       id="aiopsSamplingOptions"
       button={
         <EuiButtonEmpty
+          data-test-subj={getDataTestSubject('aiopsRandomSamplerOptionsButton', id)}
           onClick={() => setShowSamplingOptionsPopover(!showSamplingOptionsPopover)}
           iconSide="right"
           iconType="arrowDown"
+          size="s"
         >
           {buttonText}
         </EuiButtonEmpty>
@@ -152,7 +157,7 @@ export const SamplingMenu: FC<Props> = ({ randomSampler, reload }) => {
         <EuiSpacer size="m" />
 
         <EuiFormRow
-          data-test-subj="aiopsRandomSamplerOptionsFormRow"
+          data-test-subj={getDataTestSubject('aiopsRandomSamplerOptionsFormRow', id)}
           label={i18n.translate(
             'xpack.dataVisualizer.randomSamplerSettingsPopUp.randomSamplerRowLabel',
             {
@@ -161,7 +166,7 @@ export const SamplingMenu: FC<Props> = ({ randomSampler, reload }) => {
           )}
         >
           <EuiSelect
-            data-test-subj="aiopsRandomSamplerOptionsSelect"
+            data-test-subj={getDataTestSubject('aiopsRandomSamplerOptionsSelect', id)}
             options={RANDOM_SAMPLER_SELECT_OPTIONS}
             value={randomSamplerPreference}
             onChange={(e) => setRandomSamplerPreference(e.target.value as RandomSamplerOption)}

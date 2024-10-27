@@ -6,21 +6,35 @@
  */
 
 import { Observable } from 'rxjs';
+import { Logger } from '@kbn/core/server';
 import { TaskManagerConfig } from '../config';
 import { Metrics, createMetricsAggregators, createMetricsStream } from './metrics_stream';
 import { TaskPollingLifecycle } from '../polling_lifecycle';
+import { TaskManagerMetricsCollector } from './task_metrics_collector';
 export type { Metrics } from './metrics_stream';
 
-export function metricsStream(
-  config: TaskManagerConfig,
-  resetMetrics$: Observable<boolean>,
-  taskPollingLifecycle?: TaskPollingLifecycle
-): Observable<Metrics> {
+interface MetricsStreamOpts {
+  config: TaskManagerConfig;
+  logger: Logger;
+  reset$: Observable<boolean>; // emits when counter metrics should be reset
+  taskPollingLifecycle?: TaskPollingLifecycle; // subscribe to task lifecycle events
+  taskManagerMetricsCollector?: TaskManagerMetricsCollector; // subscribe to collected task manager metrics
+}
+
+export function metricsStream({
+  config,
+  reset$,
+  logger,
+  taskPollingLifecycle,
+  taskManagerMetricsCollector,
+}: MetricsStreamOpts): Observable<Metrics> {
   return createMetricsStream(
     createMetricsAggregators({
       config,
-      resetMetrics$,
+      logger,
+      reset$,
       taskPollingLifecycle,
+      taskManagerMetricsCollector,
     })
   );
 }

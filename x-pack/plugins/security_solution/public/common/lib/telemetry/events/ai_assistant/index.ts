@@ -45,6 +45,33 @@ export const assistantMessageSentEvent: TelemetryEvent = {
         optional: false,
       },
     },
+    actionTypeId: {
+      type: 'keyword',
+      _meta: {
+        description: 'Kibana connector type',
+        optional: false,
+      },
+    },
+    model: {
+      type: 'keyword',
+      _meta: {
+        description: 'LLM model',
+        optional: true,
+      },
+    },
+    provider: {
+      type: 'keyword',
+      _meta: {
+        description: 'OpenAI provider',
+        optional: true,
+      },
+    },
+    isEnabledKnowledgeBase: {
+      type: 'boolean',
+      _meta: {
+        description: 'Is knowledge base enabled',
+      },
+    },
   },
 };
 
@@ -63,6 +90,26 @@ export const assistantQuickPrompt: TelemetryEvent = {
       _meta: {
         description: 'Title of the quick prompt',
         optional: false,
+      },
+    },
+  },
+};
+
+export const assistantSettingToggledEvent: TelemetryEvent = {
+  eventType: TelemetryEventTypes.AssistantSettingToggled,
+  schema: {
+    alertsCountUpdated: {
+      type: 'boolean',
+      _meta: {
+        description: 'Did alerts count update',
+        optional: true,
+      },
+    },
+    assistantStreamingEnabled: {
+      type: 'boolean',
+      _meta: {
+        description: 'Is streaming enabled',
+        optional: true,
       },
     },
   },

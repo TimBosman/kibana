@@ -42,7 +42,8 @@ import type {
   MetricVisualizationState,
 } from '@kbn/lens-plugin/public';
 import type { ActionExecutionContext } from '@kbn/ui-actions-plugin/public';
-import { CodeEditor, HJsonLang, KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
+import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
+import { CodeEditor, HJsonLang } from '@kbn/code-editor';
 import type { StartDependencies } from './plugin';
 import {
   AllOverrides,
@@ -469,7 +470,7 @@ export const App = (props: {
   const currentSO = useRef<string>(initialAttributes);
   const [currentValid, saveValidSO] = useState(initialAttributes);
   const switchChartPreset = useCallback(
-    (newIndex) => {
+    (newIndex: number) => {
       const newChart = charts[newIndex];
       const newAttributes = JSON.stringify(newChart.attributes, null, 2);
       currentSO.current = newAttributes;
@@ -693,7 +694,7 @@ export const App = (props: {
                           <EuiSelect
                             options={charts.map(({ id }, i) => ({ value: i, text: id }))}
                             value={undefined}
-                            onChange={(e) => switchChartPreset(Number(e.target.value))}
+                            onChange={(e) => switchChartPreset(+e.target.value)}
                             aria-label="Load from a preset"
                             prepend={'Load preset'}
                           />

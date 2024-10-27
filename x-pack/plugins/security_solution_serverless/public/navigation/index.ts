@@ -5,32 +5,16 @@
  * 2.0.
  */
 
-import { APP_PATH, SecurityPageName } from '@kbn/security-solution-plugin/common';
-import type { ServerlessSecurityPublicConfig } from '../types';
+import { APP_PATH } from '@kbn/security-solution-plugin/common';
 import type { Services } from '../common/services';
 import { subscribeBreadcrumbs } from './breadcrumbs';
-import { SecurityPagePath } from './links/constants';
-import { subscribeNavigationTree } from './navigation_tree';
-import { getSecuritySideNavComponent } from './side_navigation';
+import { initSideNavigation } from './side_navigation';
+import { enableManagementCardsLanding } from './management_cards';
 
-const SECURITY_PROJECT_SETTINGS_PATH = `${APP_PATH}${
-  SecurityPagePath[SecurityPageName.projectSettings]
-}`;
+export const startNavigation = (services: Services) => {
+  services.serverless.setProjectHome(APP_PATH);
 
-export const configureNavigation = (
-  services: Services,
-  serverConfig: ServerlessSecurityPublicConfig
-) => {
-  const { serverless, securitySolution, management } = services;
-  securitySolution.setIsSidebarEnabled(false);
-
-  if (!serverConfig.developer.disableManagementUrlRedirect) {
-    management.setLandingPageRedirect(SECURITY_PROJECT_SETTINGS_PATH);
-  }
-
-  serverless.setProjectHome(APP_PATH);
-  serverless.setSideNavComponent(getSecuritySideNavComponent(services));
-
-  subscribeNavigationTree(services);
+  initSideNavigation(services);
+  enableManagementCardsLanding(services);
   subscribeBreadcrumbs(services);
 };

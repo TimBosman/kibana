@@ -16,7 +16,8 @@ import {
   DefaultPolicyNotificationMessage,
   DefaultPolicyRuleNotificationMessage,
 } from '../../../../common/endpoint/models/policy_config';
-import { set } from 'lodash';
+import { set } from '@kbn/safer-lodash-set';
+import { API_VERSIONS } from '@kbn/fleet-plugin/common';
 
 const useQueryMock = _useQuery as jest.Mock;
 
@@ -60,6 +61,7 @@ describe('When using the `useGetFileInfo()` hook', () => {
 
     expect(apiMocks.responseProvider.endpointPackagePolicy).toHaveBeenCalledWith({
       path: `/api/fleet/package_policies/${policy.id}`,
+      version: API_VERSIONS.public.v1,
     });
   });
 

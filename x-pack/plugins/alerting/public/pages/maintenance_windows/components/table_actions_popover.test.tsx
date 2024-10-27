@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { fireEvent } from '@testing-library/dom';
+import { fireEvent } from '@testing-library/react';
 import React from 'react';
 
 import { AppMockRenderer, createAppMockRenderer } from '../../../lib/test_utils';
@@ -24,6 +24,7 @@ describe('TableActionsPopover', () => {
     const result = appMockRenderer.render(
       <TableActionsPopover
         id={'123'}
+        isLoading={false}
         status={MaintenanceWindowStatus.Running}
         onEdit={() => {}}
         onCancel={() => {}}
@@ -39,6 +40,7 @@ describe('TableActionsPopover', () => {
     const result = appMockRenderer.render(
       <TableActionsPopover
         id={'123'}
+        isLoading={false}
         status={MaintenanceWindowStatus.Running}
         onEdit={() => {}}
         onCancel={() => {}}
@@ -56,6 +58,7 @@ describe('TableActionsPopover', () => {
     const result = appMockRenderer.render(
       <TableActionsPopover
         id={'123'}
+        isLoading={false}
         status={MaintenanceWindowStatus.Upcoming}
         onEdit={() => {}}
         onCancel={() => {}}
@@ -72,6 +75,7 @@ describe('TableActionsPopover', () => {
     const result = appMockRenderer.render(
       <TableActionsPopover
         id={'123'}
+        isLoading={false}
         status={MaintenanceWindowStatus.Finished}
         onEdit={() => {}}
         onCancel={() => {}}
@@ -88,6 +92,7 @@ describe('TableActionsPopover', () => {
     const result = appMockRenderer.render(
       <TableActionsPopover
         id={'123'}
+        isLoading={false}
         status={MaintenanceWindowStatus.Archived}
         onEdit={() => {}}
         onCancel={() => {}}

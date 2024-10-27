@@ -1,23 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
-import { lastValueFrom } from 'rxjs';
+
+import { firstValueFrom, lastValueFrom } from 'rxjs';
 import { i18n } from '@kbn/i18n';
 import { ISearchSource, EsQuerySortValue } from '@kbn/data-plugin/public';
 import type { DataView } from '@kbn/data-views-plugin/public';
 import { RequestAdapter } from '@kbn/inspector-plugin/common';
 import { buildDataTableRecord } from '@kbn/discover-utils';
 import type { DataTableRecord, EsHitRecord } from '@kbn/discover-utils/types';
-import {
-  getSearchResponseInterceptedWarnings,
-  type SearchResponseInterceptedWarning,
-} from '@kbn/search-response-warnings';
+import type { SearchResponseWarning } from '@kbn/search-response-warnings';
 import type { DiscoverServices } from '../../../build_services';
-import { DISABLE_SHARD_FAILURE_WARNING } from '../../../../common/constants';
+import { createDataSource } from '../../../../common/data_sources';
 
 export async function fetchAnchor(
   anchorId: string,
@@ -28,14 +27,24 @@ export async function fetchAnchor(
   services: DiscoverServices
 ): Promise<{
   anchorRow: DataTableRecord;
-  interceptedWarnings: SearchResponseInterceptedWarning[] | undefined;
+  interceptedWarnings: SearchResponseWarning[];
 }> {
+  const { core, profilesManager } = services;
+
+  const solutionNavId = await firstValueFrom(core.chrome.getActiveSolutionNavId$());
+  await profilesManager.resolveRootProfile({ solutionNavId });
+  await profilesManager.resolveDataSourceProfile({
+    dataSource: createDataSource({ dataView, query: undefined }),
+    dataView,
+    query: { query: '', language: 'kuery' },
+  });
+
   updateSearchSource(searchSource, anchorId, sort, useNewFieldsApi, dataView);
 
   const adapter = new RequestAdapter();
   const { rawResponse } = await lastValueFrom(
     searchSource.fetch$({
-      disableShardFailureWarning: DISABLE_SHARD_FAILURE_WARNING,
+      disableWarningToasts: true,
       inspector: {
         adapter,
         title: 'anchor',
@@ -51,15 +60,18 @@ export async function fetchAnchor(
       })
     );
   }
+
+  const interceptedWarnings: SearchResponseWarning[] = [];
+  services.data.search.showWarnings(adapter, (warning) => {
+    interceptedWarnings.push(warning);
+    return true; // suppress the default behaviour
+  });
+
   return {
-    anchorRow: buildDataTableRecord(doc, dataView, true),
-    interceptedWarnings: getSearchResponseInterceptedWarnings({
-      services,
-      adapter,
-      options: {
-        disableShardFailureWarning: DISABLE_SHARD_FAILURE_WARNING,
-      },
+    anchorRow: profilesManager.resolveDocumentProfile({
+      record: buildDataTableRecord(doc, dataView, true),
     }),
+    interceptedWarnings,
   };
 }
 
@@ -91,7 +103,7 @@ export function updateSearchSource(
     .setField('trackTotalHits', false);
   if (useNewFieldsApi) {
     searchSource.removeField('fieldsFromSource');
-    searchSource.setField('fields', [{ field: '*', include_unmapped: 'true' }]);
+    searchSource.setField('fields', [{ field: '*', include_unmapped: true }]);
   }
   return searchSource;
 }

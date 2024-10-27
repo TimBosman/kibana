@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { BehaviorSubject } from 'rxjs';
@@ -19,16 +20,12 @@ import {
   DiscoverSidebarResponsiveProps,
 } from './discover_sidebar_responsive';
 import { DiscoverServices } from '../../../../build_services';
-import { FetchStatus } from '../../../types';
-import {
-  AvailableFields$,
-  DataDocuments$,
-  RecordRawType,
-} from '../../services/discover_data_state_container';
+import { FetchStatus, SidebarToggleState } from '../../../types';
+import { DataDocuments$ } from '../../state_management/discover_data_state_container';
 import { stubLogstashDataView } from '@kbn/data-plugin/common/stubs';
 import { KibanaContextProvider } from '@kbn/kibana-react-plugin/public';
 import { getDiscoverStateMock } from '../../../../__mocks__/discover_state.mock';
-import { DiscoverAppStateProvider } from '../../services/discover_app_state_container';
+import { DiscoverAppStateProvider } from '../../state_management/discover_app_state_container';
 import * as ExistingFieldsServiceApi from '@kbn/unified-field-list/src/services/field_existing/load_field_existing';
 import { resetExistingFieldsCache } from '@kbn/unified-field-list/src/hooks/use_existing_fields';
 import { createDiscoverServicesMock } from '../../../../__mocks__/services';
@@ -36,13 +33,18 @@ import type { AggregateQuery, Query } from '@kbn/es-query';
 import { buildDataTableRecord } from '@kbn/discover-utils';
 import type { DataTableRecord } from '@kbn/discover-utils/types';
 import type { DiscoverCustomizationId } from '../../../../customizations/customization_service';
-import type { SearchBarCustomization } from '../../../../customizations';
+import { FieldListCustomization, SearchBarCustomization } from '../../../../customizations';
 
 const mockSearchBarCustomization: SearchBarCustomization = {
   id: 'search_bar',
   CustomDataViewPicker: jest
     .fn(() => <div data-test-subj="custom-data-view-picker" />)
     .mockName('CustomDataViewPickerMock'),
+};
+
+const mockFieldListCustomisation: FieldListCustomization = {
+  id: 'field_list',
+  logsFieldsEnabled: true,
 };
 
 let mockUseCustomizations = false;
@@ -57,11 +59,22 @@ jest.mock('../../../../customizations', () => ({
     switch (id) {
       case 'search_bar':
         return mockSearchBarCustomization;
+      case 'field_list':
+        return mockFieldListCustomisation;
       default:
         throw new Error(`Unknown customization id: ${id}`);
     }
   }),
 }));
+
+jest.mock('lodash', () => {
+  const original = jest.requireActual('lodash');
+
+  return {
+    ...original,
+    debounce: (fn: unknown) => fn,
+  };
+});
 
 jest.mock('@kbn/unified-field-list/src/services/field_stats', () => ({
   loadFieldStats: jest.fn().mockResolvedValue({
@@ -124,15 +137,7 @@ const mockCalcFieldCounts = jest.fn(() => {
   return mockfieldCounts;
 });
 
-jest.mock('../../../../kibana_services', () => ({
-  getUiActions: jest.fn(() => {
-    return {
-      getTriggerCompatibleActions: jest.fn(() => []),
-    };
-  }),
-}));
-
-jest.mock('../../utils/calc_field_counts', () => ({
+jest.mock('@kbn/discover-utils/src/utils/calc_field_counts', () => ({
   calcFieldCounts: () => mockCalcFieldCounts(),
 }));
 
@@ -156,10 +161,6 @@ function getCompProps(options?: { hits?: DataTableRecord[] }): DiscoverSidebarRe
       fetchStatus: FetchStatus.COMPLETE,
       result: hits,
     }) as DataDocuments$,
-    availableFields$: new BehaviorSubject({
-      fetchStatus: FetchStatus.COMPLETE,
-      fields: [] as string[],
-    }) as AvailableFields$,
     onChangeDataView: jest.fn(),
     onAddFilter: jest.fn(),
     onAddField: jest.fn(),
@@ -168,6 +169,10 @@ function getCompProps(options?: { hits?: DataTableRecord[] }): DiscoverSidebarRe
     trackUiMetric: jest.fn(),
     onFieldEdited: jest.fn(),
     onDataViewCreated: jest.fn(),
+    sidebarToggleState$: new BehaviorSubject<SidebarToggleState>({
+      isCollapsed: false,
+      toggle: () => {},
+    }),
   };
 }
 
@@ -199,7 +204,7 @@ async function mountComponent(
   mockedServices.data.query.getState = jest.fn().mockImplementation(() => appState.getState());
 
   await act(async () => {
-    comp = await mountWithIntl(
+    comp = mountWithIntl(
       <KibanaContextProvider services={mockedServices}>
         <DiscoverAppStateProvider value={appState}>
           <DiscoverSidebarResponsive {...props} />
@@ -208,10 +213,10 @@ async function mountComponent(
     );
     // wait for lazy modules
     await new Promise((resolve) => setTimeout(resolve, 0));
-    await comp.update();
+    comp.update();
   });
 
-  await comp!.update();
+  comp!.update();
 
   return comp!;
 }
@@ -251,7 +256,7 @@ describe('discover responsive sidebar', function () {
     await act(async () => {
       // wait for lazy modules
       await new Promise((resolve) => setTimeout(resolve, 0));
-      await compLoadingExistence.update();
+      compLoadingExistence.update();
     });
 
     expect(
@@ -273,11 +278,11 @@ describe('discover responsive sidebar', function () {
         indexPatternTitle: 'test-loaded',
         existingFieldNames: Object.keys(mockfieldCounts),
       });
-      await compLoadingExistence.update();
+      compLoadingExistence.update();
     });
 
     await act(async () => {
-      await compLoadingExistence.update();
+      compLoadingExistence.update();
     });
 
     expect(
@@ -308,11 +313,6 @@ describe('discover responsive sidebar', function () {
     expect(metaFieldsCount.text()).toBe('2');
     expect(unmappedFieldsCount.exists()).toBe(false);
     expect(mockCalcFieldCounts.mock.calls.length).toBe(1);
-
-    expect(props.availableFields$.getValue()).toEqual({
-      fetchStatus: 'complete',
-      fields: ['extension'],
-    });
 
     expect(findTestSubject(comp, 'fieldListGrouped__ariaDescription').text()).toBe(
       '1 selected field. 4 popular fields. 3 available fields. 20 empty fields. 2 meta fields.'
@@ -372,11 +372,6 @@ describe('discover responsive sidebar', function () {
     expect(metaFieldsCount.text()).toBe('2');
     expect(unmappedFieldsCount.exists()).toBe(false);
 
-    expect(propsWithoutColumns.availableFields$.getValue()).toEqual({
-      fetchStatus: 'complete',
-      fields: ['bytes', 'extension', '_id', 'phpmemory'],
-    });
-
     expect(findTestSubject(compWithoutSelected, 'fieldListGrouped__ariaDescription').text()).toBe(
       '4 popular fields. 3 available fields. 20 empty fields. 2 meta fields.'
     );
@@ -419,11 +414,11 @@ describe('discover responsive sidebar', function () {
     const availableFields = findTestSubject(comp, 'fieldListGroupedAvailableFields');
     await act(async () => {
       const button = findTestSubject(availableFields, 'field-extension-showDetails');
-      await button.simulate('click');
-      await comp.update();
+      button.simulate('click');
+      comp.update();
     });
 
-    await comp.update();
+    comp.update();
     findTestSubject(comp, 'plus-extension-gif').simulate('click');
     expect(props.onAddFilter).toHaveBeenCalled();
   });
@@ -432,11 +427,11 @@ describe('discover responsive sidebar', function () {
     const availableFields = findTestSubject(comp, 'fieldListGroupedAvailableFields');
     await act(async () => {
       const button = findTestSubject(availableFields, 'field-extension-showDetails');
-      await button.simulate('click');
-      await comp.update();
+      button.simulate('click');
+      comp.update();
     });
 
-    await comp.update();
+    comp.update();
     findTestSubject(comp, 'discoverFieldListPanelAddExistFilter-extension').simulate('click');
     expect(props.onAddFilter).toHaveBeenCalledWith('_exists_', 'extension', '+');
   });
@@ -450,14 +445,14 @@ describe('discover responsive sidebar', function () {
     );
 
     await act(async () => {
-      await findTestSubject(comp, 'fieldListFiltersFieldSearch').simulate('change', {
+      findTestSubject(comp, 'fieldListFiltersFieldSearch').simulate('change', {
         target: { value: 'bytes' },
       });
     });
 
     expect(findTestSubject(comp, 'fieldListGroupedAvailableFields-count').text()).toBe('1');
     expect(findTestSubject(comp, 'fieldListGrouped__ariaDescription').text()).toBe(
-      '1 popular field. 1 available field. 0 empty fields. 0 meta fields.'
+      '1 popular field. 1 available field. 0 meta fields.'
     );
     expect(mockCalcFieldCounts.mock.calls.length).toBe(1);
   });
@@ -471,16 +466,16 @@ describe('discover responsive sidebar', function () {
     );
 
     await act(async () => {
-      await findTestSubject(comp, 'fieldListFiltersFieldTypeFilterToggle').simulate('click');
+      findTestSubject(comp, 'fieldListFiltersFieldTypeFilterToggle').simulate('click');
     });
 
-    await comp.update();
+    comp.update();
 
     await act(async () => {
-      await findTestSubject(comp, 'typeFilter-number').simulate('click');
+      findTestSubject(comp, 'typeFilter-number').simulate('click');
     });
 
-    await comp.update();
+    comp.update();
 
     expect(findTestSubject(comp, 'fieldListGroupedAvailableFields-count').text()).toBe('2');
     expect(findTestSubject(comp, 'fieldListGrouped__ariaDescription').text()).toBe(
@@ -498,54 +493,47 @@ describe('discover responsive sidebar', function () {
   });
 
   it('should render correctly in the ES|QL mode', async () => {
-    const propsWithTextBasedMode = {
+    const propsWithEsqlMode = {
       ...props,
       columns: ['extension', 'bytes'],
       onAddFilter: undefined,
       documents$: new BehaviorSubject({
         fetchStatus: FetchStatus.COMPLETE,
-        recordRawType: RecordRawType.PLAIN,
         result: getDataTableRecords(stubLogstashDataView),
-        textBasedQueryColumns: [
+        esqlQueryColumns: [
           { id: '1', name: 'extension', meta: { type: 'text' } },
           { id: '2', name: 'bytes', meta: { type: 'number' } },
           { id: '3', name: '@timestamp', meta: { type: 'date' } },
         ],
       }) as DataDocuments$,
     };
-    const compInTextBasedMode = await mountComponent(propsWithTextBasedMode, {
+    const compInEsqlMode = await mountComponent(propsWithEsqlMode, {
       query: { esql: 'FROM `index`' },
     });
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
-      await compInTextBasedMode.update();
+      compInEsqlMode.update();
     });
 
-    expect(findTestSubject(compInTextBasedMode, 'indexPattern-add-field_btn').length).toBe(0);
+    expect(findTestSubject(compInEsqlMode, 'indexPattern-add-field_btn').length).toBe(0);
 
     const popularFieldsCount = findTestSubject(
-      compInTextBasedMode,
+      compInEsqlMode,
       'fieldListGroupedPopularFields-count'
     );
     const selectedFieldsCount = findTestSubject(
-      compInTextBasedMode,
+      compInEsqlMode,
       'fieldListGroupedSelectedFields-count'
     );
     const availableFieldsCount = findTestSubject(
-      compInTextBasedMode,
+      compInEsqlMode,
       'fieldListGroupedAvailableFields-count'
     );
-    const emptyFieldsCount = findTestSubject(
-      compInTextBasedMode,
-      'fieldListGroupedEmptyFields-count'
-    );
-    const metaFieldsCount = findTestSubject(
-      compInTextBasedMode,
-      'fieldListGroupedMetaFields-count'
-    );
+    const emptyFieldsCount = findTestSubject(compInEsqlMode, 'fieldListGroupedEmptyFields-count');
+    const metaFieldsCount = findTestSubject(compInEsqlMode, 'fieldListGroupedMetaFields-count');
     const unmappedFieldsCount = findTestSubject(
-      compInTextBasedMode,
+      compInEsqlMode,
       'fieldListGroupedUnmappedFields-count'
     );
 
@@ -558,7 +546,7 @@ describe('discover responsive sidebar', function () {
 
     expect(mockCalcFieldCounts.mock.calls.length).toBe(0);
 
-    expect(findTestSubject(compInTextBasedMode, 'fieldListGrouped__ariaDescription').text()).toBe(
+    expect(findTestSubject(compInEsqlMode, 'fieldListGrouped__ariaDescription').text()).toBe(
       '2 selected fields. 3 available fields.'
     );
   });
@@ -619,7 +607,7 @@ describe('discover responsive sidebar', function () {
     );
     const addFieldButton = findTestSubject(comp, 'dataView-add-field_btn');
     expect(addFieldButton.length).toBe(1);
-    await addFieldButton.simulate('click');
+    addFieldButton.simulate('click');
     expect(services.dataViewFieldEditor.openEditor).toHaveBeenCalledTimes(1);
   });
 
@@ -630,10 +618,10 @@ describe('discover responsive sidebar', function () {
     await act(async () => {
       findTestSubject(availableFields, 'field-bytes').simulate('click');
     });
-    await comp.update();
+    comp.update();
     const editFieldButton = findTestSubject(comp, 'discoverFieldListPanelEdit-bytes');
     expect(editFieldButton.length).toBe(1);
-    await editFieldButton.simulate('click');
+    editFieldButton.simulate('click');
     expect(services.dataViewFieldEditor.openEditor).toHaveBeenCalledTimes(1);
   });
 
@@ -662,12 +650,12 @@ describe('discover responsive sidebar', function () {
     // open flyout
     await act(async () => {
       compWithPicker.find('.unifiedFieldListSidebar__mobileButton').last().simulate('click');
-      await compWithPicker.update();
+      compWithPicker.update();
     });
 
-    await compWithPicker.update();
+    compWithPicker.update();
     // open data view picker
-    await findTestSubject(compWithPicker, 'dataView-switch-link').simulate('click');
+    findTestSubject(compWithPicker, 'dataView-switch-link').simulate('click');
     expect(findTestSubject(compWithPicker, 'changeDataViewPopover').length).toBe(1);
     // check "Add a field"
     const addFieldButtonInDataViewPicker = findTestSubject(
@@ -678,7 +666,7 @@ describe('discover responsive sidebar', function () {
     // click "Create a data view"
     const createDataViewButton = findTestSubject(compWithPicker, 'dataview-create-new');
     expect(createDataViewButton.length).toBe(1);
-    await createDataViewButton.simulate('click');
+    createDataViewButton.simulate('click');
     expect(services.dataViewEditor.openEditor).toHaveBeenCalled();
   });
 
@@ -697,10 +685,10 @@ describe('discover responsive sidebar', function () {
         .find('.unifiedFieldListSidebar__mobileButton')
         .last()
         .simulate('click');
-      await compWithPickerInViewerMode.update();
+      compWithPickerInViewerMode.update();
     });
 
-    await compWithPickerInViewerMode.update();
+    compWithPickerInViewerMode.update();
     // open data view picker
     findTestSubject(compWithPickerInViewerMode, 'dataView-switch-link').simulate('click');
     expect(findTestSubject(compWithPickerInViewerMode, 'changeDataViewPopover').length).toBe(1);
@@ -724,10 +712,10 @@ describe('discover responsive sidebar', function () {
 
       await act(async () => {
         comp.find('.unifiedFieldListSidebar__mobileButton').last().simulate('click');
-        await comp.update();
+        comp.update();
       });
 
-      await comp.update();
+      comp.update();
 
       expect(comp.find('[data-test-subj="custom-data-view-picker"]').exists()).toBe(false);
     });
@@ -741,12 +729,35 @@ describe('discover responsive sidebar', function () {
 
       await act(async () => {
         comp.find('.unifiedFieldListSidebar__mobileButton').last().simulate('click');
-        await comp.update();
+        comp.update();
       });
 
-      await comp.update();
+      comp.update();
 
       expect(comp.find('[data-test-subj="custom-data-view-picker"]').exists()).toBe(true);
+    });
+
+    it('should allow to toggle sidebar', async function () {
+      const comp = await mountComponent(props);
+      expect(findTestSubject(comp, 'fieldList').exists()).toBe(true);
+      findTestSubject(comp, 'unifiedFieldListSidebar__toggle-collapse').simulate('click');
+      expect(findTestSubject(comp, 'fieldList').exists()).toBe(false);
+      findTestSubject(comp, 'unifiedFieldListSidebar__toggle-expand').simulate('click');
+      expect(findTestSubject(comp, 'fieldList').exists()).toBe(true);
+    });
+  });
+
+  describe('field list customization', () => {
+    it('should render Smart Fields', async () => {
+      mockUseCustomizations = true;
+      const comp = await mountComponent(props);
+
+      expect(findTestSubject(comp, 'fieldList').exists()).toBe(true);
+      expect(findTestSubject(comp, 'fieldListGroupedSmartFields').exists()).toBe(true);
+
+      const smartFieldsCount = findTestSubject(comp, 'fieldListGroupedSmartFields-count');
+
+      expect(smartFieldsCount.text()).toBe('2');
     });
   });
 });

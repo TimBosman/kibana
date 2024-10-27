@@ -8,7 +8,6 @@
 import type { SavedObject } from '@kbn/core/server';
 
 import { SECURITY_SOLUTION_OWNER } from '../common/constants';
-import type { CasesStart } from './types';
 import { createCasesClientMock } from './client/mocks';
 import type { CaseSavedObjectTransformed } from './common/types/case';
 import type {
@@ -28,6 +27,7 @@ import {
   AttachmentType,
 } from '../common/types/domain';
 import type { CasePostRequest } from '../common/types/api';
+import type { CasesServerStart } from './types';
 
 const lensPersistableState = {
   attributes: {
@@ -162,6 +162,7 @@ export const mockCases: CaseSavedObjectTransformed[] = [
       owner: SECURITY_SOLUTION_OWNER,
       assignees: [],
       category: null,
+      customFields: [],
     },
     references: [],
     updated_at: '2019-11-25T21:54:48.952Z',
@@ -204,6 +205,7 @@ export const mockCases: CaseSavedObjectTransformed[] = [
       owner: SECURITY_SOLUTION_OWNER,
       assignees: [],
       category: null,
+      customFields: [],
     },
     references: [],
     updated_at: '2019-11-25T22:32:00.900Z',
@@ -246,6 +248,7 @@ export const mockCases: CaseSavedObjectTransformed[] = [
       owner: SECURITY_SOLUTION_OWNER,
       assignees: [],
       category: null,
+      customFields: [],
     },
     references: [],
     updated_at: '2019-11-25T22:32:17.947Z',
@@ -292,6 +295,7 @@ export const mockCases: CaseSavedObjectTransformed[] = [
       owner: SECURITY_SOLUTION_OWNER,
       assignees: [],
       category: null,
+      customFields: [],
     },
     references: [],
     updated_at: '2019-11-25T22:32:17.947Z',
@@ -718,7 +722,7 @@ export const mappings: ConnectorMappings = [
 
 const casesClientMock = createCasesClientMock();
 
-export const mockCasesContract = (): CasesStart => ({
+export const mockCasesContract = (): CasesServerStart => ({
   getCasesClientWithRequest: jest.fn().mockResolvedValue(casesClientMock),
   getExternalReferenceAttachmentTypeRegistry: jest.fn(),
   getPersistableStateAttachmentTypeRegistry: jest.fn(),

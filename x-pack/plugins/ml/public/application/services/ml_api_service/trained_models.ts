@@ -5,15 +5,19 @@
  * 2.0.
  */
 
-import * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
-import { IngestPipeline } from '@elastic/elasticsearch/lib/api/types';
+import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import type { IngestPipeline } from '@elastic/elasticsearch/lib/api/types';
 
 import { useMemo } from 'react';
 import type { HttpFetchQuery } from '@kbn/core/public';
 import type { ErrorType } from '@kbn/ml-error-utils';
+import type {
+  GetModelDownloadConfigOptions,
+  ModelDefinitionResponse,
+} from '@kbn/ml-trained-models-utils';
 import { ML_INTERNAL_BASE_PATH } from '../../../../common/constants/app';
 import type { MlSavedObjectType } from '../../../../common/types/saved_objects';
-import { HttpService } from '../http_service';
+import type { HttpService } from '../http_service';
 import { useMlKibana } from '../../contexts/kibana';
 import type {
   TrainedModelConfigResponse,
@@ -21,8 +25,8 @@ import type {
   TrainedModelStat,
   NodesOverviewResponse,
   MemoryUsageInfo,
+  ModelDownloadState,
 } from '../../../../common/types/trained_models';
-
 export interface InferenceQueryParams {
   decompress_definition?: boolean;
   from?: number;
@@ -31,6 +35,7 @@ export interface InferenceQueryParams {
   tags?: string;
   // Custom kibana endpoint query params
   with_pipelines?: boolean;
+  with_indices?: boolean;
   include?: 'total_feature_importance' | 'feature_importance_baseline' | string;
 }
 
@@ -51,12 +56,55 @@ export interface InferenceStatsResponse {
   trained_model_stats: TrainedModelStat[];
 }
 
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+export type CommonDeploymentParams = {
+  deployment_id?: string;
+  threads_per_allocation: number;
+  priority: 'low' | 'normal';
+  number_of_allocations?: number;
+};
+
+export interface AdaptiveAllocationsParams {
+  adaptive_allocations?: {
+    enabled: boolean;
+    min_number_of_allocations?: number;
+    max_number_of_allocations?: number;
+  };
+}
+
+export interface UpdateAllocationParams extends AdaptiveAllocationsParams {
+  number_of_allocations?: number;
+}
+
 /**
- * Service with APIs calls to perform inference operations.
+ * Service with APIs calls to perform operations with trained models.
  * @param httpService
  */
 export function trainedModelsApiProvider(httpService: HttpService) {
   return {
+    /**
+     * Fetches the trained models list available for download.
+     */
+    getTrainedModelDownloads() {
+      return httpService.http<ModelDefinitionResponse[]>({
+        path: `${ML_INTERNAL_BASE_PATH}/trained_models/model_downloads`,
+        method: 'GET',
+        version: '1',
+      });
+    },
+
+    /**
+     * Gets ELSER config for download based on the cluster OS and CPU architecture.
+     */
+    getElserConfig(options?: GetModelDownloadConfigOptions) {
+      return httpService.http<ModelDefinitionResponse>({
+        path: `${ML_INTERNAL_BASE_PATH}/trained_models/elser_config`,
+        method: 'GET',
+        ...(options ? { query: options as HttpFetchQuery } : {}),
+        version: '1',
+      });
+    },
+
     /**
      * Fetches configuration information for a trained inference model.
      * @param modelId - Model ID, collection of Model IDs or Model ID pattern.
@@ -149,6 +197,18 @@ export function trainedModelsApiProvider(httpService: HttpService) {
       });
     },
 
+    /**
+     * Gets model config based on the cluster OS and CPU architecture.
+     */
+    getCuratedModelConfig(modelName: string, options?: GetModelDownloadConfigOptions) {
+      return httpService.http<ModelDefinitionResponse>({
+        path: `${ML_INTERNAL_BASE_PATH}/trained_models/curated_model_config/${modelName}`,
+        method: 'GET',
+        ...(options ? { query: options as HttpFetchQuery } : {}),
+        version: '1',
+      });
+    },
+
     getTrainedModelsNodesOverview() {
       return httpService.http<NodesOverviewResponse>({
         path: `${ML_INTERNAL_BASE_PATH}/model_management/nodes_overview`,
@@ -159,17 +219,14 @@ export function trainedModelsApiProvider(httpService: HttpService) {
 
     startModelAllocation(
       modelId: string,
-      queryParams?: {
-        number_of_allocations: number;
-        threads_per_allocation: number;
-        priority: 'low' | 'normal';
-        deployment_id?: string;
-      }
+      queryParams?: CommonDeploymentParams,
+      bodyParams?: AdaptiveAllocationsParams
     ) {
       return httpService.http<{ acknowledge: boolean }>({
         path: `${ML_INTERNAL_BASE_PATH}/trained_models/${modelId}/deployment/_start`,
         method: 'POST',
         query: queryParams,
+        ...(bodyParams ? { body: JSON.stringify(bodyParams) } : {}),
         version: '1',
       });
     },
@@ -191,11 +248,7 @@ export function trainedModelsApiProvider(httpService: HttpService) {
       });
     },
 
-    updateModelDeployment(
-      modelId: string,
-      deploymentId: string,
-      params: { number_of_allocations: number }
-    ) {
+    updateModelDeployment(modelId: string, deploymentId: string, params: UpdateAllocationParams) {
       return httpService.http<{ acknowledge: boolean }>({
         path: `${ML_INTERNAL_BASE_PATH}/trained_models/${modelId}/${deploymentId}/deployment/_update`,
         method: 'POST',
@@ -250,6 +303,22 @@ export function trainedModelsApiProvider(httpService: HttpService) {
         path: `${ML_INTERNAL_BASE_PATH}/trained_models/${modelId}`,
         method: 'PUT',
         body: JSON.stringify(config),
+        version: '1',
+      });
+    },
+
+    installElasticTrainedModelConfig(modelId: string) {
+      return httpService.http<estypes.MlPutTrainedModelResponse>({
+        path: `${ML_INTERNAL_BASE_PATH}/trained_models/install_elastic_trained_model/${modelId}`,
+        method: 'POST',
+        version: '1',
+      });
+    },
+
+    getModelsDownloadStatus() {
+      return httpService.http<Record<string, ModelDownloadState>>({
+        path: `${ML_INTERNAL_BASE_PATH}/trained_models/download_status`,
+        method: 'GET',
         version: '1',
       });
     },

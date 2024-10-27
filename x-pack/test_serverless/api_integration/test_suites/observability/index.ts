@@ -9,10 +9,14 @@ import { FtrProviderContext } from '../../ftr_provider_context';
 
 export default function ({ loadTestFile }: FtrProviderContext) {
   describe('Serverless observability API', function () {
-    loadTestFile(require.resolve('./fleet/fleet'));
-    loadTestFile(require.resolve('./telemetry/snapshot_telemetry'));
-    loadTestFile(require.resolve('./telemetry/telemetry_config'));
+    this.tags(['esGate']);
+
     loadTestFile(require.resolve('./apm_api_integration/feature_flags.ts'));
+    loadTestFile(require.resolve('./apm_api_integration/service_maps/service_maps'));
+    loadTestFile(require.resolve('./apm_api_integration/traces/critical_path'));
     loadTestFile(require.resolve('./cases'));
+    loadTestFile(require.resolve('./slos'));
+    loadTestFile(require.resolve('./synthetics'));
+    loadTestFile(require.resolve('./dataset_quality_api_integration'));
   });
 }

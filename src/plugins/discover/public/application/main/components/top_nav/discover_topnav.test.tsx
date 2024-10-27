@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { ReactElement } from 'react';
@@ -11,22 +12,17 @@ import { mountWithIntl } from '@kbn/test-jest-helpers';
 import { dataViewMock } from '@kbn/discover-utils/src/__mocks__';
 import { DiscoverTopNav, DiscoverTopNavProps } from './discover_topnav';
 import { TopNavMenu, TopNavMenuData } from '@kbn/navigation-plugin/public';
-import { Query } from '@kbn/es-query';
-import { setHeaderActionMenuMounter } from '../../../../kibana_services';
 import { discoverServiceMock as mockDiscoverService } from '../../../../__mocks__/services';
 import { getDiscoverStateMock } from '../../../../__mocks__/discover_state.mock';
-import { DiscoverMainProvider } from '../../services/discover_state_provider';
+import { DiscoverMainProvider } from '../../state_management/discover_state_provider';
 import type { SearchBarCustomization, TopNavCustomization } from '../../../../customizations';
 import type { DiscoverCustomizationId } from '../../../../customizations/customization_service';
 import { useDiscoverCustomization } from '../../../../customizations';
-
-setHeaderActionMenuMounter(jest.fn());
+import { useKibana } from '@kbn/kibana-react-plugin/public';
 
 jest.mock('@kbn/kibana-react-plugin/public', () => ({
   ...jest.requireActual('@kbn/kibana-react-plugin/public'),
-  useKibana: () => ({
-    services: mockDiscoverService,
-  }),
+  useKibana: jest.fn(),
 }));
 
 const MockCustomSearchBar: typeof mockDiscoverService.navigation.ui.AggregateQueryTopNavMenu =
@@ -46,6 +42,11 @@ const mockSearchBarCustomizationWithCustomSearchBar: SearchBarCustomization = {
   CustomSearchBar: MockCustomSearchBar,
 };
 
+const mockSearchBarCustomizationWithHiddenDataViewPicker: SearchBarCustomization = {
+  id: 'search_bar',
+  hideDataViewPicker: true,
+};
+
 let mockUseCustomizations = false;
 
 jest.mock('../../../../customizations', () => ({
@@ -53,21 +54,31 @@ jest.mock('../../../../customizations', () => ({
   useDiscoverCustomization: jest.fn(),
 }));
 
-function getProps(savePermissions = true): DiscoverTopNavProps {
-  mockDiscoverService.capabilities.discover!.save = savePermissions;
+const mockDefaultCapabilities = {
+  discover: { save: true },
+} as unknown as typeof mockDiscoverService.capabilities;
+
+function getProps(
+  {
+    capabilities,
+  }: {
+    capabilities?: Partial<typeof mockDiscoverService.capabilities>;
+  } = { capabilities: mockDefaultCapabilities }
+): DiscoverTopNavProps {
+  if (capabilities) {
+    mockDiscoverService.capabilities = capabilities as typeof mockDiscoverService.capabilities;
+  }
   const stateContainer = getDiscoverStateMock({ isTimeBased: true });
   stateContainer.internalState.transitions.setDataView(dataViewMock);
 
   return {
     stateContainer,
-    query: {} as Query,
     savedQuery: '',
-    updateQuery: jest.fn(),
-    onOpenInspector: jest.fn(),
     onFieldEdited: jest.fn(),
-    isPlainRecord: false,
   };
 }
+
+const mockUseKibana = useKibana as jest.Mock;
 
 describe('Discover topnav component', () => {
   beforeEach(() => {
@@ -90,10 +101,14 @@ describe('Discover topnav component', () => {
           throw new Error(`Unknown customization id: ${id}`);
       }
     });
+
+    mockUseKibana.mockReturnValue({
+      services: mockDiscoverService,
+    });
   });
 
   test('generated config of TopNavMenu config is correct when discover save permissions are assigned', () => {
-    const props = getProps(true);
+    const props = getProps({ capabilities: { discover: { save: true } } });
     const component = mountWithIntl(
       <DiscoverMainProvider value={props.stateContainer}>
         <DiscoverTopNav {...props} />
@@ -105,7 +120,7 @@ describe('Discover topnav component', () => {
   });
 
   test('generated config of TopNavMenu config is correct when no discover save permissions are assigned', () => {
-    const props = getProps(false);
+    const props = getProps({ capabilities: { discover: { save: false } } });
     const component = mountWithIntl(
       <DiscoverMainProvider value={props.stateContainer}>
         <DiscoverTopNav {...props} />
@@ -114,6 +129,32 @@ describe('Discover topnav component', () => {
     const topNavMenu = component.find(TopNavMenu).props();
     const topMenuConfig = topNavMenu.config?.map((obj: TopNavMenuData) => obj.id);
     expect(topMenuConfig).toEqual(['new', 'open', 'share', 'inspect']);
+  });
+
+  test('top nav is correct when discover saveQuery permission is granted', () => {
+    const props = getProps({ capabilities: { discover: { saveQuery: true } } });
+    const component = mountWithIntl(
+      <DiscoverMainProvider value={props.stateContainer}>
+        <DiscoverTopNav {...props} />
+      </DiscoverMainProvider>
+    );
+    const statefulSearchBar = component.find(
+      mockDiscoverService.navigation.ui.AggregateQueryTopNavMenu
+    );
+    expect(statefulSearchBar.props().saveQueryMenuVisibility).toBe('allowed_by_app_privilege');
+  });
+
+  test('top nav is correct when discover saveQuery permission is not granted', () => {
+    const props = getProps({ capabilities: { discover: { saveQuery: false } } });
+    const component = mountWithIntl(
+      <DiscoverMainProvider value={props.stateContainer}>
+        <DiscoverTopNav {...props} />
+      </DiscoverMainProvider>
+    );
+    const statefulSearchBar = component.find(
+      mockDiscoverService.navigation.ui.AggregateQueryTopNavMenu
+    );
+    expect(statefulSearchBar.props().saveQueryMenuVisibility).toBe('globally_managed');
   });
 
   describe('top nav customization', () => {
@@ -217,6 +258,53 @@ describe('Discover topnav component', () => {
         topNav.prop('dataViewPickerOverride') as ReactElement
       ).find(mockSearchBarCustomization.CustomDataViewPicker!);
       expect(dataViewPickerOverride.length).toBe(1);
+    });
+
+    it('should not render the dataView picker when hideDataViewPicker is true', () => {
+      (useDiscoverCustomization as jest.Mock).mockImplementation((id: DiscoverCustomizationId) => {
+        if (id === 'search_bar') {
+          return mockSearchBarCustomizationWithHiddenDataViewPicker;
+        }
+      });
+
+      const props = getProps();
+      const component = mountWithIntl(
+        <DiscoverMainProvider value={props.stateContainer}>
+          <DiscoverTopNav {...props} />
+        </DiscoverMainProvider>
+      );
+
+      const topNav = component.find(mockDiscoverService.navigation.ui.AggregateQueryTopNavMenu);
+      expect(topNav.prop('dataViewPickerComponentProps')).toBeUndefined();
+    });
+  });
+
+  describe('inline top nav', () => {
+    it('should render top nav when inline top nav is not enabled', () => {
+      const props = getProps();
+      const component = mountWithIntl(
+        <DiscoverMainProvider value={props.stateContainer}>
+          <DiscoverTopNav {...props} />
+        </DiscoverMainProvider>
+      );
+      const searchBar = component.find(mockDiscoverService.navigation.ui.AggregateQueryTopNavMenu);
+      expect(searchBar.prop('badges')).toBeDefined();
+      expect(searchBar.prop('config')).toBeDefined();
+      expect(searchBar.prop('setMenuMountPoint')).toBeDefined();
+    });
+
+    it('should not render top nav when inline top nav is enabled', () => {
+      const props = getProps();
+      props.stateContainer.customizationContext.inlineTopNav.enabled = true;
+      const component = mountWithIntl(
+        <DiscoverMainProvider value={props.stateContainer}>
+          <DiscoverTopNav {...props} />
+        </DiscoverMainProvider>
+      );
+      const searchBar = component.find(mockDiscoverService.navigation.ui.AggregateQueryTopNavMenu);
+      expect(searchBar.prop('badges')).toBeUndefined();
+      expect(searchBar.prop('config')).toBeUndefined();
+      expect(searchBar.prop('setMenuMountPoint')).toBeUndefined();
     });
   });
 });

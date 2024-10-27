@@ -24,6 +24,7 @@ import {
 import { euiStyled } from '@kbn/kibana-react-plugin/common';
 import { FormattedMessage } from '@kbn/i18n-react';
 
+import { RESPONSE_ACTION_API_COMMAND_TO_CONSOLE_COMMAND_MAP } from '../../../../../common/endpoint/service/response_actions/constants';
 import { SecurityPageName } from '../../../../../common/constants';
 import { getRuleDetailsUrl } from '../../../../common/components/link_to';
 import { SecuritySolutionLinkAnchor } from '../../../../common/components/links';
@@ -31,9 +32,9 @@ import type { ActionListApiResponse } from '../../../../../common/endpoint/types
 import type { EndpointActionListRequestQuery } from '../../../../../common/api/endpoint';
 import { FormattedDate } from '../../../../common/components/formatted_date';
 import { ARIA_LABELS, TABLE_COLUMN_NAMES, UX_MESSAGES } from '../translations';
-import { getActionStatus, getUiCommand } from './hooks';
+import { getActionStatus } from './hooks';
 import { getEmptyValue } from '../../../../common/components/empty_value';
-import { StatusBadge } from './status_badge';
+import { ResponseActionStatusBadge } from './response_action_status_badge';
 import { ActionsLogExpandedTray } from './action_log_expanded_tray';
 import { useTestIdGenerator } from '../../../hooks/use_test_id_generator';
 import { MANAGEMENT_PAGE_SIZE_OPTIONS } from '../../../common/constants';
@@ -42,7 +43,7 @@ import { useUrlPagination } from '../../../hooks/use_url_pagination';
 const emptyValue = getEmptyValue();
 
 // Truncated usernames
-const StyledFacetButton = euiStyled(EuiFacetButton)`
+const StyledFacetButton = euiStyled(EuiFacetButton).attrs({ title: undefined })`
   .euiText {
     margin-top: 0.38rem;
     overflow-y: visible !important;
@@ -86,7 +87,7 @@ const getResponseActionListTableColumns = ({
       width: !showHostNames ? '21%' : '10%',
       truncateText: true,
       render: (_command: ActionListApiResponse['data'][number]['command']) => {
-        const command = getUiCommand(_command);
+        const command = RESPONSE_ACTION_API_COMMAND_TO_CONSOLE_COMMAND_MAP[_command];
         return (
           <EuiToolTip content={command} anchorClassName="eui-textTruncate">
             <EuiText
@@ -128,6 +129,10 @@ const getResponseActionListTableColumns = ({
           <StyledFacetButton
             icon={
               <EuiAvatar
+                // We've a EuiTooltip that shows for createdBy below,
+                // Thus we don't need to add a title tooltip as well.
+                aria-hidden={true}
+                title=""
                 name={createdBy}
                 data-test-subj={getTestId('column-user-avatar')}
                 size="s"
@@ -219,7 +224,7 @@ const getResponseActionListTableColumns = ({
 
         return (
           <EuiToolTip content={status} anchorClassName="eui-textTruncate">
-            <StatusBadge
+            <ResponseActionStatusBadge
               color={
                 _status === 'failed' ? 'danger' : _status === 'successful' ? 'success' : 'warning'
               }
@@ -268,6 +273,7 @@ interface ActionsLogTableProps {
   isFlyout: boolean;
   loading: boolean;
   onChange: ({
+    // @ts-expect-error upgrade typescript v4.9.5
     page: _page,
   }: CriteriaWithPagination<ActionListApiResponse['data'][number]>) => void;
   onShowActionDetails: (actionIds: string[]) => void;
@@ -430,7 +436,6 @@ export const ActionsLogTable = memo<ActionsLogTableProps>(
           columns={columns}
           itemId="id"
           itemIdToExpandedRowMap={expandedRowMap}
-          isExpandable
           pagination={tablePagination}
           onChange={onChange}
           loading={loading}

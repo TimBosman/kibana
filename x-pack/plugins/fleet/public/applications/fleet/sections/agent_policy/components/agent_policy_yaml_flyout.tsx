@@ -8,7 +8,7 @@
 import React, { memo } from 'react';
 import styled from 'styled-components';
 import { FormattedMessage } from '@kbn/i18n-react';
-import { safeDump } from 'js-yaml';
+import { dump } from 'js-yaml';
 import {
   EuiCodeBlock,
   EuiFlexGroup,
@@ -24,9 +24,11 @@ import {
   EuiSpacer,
 } from '@elastic/eui';
 
+import { MAX_FLYOUT_WIDTH } from '../../../constants';
 import { useGetOneAgentPolicyFull, useGetOneAgentPolicy, useStartServices } from '../../../hooks';
 import { Loading } from '../../../components';
 import { fullAgentPolicyToYaml, agentPolicyRouteService } from '../../../services';
+import { API_VERSIONS } from '../../../../../../common/constants';
 
 const FlyoutBody = styled(EuiFlyoutBody)`
   .euiFlyoutBody__overflowContent {
@@ -60,24 +62,24 @@ export const AgentPolicyYamlFlyout = memo<{ policyId: string; onClose: () => voi
     ) : (
       <>
         <EuiCodeBlock language="yaml" isCopyable fontSize="m" whiteSpace="pre">
-          {fullAgentPolicyToYaml(yamlData!.item, safeDump)}
+          {fullAgentPolicyToYaml(yamlData!.item, dump)}
         </EuiCodeBlock>
       </>
     );
 
-    const downloadLink = core.http.basePath.prepend(
-      agentPolicyRouteService.getInfoFullDownloadPath(policyId)
-    );
+    const downloadLink =
+      core.http.basePath.prepend(agentPolicyRouteService.getInfoFullDownloadPath(policyId)) +
+      `?apiVersion=${API_VERSIONS.public.v1}`;
 
     return (
-      <EuiFlyout onClose={onClose} size="l" maxWidth={640}>
+      <EuiFlyout onClose={onClose} maxWidth={MAX_FLYOUT_WIDTH}>
         <EuiFlyoutHeader hasBorder aria-labelledby="IngestManagerAgentPolicyYamlFlyoutTitle">
           <EuiTitle size="m">
             <h2 id="IngestManagerAgentPolicyYamlFlyoutTitle">
               {agentPolicyData?.item ? (
                 <FormattedMessage
                   id="xpack.fleet.policyDetails.yamlflyoutTitleWithName"
-                  defaultMessage="'{name}' agent policy"
+                  defaultMessage="''{name}'' agent policy"
                   values={{ name: agentPolicyData.item.name }}
                 />
               ) : (

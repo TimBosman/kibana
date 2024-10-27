@@ -18,10 +18,18 @@ export default function ({ getService, getPageObjects }: FtrProviderContext) {
   const kibanaServer = getService('kibanaServer');
   const testSubjects = getService('testSubjects');
 
-  const PageObjects = getPageObjects(['common', 'settings', 'header', 'savedObjects', 'dashboard']);
+  const PageObjects = getPageObjects([
+    'common',
+    'settings',
+    'header',
+    'savedObjects',
+    'dashboard',
+    'svlCommonPage',
+  ]);
 
   describe('Importing an existing dashboard', () => {
     before(async () => {
+      await PageObjects.svlCommonPage.loginWithRole('developer');
       await esArchiver.loadIfNeeded('x-pack/test/functional/es_archives/logstash_functional');
       await kibanaServer.uiSettings.replace({});
     });

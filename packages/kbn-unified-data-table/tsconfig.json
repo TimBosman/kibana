@@ -33,5 +33,12 @@
     "@kbn/code-editor",
     "@kbn/config",
     "@kbn/monaco",
+    "@kbn/field-utils",
+    "@kbn/react-field",
+    "@kbn/shared-ux-utility",
+    "@kbn/unified-field-list",
+    "@kbn/core-notifications-browser",
+    "@kbn/core-capabilities-browser-mocks",
+    "@kbn/sort-predicates",
   ]
 }

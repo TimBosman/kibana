@@ -41,7 +41,7 @@ import {
   OWNER_INFO,
 } from '../../common/constants';
 import type { CASE_VIEW_PAGE_TABS } from '../../common/types';
-import type { AlertInfo, FileAttachmentRequest, SOWithErrors } from './types';
+import type { AlertInfo, FileAttachmentRequest } from './types';
 
 import type { UpdateAlertStatusRequest } from '../client/alerts/types';
 import {
@@ -87,6 +87,7 @@ export const transformNewCase = ({
   updated_by: null,
   assignees: dedupAssignees(newCase.assignees) ?? [],
   category: newCase.category ?? null,
+  customFields: newCase.customFields ?? [],
 });
 
 export const transformCases = ({
@@ -471,8 +472,6 @@ export const getCaseViewPath = (params: {
 
   return `${basePath}${normalizePath(CASE_VIEW_PATH.replace(':detailName', caseId))}`;
 };
-
-export const isSOError = <T>(so: { error?: unknown }): so is SOWithErrors<T> => so.error != null;
 
 export const countUserAttachments = (
   attachments: Array<SavedObject<AttachmentAttributes>>

@@ -7,6 +7,7 @@
 
 import type { SortResults } from '@elastic/elasticsearch/lib/api/types';
 
+import type { PackageSpecIcon } from '../models/package_spec';
 import type {
   AssetReference,
   CategorySummaryList,
@@ -18,6 +19,8 @@ import type {
   EpmPackageInstallStatus,
   SimpleSOAssetType,
   AssetSOObject,
+  InstallResultStatus,
+  PackageMetadata,
 } from '../models/epm';
 
 export interface GetCategoriesRequest {
@@ -59,6 +62,9 @@ export interface InstalledPackage {
     name: string;
     title: string;
   }>;
+  title?: string;
+  description?: string;
+  icons?: PackageSpecIcon[];
 }
 export interface GetInstalledPackagesResponse {
   items: InstalledPackage[];
@@ -96,6 +102,7 @@ export interface GetInfoRequest {
 
 export interface GetInfoResponse {
   item: PackageInfo;
+  metadata?: PackageMetadata;
   // deprecated in 8.0
   response?: PackageInfo;
 }
@@ -154,10 +161,10 @@ export interface IBulkInstallPackageHTTPError {
 
 export interface InstallResult {
   assets?: AssetReference[];
-  status?: 'installed' | 'already_installed';
+  status?: InstallResultStatus;
   error?: Error;
   installType: InstallType;
-  installSource: InstallSource;
+  installSource?: InstallSource;
 }
 
 export interface BulkInstallPackageInfo {
@@ -189,6 +196,9 @@ export interface DeletePackageRequest {
     pkgName: string;
     pkgVersion: string;
   };
+  query: {
+    force?: boolean;
+  };
 }
 
 export interface DeletePackageResponse {
@@ -207,5 +217,22 @@ export interface GetBulkAssetsRequest {
 }
 
 export interface GetBulkAssetsResponse {
-  items: SimpleSOAssetType[];
+  items: Array<SimpleSOAssetType & { appLink?: string }>;
 }
+
+export interface GetInputsTemplatesRequest {
+  params: {
+    pkgName: string;
+    pkgVersion: string;
+  };
+  query: {
+    format: 'json' | 'yml' | 'yaml';
+    prerelease?: boolean;
+  };
+}
+
+export type GetInputsTemplatesResponse =
+  | string
+  | {
+      inputs: any;
+    };

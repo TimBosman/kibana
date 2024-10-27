@@ -7,10 +7,10 @@
 
 import { act, renderHook } from '@testing-library/react-hooks';
 import { mount } from 'enzyme';
-import type { FunctionComponent } from 'react';
+import type { FC, PropsWithChildren } from 'react';
 import React from 'react';
 
-import { coreMock, scopedHistoryMock, themeServiceMock } from '@kbn/core/public/mocks';
+import { coreMock, scopedHistoryMock } from '@kbn/core/public/mocks';
 
 import { UserProfile, useUserProfileForm } from './user_profile';
 import { UserProfileAPIClient } from '..';
@@ -22,14 +22,12 @@ import { Providers } from '../account_management_app';
 
 const user = mockAuthenticatedUser();
 const coreStart = coreMock.createStart();
-const theme$ = themeServiceMock.createTheme$();
 let history = scopedHistoryMock.create();
 const authc = securityMock.createSetup().authc;
 
-const wrapper: FunctionComponent = ({ children }) => (
+const wrapper: FC<PropsWithChildren<unknown>> = ({ children }) => (
   <Providers
     services={coreStart}
-    theme$={theme$}
     history={history}
     authc={authc}
     securityApiClients={{
@@ -197,7 +195,6 @@ describe('useUserProfileForm', () => {
       const testWrapper = mount(
         <Providers
           services={coreStart}
-          theme$={theme$}
           history={history}
           authc={authc}
           securityApiClients={{
@@ -220,7 +217,6 @@ describe('useUserProfileForm', () => {
       const testWrapper = mount(
         <Providers
           services={coreStart}
-          theme$={theme$}
           history={history}
           authc={authc}
           securityApiClients={{
@@ -245,7 +241,6 @@ describe('useUserProfileForm', () => {
       const testWrapper = mount(
         <Providers
           services={coreStart}
-          theme$={theme$}
           history={history}
           authc={authc}
           securityApiClients={{
@@ -266,9 +261,8 @@ describe('useUserProfileForm', () => {
       const themeOptions = themeMenu.find('EuiKeyPadMenuItem');
       expect(themeOptions).toHaveLength(3);
       themeOptions.forEach((option) => {
-        expect(option.getDOMNode().classList.contains('euiKeyPadMenuItem-isDisabled')).toEqual(
-          false
-        );
+        const menuItemEl = (option.getDOMNode() as unknown as Element[])[1];
+        expect(menuItemEl.className).not.toContain('disabled');
       });
     });
 
@@ -280,7 +274,6 @@ describe('useUserProfileForm', () => {
       const testWrapper = mount(
         <Providers
           services={coreStart}
-          theme$={theme$}
           history={history}
           authc={authc}
           securityApiClients={{
@@ -325,13 +318,12 @@ describe('useUserProfileForm', () => {
       const data: UserProfileData = {};
 
       const nonCloudUser = mockAuthenticatedUser({ elastic_cloud_user: false });
-      coreStart.settings.client.get.mockReturnValue(true);
+      coreStart.theme.getTheme.mockReturnValue({ darkMode: true });
       coreStart.settings.client.isOverridden.mockReturnValue(true);
 
       const testWrapper = mount(
         <Providers
           services={coreStart}
-          theme$={theme$}
           history={history}
           authc={authc}
           securityApiClients={{
@@ -353,9 +345,8 @@ describe('useUserProfileForm', () => {
       const themeOptions = themeMenu.find('EuiKeyPadMenuItem');
       expect(themeOptions).toHaveLength(3);
       themeOptions.forEach((option) => {
-        expect(option.getDOMNode().classList.contains('euiKeyPadMenuItem-isDisabled')).toEqual(
-          true
-        );
+        const menuItemEl = (option.getDOMNode() as unknown as Element[])[1];
+        expect(menuItemEl.className).toContain('disabled');
       });
     });
 
@@ -363,13 +354,12 @@ describe('useUserProfileForm', () => {
       const data: UserProfileData = {};
 
       const nonCloudUser = mockAuthenticatedUser({ elastic_cloud_user: false });
-      coreStart.settings.client.get.mockReturnValue(false);
+      coreStart.theme.getTheme.mockReturnValue({ darkMode: false });
       coreStart.settings.client.isOverridden.mockReturnValue(true);
 
       const testWrapper = mount(
         <Providers
           services={coreStart}
-          theme$={theme$}
           history={history}
           authc={authc}
           securityApiClients={{
@@ -391,9 +381,8 @@ describe('useUserProfileForm', () => {
       const themeOptions = themeMenu.find('EuiKeyPadMenuItem');
       expect(themeOptions).toHaveLength(3);
       themeOptions.forEach((option) => {
-        expect(option.getDOMNode().classList.contains('euiKeyPadMenuItem-isDisabled')).toEqual(
-          true
-        );
+        const menuItemEl = (option.getDOMNode() as unknown as Element[])[1];
+        expect(menuItemEl.className).toContain('disabled');
       });
     });
   });
@@ -409,7 +398,6 @@ describe('useUserProfileForm', () => {
       const testWrapper = mount(
         <Providers
           services={coreStart}
-          theme$={theme$}
           history={history}
           authc={authc}
           securityApiClients={{
@@ -437,7 +425,6 @@ describe('useUserProfileForm', () => {
       const testWrapper = mount(
         <Providers
           services={coreStart}
-          theme$={theme$}
           history={history}
           authc={authc}
           securityApiClients={{

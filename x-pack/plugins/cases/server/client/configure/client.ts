@@ -18,6 +18,8 @@ import type {
   ConfigurationAttributes,
   Configurations,
   ConnectorMappings,
+  CustomFieldsConfiguration,
+  TemplatesConfiguration,
 } from '../../../common/types/domain';
 import type {
   ConfigurationPatchRequest,
@@ -31,7 +33,7 @@ import {
   GetConfigurationFindRequestRt,
   FindActionConnectorResponseRt,
 } from '../../../common/types/api';
-import { decodeWithExcessOrThrow } from '../../../common/api';
+import { decodeWithExcessOrThrow, decodeOrThrow } from '../../common/runtime_types';
 import {
   MAX_CONCURRENT_SEARCHES,
   MAX_SUPPORTED_CONNECTORS_RETURNED,
@@ -42,12 +44,17 @@ import type { CasesClientArgs } from '../types';
 import { getMappings } from './get_mappings';
 
 import { Operations } from '../../authorization';
-import { combineAuthorizedAndOwnerFilter } from '../utils';
+import { combineAuthorizedAndOwnerFilter, transformTemplateCustomFields } from '../utils';
 import type { MappingsArgs, CreateMappingsArgs, UpdateMappingsArgs } from './types';
 import { createMappings } from './create_mappings';
 import { updateMappings } from './update_mappings';
-import { decodeOrThrow } from '../../../common/api/runtime_types';
 import { ConfigurationRt, ConfigurationsRt } from '../../../common/types/domain';
+import { validateDuplicatedKeysInRequest } from '../validators';
+import {
+  validateCustomFieldTypesInRequest,
+  validateTemplatesCustomFieldsInRequest,
+} from './validators';
+import { LICENSING_CASE_ASSIGNMENT_FEATURE } from '../../common/constants';
 
 /**
  * Defines the internal helper functions.
@@ -67,7 +74,7 @@ export interface ConfigureSubClient {
   /**
    * Retrieves the external connector configuration for a particular case owner.
    */
-  get(params: GetConfigurationFindRequest): Promise<Configurations>;
+  get(params?: GetConfigurationFindRequest): Promise<Configurations>;
   /**
    * Retrieves the valid external connectors supported by the cases plugin.
    */
@@ -89,6 +96,52 @@ export interface ConfigureSubClient {
    */
   create(configuration: ConfigurationRequest): Promise<Configuration>;
 }
+
+/**
+ * validate templates in configuration
+ */
+const validateTemplates = async ({
+  templates,
+  clientArgs,
+  customFields,
+}: {
+  templates: TemplatesConfiguration | undefined;
+  clientArgs: CasesClientArgs;
+  customFields: CustomFieldsConfiguration | undefined;
+}) => {
+  const { licensingService } = clientArgs.services;
+
+  validateDuplicatedKeysInRequest({
+    requestFields: templates,
+    fieldName: 'templates',
+  });
+
+  if (templates && templates.length) {
+    /**
+     * Assign users to a template is only available to Platinum+
+     */
+    const hasAssigneesInTemplate = templates.some((template) =>
+      Boolean(template.caseFields?.assignees && template.caseFields?.assignees.length > 0)
+    );
+
+    const hasPlatinumLicenseOrGreater = await licensingService.isAtLeastPlatinum();
+
+    if (hasAssigneesInTemplate && !hasPlatinumLicenseOrGreater) {
+      throw Boom.forbidden(
+        'In order to assign users to cases, you must be subscribed to an Elastic Platinum license'
+      );
+    }
+
+    if (hasAssigneesInTemplate) {
+      licensingService.notifyUsage(LICENSING_CASE_ASSIGNMENT_FEATURE);
+    }
+
+    validateTemplatesCustomFieldsInRequest({
+      templates,
+      customFieldsConfiguration: customFields,
+    });
+  }
+};
 
 /**
  * These functions should not be exposed on the plugin contract. They are for internal use to support the CRUD of
@@ -118,7 +171,7 @@ export const createConfigurationSubClient = (
   casesInternalClient: CasesClientInternal
 ): ConfigureSubClient => {
   return Object.freeze({
-    get: (params: GetConfigurationFindRequest) => get(params, clientArgs, casesInternalClient),
+    get: (params?: GetConfigurationFindRequest) => get(params, clientArgs, casesInternalClient),
     getConnectors: () => getConnectors(clientArgs),
     update: (configurationId: string, configuration: ConfigurationPatchRequest) =>
       update(configurationId, configuration, clientArgs, casesInternalClient),
@@ -128,7 +181,7 @@ export const createConfigurationSubClient = (
 };
 
 export async function get(
-  params: GetConfigurationFindRequest,
+  params: GetConfigurationFindRequest = {},
   clientArgs: CasesClientArgs,
   casesClientInternal: CasesClientInternal
 ): Promise<Configurations> {
@@ -250,11 +303,32 @@ export async function update(
   try {
     const request = decodeWithExcessOrThrow(ConfigurationPatchRequestRt)(req);
 
-    const { version, ...queryWithoutVersion } = request;
+    validateDuplicatedKeysInRequest({
+      requestFields: request.customFields,
+      fieldName: 'customFields',
+    });
+
+    const { version, templates, ...queryWithoutVersion } = request;
 
     const configuration = await caseConfigureService.get({
       unsecuredSavedObjectsClient,
       configurationId,
+    });
+
+    validateCustomFieldTypesInRequest({
+      requestCustomFields: request.customFields,
+      originalCustomFields: configuration.attributes.customFields,
+    });
+
+    const updatedTemplates = transformTemplateCustomFields({
+      templates,
+      customFields: request.customFields,
+    });
+
+    await validateTemplates({
+      templates: updatedTemplates,
+      clientArgs,
+      customFields: request.customFields,
     });
 
     await authorization.ensureAuthorized({
@@ -312,6 +386,7 @@ export async function update(
       configurationId: configuration.id,
       updatedAttributes: {
         ...queryWithoutVersionAndConnector,
+        ...(updatedTemplates && { templates: updatedTemplates }),
         ...(connector != null && { connector }),
         updated_at: updateDate,
         updated_by: user,
@@ -339,7 +414,7 @@ export async function update(
   }
 }
 
-async function create(
+export async function create(
   configRequest: ConfigurationRequest,
   clientArgs: CasesClientArgs,
   casesClientInternal: CasesClientInternal
@@ -355,6 +430,17 @@ async function create(
   try {
     const validatedConfigurationRequest =
       decodeWithExcessOrThrow(ConfigurationRequestRt)(configRequest);
+
+    validateDuplicatedKeysInRequest({
+      requestFields: validatedConfigurationRequest.customFields,
+      fieldName: 'customFields',
+    });
+
+    await validateTemplates({
+      templates: validatedConfigurationRequest.templates,
+      clientArgs,
+      customFields: validatedConfigurationRequest.customFields,
+    });
 
     let error = null;
 
@@ -428,6 +514,8 @@ async function create(
       unsecuredSavedObjectsClient,
       attributes: {
         ...validatedConfigurationRequest,
+        customFields: validatedConfigurationRequest.customFields ?? [],
+        templates: validatedConfigurationRequest.templates ?? [],
         connector: validatedConfigurationRequest.connector,
         created_at: creationDate,
         created_by: user,

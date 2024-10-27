@@ -14,20 +14,17 @@
 
 import { schema } from '@kbn/config-schema';
 import { ML_INTERNAL_BASE_PATH } from '../../common/constants/app';
-import { RouteInitialization } from '../types';
+import type { RouteInitialization } from '../types';
 import { wrapError } from '../client/error_wrapper';
 
 import { MemoryUsageService } from '../models/model_management';
 import { itemTypeLiterals } from './schemas/saved_objects';
 
-export function modelManagementRoutes({ router, routeGuard }: RouteInitialization) {
-  /**
-   * @apiGroup ModelManagement
-   *
-   * @api {get} /internal/ml/model_management/nodes_overview Get node overview about the models allocation
-   * @apiName GetModelManagementNodesOverview
-   * @apiDescription Retrieves the list of ML nodes with memory breakdown and allocated models info
-   */
+export function modelManagementRoutes({
+  router,
+  routeGuard,
+  getEnabledFeatures,
+}: RouteInitialization) {
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/model_management/nodes_overview`,
@@ -40,6 +37,8 @@ export function modelManagementRoutes({ router, routeGuard }: RouteInitializatio
           'access:ml:canGetTrainedModels',
         ],
       },
+      summary: 'Get node overview about the models allocation',
+      description: 'Retrieves the list of ML nodes with memory breakdown and allocated models info',
     })
     .addVersion(
       {
@@ -48,7 +47,7 @@ export function modelManagementRoutes({ router, routeGuard }: RouteInitializatio
       },
       routeGuard.fullLicenseAPIGuard(async ({ client, mlClient, response }) => {
         try {
-          const memoryUsageService = new MemoryUsageService(mlClient);
+          const memoryUsageService = new MemoryUsageService(mlClient, getEnabledFeatures());
           const result = await memoryUsageService.getNodesOverview();
           return response.ok({
             body: result,
@@ -59,13 +58,6 @@ export function modelManagementRoutes({ router, routeGuard }: RouteInitializatio
       })
     );
 
-  /**
-   * @apiGroup ModelManagement
-   *
-   * @api {get} /internal/ml/model_management/memory_usage Memory usage for jobs and trained models
-   * @apiName GetModelManagementMemoryUsage
-   * @apiDescription Returns the memory usage for jobs and trained models
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/model_management/memory_usage`,
@@ -78,6 +70,8 @@ export function modelManagementRoutes({ router, routeGuard }: RouteInitializatio
           'access:ml:canGetTrainedModels',
         ],
       },
+      summary: 'Get memory usage for jobs and trained models',
+      description: 'Retrieves the memory usage for jobs and trained models',
     })
     .addVersion(
       {
@@ -95,7 +89,7 @@ export function modelManagementRoutes({ router, routeGuard }: RouteInitializatio
 
       routeGuard.fullLicenseAPIGuard(async ({ mlClient, response, request }) => {
         try {
-          const memoryUsageService = new MemoryUsageService(mlClient);
+          const memoryUsageService = new MemoryUsageService(mlClient, getEnabledFeatures());
           return response.ok({
             body: await memoryUsageService.getMemorySizes(
               request.query.type,

@@ -5,16 +5,13 @@
  * 2.0.
  */
 
-import {
-  HealthStatus,
-  IndicesStatsIndexMetadataState,
-  Uuid,
-} from '@elastic/elasticsearch/lib/api/types';
+export type { Index } from '@kbn/index-management-shared-types';
 
-interface IndexModule {
+export interface IndexModule {
   number_of_shards: number | string;
   codec: string;
   routing_partition_size: number;
+  refresh_interval: string;
   load_fixed_bitset_filters_eagerly: boolean;
   shard: {
     check_on_startup: boolean | 'checksum';
@@ -56,30 +53,8 @@ export interface IndexSettings {
   analysis?: AnalysisModule;
   [key: string]: any;
 }
-export interface Index {
-  name: string;
-  primary?: number | string;
-  replica?: number | string;
-  isFrozen: boolean;
-  hidden: boolean;
-  aliases: string | string[];
-  data_stream?: string;
 
-  // The types below are added by extension services if corresponding plugins are enabled (ILM, Rollup, CCR)
-  isRollupIndex?: boolean;
-  ilm?: {
-    index: string;
-    managed: boolean;
-  };
-  isFollowerIndex?: boolean;
-
-  // The types from here below represent information returned from the index stats API;
-  // treated optional as the stats API is not available on serverless
-  health?: HealthStatus;
-  status?: IndicesStatsIndexMetadataState;
-  uuid?: Uuid;
-  documents?: number;
-  size?: string;
-  primary_size?: string;
-  documents_deleted?: number;
+export interface IndexSettingsResponse {
+  settings: IndexSettings;
+  defaults: IndexSettings;
 }

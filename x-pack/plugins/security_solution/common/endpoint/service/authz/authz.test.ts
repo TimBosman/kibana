@@ -11,8 +11,8 @@ import { createFleetAuthzMock } from '@kbn/fleet-plugin/common/mocks';
 import { createLicenseServiceMock } from '../../../license/mocks';
 import type { EndpointAuthzKeyList } from '../../types/authz';
 import {
-  RESPONSE_CONSOLE_ACTION_COMMANDS_TO_RBAC_FEATURE_CONTROL,
   CONSOLE_RESPONSE_ACTION_COMMANDS,
+  RESPONSE_CONSOLE_ACTION_COMMANDS_TO_RBAC_FEATURE_CONTROL,
   type ResponseConsoleRbacControls,
 } from '../response_actions/constants';
 
@@ -98,6 +98,27 @@ describe('Endpoint Authz service', () => {
       );
     });
 
+    it('should not give canReadFleetAgents if `fleet.readAgents` is false', () => {
+      fleetAuthz.fleet.readAgents = false;
+      expect(calculateEndpointAuthz(licenseService, fleetAuthz, userRoles).canReadFleetAgents).toBe(
+        false
+      );
+    });
+
+    it('should not give canWriteFleetAgents if `fleet.allAgents` is false', () => {
+      fleetAuthz.fleet.allAgents = false;
+      expect(
+        calculateEndpointAuthz(licenseService, fleetAuthz, userRoles).canWriteFleetAgents
+      ).toBe(false);
+    });
+
+    it('should not give canReadFleetAgentPolicies if `fleet.readAgentPolicies` is false', () => {
+      fleetAuthz.fleet.readAgentPolicies = false;
+      expect(
+        calculateEndpointAuthz(licenseService, fleetAuthz, userRoles).canReadFleetAgentPolicies
+      ).toBe(false);
+    });
+
     it('should not give canAccessEndpointManagement if not superuser', () => {
       userRoles = [];
       expect(
@@ -134,6 +155,7 @@ describe('Endpoint Authz service', () => {
       ['canSuspendProcess', 'writeProcessOperations'],
       ['canGetRunningProcesses', 'writeProcessOperations'],
       ['canWriteExecuteOperations', 'writeExecuteOperations'],
+      ['canWriteScanOperations', 'writeScanOperations'],
       ['canWriteFileOperations', 'writeFileOperations'],
       ['canWriteTrustedApplications', 'writeTrustedApplications'],
       ['canReadTrustedApplications', 'readTrustedApplications'],
@@ -146,6 +168,14 @@ describe('Endpoint Authz service', () => {
       ['canWriteEventFilters', 'writeEventFilters'],
       ['canReadEventFilters', 'readEventFilters'],
     ])('%s should be true if `packagePrivilege.%s` is `true`', (auth) => {
+      const authz = calculateEndpointAuthz(licenseService, fleetAuthz, userRoles);
+      expect(authz[auth]).toBe(true);
+    });
+
+    it.each<[EndpointAuthzKeyList[number], string]>([
+      ['canReadEndpointExceptions', 'showEndpointExceptions'],
+      ['canWriteEndpointExceptions', 'crudEndpointExceptions'],
+    ])('%s should be true if `endpointExceptionsPrivileges.%s` is `true`', (auth) => {
       const authz = calculateEndpointAuthz(licenseService, fleetAuthz, userRoles);
       expect(authz[auth]).toBe(true);
     });
@@ -164,6 +194,7 @@ describe('Endpoint Authz service', () => {
       ['canSuspendProcess', ['writeProcessOperations']],
       ['canGetRunningProcesses', ['writeProcessOperations']],
       ['canWriteExecuteOperations', ['writeExecuteOperations']],
+      ['canWriteScanOperations', ['writeScanOperations']],
       ['canWriteFileOperations', ['writeFileOperations']],
       ['canWriteTrustedApplications', ['writeTrustedApplications']],
       ['canReadTrustedApplications', ['readTrustedApplications']],
@@ -181,6 +212,20 @@ describe('Endpoint Authz service', () => {
       privileges.forEach((privilege) => {
         fleetAuthz.packagePrivileges!.endpoint.actions[privilege].executePackageAction = false;
       });
+
+      const authz = calculateEndpointAuthz(licenseService, fleetAuthz, userRoles);
+      expect(authz[auth]).toBe(false);
+    });
+
+    it.each<[EndpointAuthzKeyList[number], string[]]>([
+      ['canReadEndpointExceptions', ['showEndpointExceptions']],
+      ['canWriteEndpointExceptions', ['crudEndpointExceptions']],
+    ])('%s should be false if `endpointExceptionsPrivileges.%s` is `false`', (auth, privileges) => {
+      privileges.forEach((privilege) => {
+        // @ts-ignore
+        fleetAuthz.endpointExceptionsPrivileges!.actions[privilege] = false;
+      });
+
       const authz = calculateEndpointAuthz(licenseService, fleetAuthz, userRoles);
       expect(authz[auth]).toBe(false);
     });
@@ -199,6 +244,7 @@ describe('Endpoint Authz service', () => {
       ['canSuspendProcess', ['writeProcessOperations']],
       ['canGetRunningProcesses', ['writeProcessOperations']],
       ['canWriteExecuteOperations', ['writeExecuteOperations']],
+      ['canWriteScanOperations', ['writeScanOperations']],
       ['canWriteFileOperations', ['writeFileOperations']],
       ['canWriteTrustedApplications', ['writeTrustedApplications']],
       ['canReadTrustedApplications', ['readTrustedApplications']],
@@ -254,6 +300,9 @@ describe('Endpoint Authz service', () => {
         canWriteSecuritySolution: false,
         canReadSecuritySolution: false,
         canAccessFleet: false,
+        canReadFleetAgentPolicies: false,
+        canReadFleetAgents: false,
+        canWriteFleetAgents: false,
         canAccessEndpointActionsLogManagement: false,
         canAccessEndpointManagement: false,
         canCreateArtifactsByPolicy: false,
@@ -271,6 +320,7 @@ describe('Endpoint Authz service', () => {
         canGetRunningProcesses: false,
         canAccessResponseConsole: false,
         canWriteExecuteOperations: false,
+        canWriteScanOperations: false,
         canWriteFileOperations: false,
         canWriteTrustedApplications: false,
         canReadTrustedApplications: false,
@@ -281,6 +331,8 @@ describe('Endpoint Authz service', () => {
         canReadBlocklist: false,
         canWriteEventFilters: false,
         canReadEventFilters: false,
+        canReadEndpointExceptions: false,
+        canWriteEndpointExceptions: false,
       });
     });
   });

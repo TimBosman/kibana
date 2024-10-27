@@ -12,8 +12,17 @@ import {
   list_id,
   DefaultNamespaceArray,
 } from '@kbn/securitysolution-io-ts-list-types';
-import { NonEmptyStringArray } from '@kbn/securitysolution-io-ts-types';
-import { RuleName, RuleObjectId, RuleSignatureId } from '../../model';
+import { NonEmptyStringArray, NonEmptyString, UUID } from '@kbn/securitysolution-io-ts-types';
+
+// TODO https://github.com/elastic/security-team/issues/7491
+type RuleObjectId = t.TypeOf<typeof RuleObjectId>;
+const RuleObjectId = UUID;
+
+type RuleSignatureId = t.TypeOf<typeof RuleSignatureId>;
+const RuleSignatureId = t.string;
+
+type RuleName = t.TypeOf<typeof RuleName>;
+const RuleName = NonEmptyString;
 
 // If ids and list_ids are undefined, route will fetch all lists matching the
 // specified namespace type

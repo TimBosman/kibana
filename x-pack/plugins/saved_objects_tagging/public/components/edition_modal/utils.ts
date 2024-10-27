@@ -6,9 +6,11 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
+import { i18n } from '@kbn/i18n';
+
+import type { TagAttributes } from '../../../common/types';
 import {
-  TagAttributes,
-  TagValidation,
+  type TagValidation,
   validateTagColor,
   validateTagName,
   validateTagDescription,
@@ -20,6 +22,20 @@ import {
 export const getRandomColor = (): string => {
   return '#' + String(Math.floor(Math.random() * 16777215).toString(16)).padStart(6, '0');
 };
+
+export const duplicateTagNameErrorMessage = i18n.translate(
+  'xpack.savedObjectsTagging.validation.name.duplicateError',
+  {
+    defaultMessage: 'Name has already been taken.',
+  }
+);
+
+export const managedTagConflictMessage = i18n.translate(
+  'xpack.savedObjectsTagging.validation.name.managedTagDuplicateError',
+  {
+    defaultMessage: 'This name belongs to a tag managed by Elastic.',
+  }
+);
 
 export const validateTag = (tag: TagAttributes): TagValidation => {
   const validation: TagValidation = {
@@ -50,7 +66,7 @@ export const useIfMounted = () => {
     []
   );
 
-  const ifMounted = useCallback((func) => {
+  const ifMounted = useCallback((func?: () => void) => {
     if (isMounted.current && func) {
       func();
     }

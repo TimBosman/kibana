@@ -8,8 +8,14 @@
 import type { DataView } from '@kbn/data-views-plugin/public';
 import type { Field, Aggregation, SplitField, AggFieldPair } from '@kbn/ml-anomaly-utils';
 import type { SavedSearch } from '@kbn/saved-search-plugin/public';
+import type { MlApi } from '../../../../services/ml_api_service';
+import type { NewJobCapsService } from '../../../../services/new_job_capabilities/new_job_capabilities_service';
 import { JobCreator } from './job_creator';
-import { Job, Datafeed, Detector } from '../../../../../../common/types/anomaly_detection_jobs';
+import type {
+  Job,
+  Datafeed,
+  Detector,
+} from '../../../../../../common/types/anomaly_detection_jobs';
 import { createBasicDetector } from './util/default_configs';
 import { JOB_TYPE, CREATED_BY_LABEL } from '../../../../../../common/constants/new_job';
 import { getRichDetectors } from './util/general';
@@ -23,8 +29,14 @@ export class GeoJobCreator extends JobCreator {
 
   protected _type: JOB_TYPE = JOB_TYPE.GEO;
 
-  constructor(indexPattern: DataView, savedSearch: SavedSearch | null, query: object) {
-    super(indexPattern, savedSearch, query);
+  constructor(
+    mlApi: MlApi,
+    newJobCapsService: NewJobCapsService,
+    indexPattern: DataView,
+    savedSearch: SavedSearch | null,
+    query: object
+  ) {
+    super(mlApi, newJobCapsService, indexPattern, savedSearch, query);
     this.createdBy = CREATED_BY_LABEL.GEO;
     this._wizardInitialized$.next(true);
   }
@@ -106,7 +118,13 @@ export class GeoJobCreator extends JobCreator {
     this._overrideConfigs(job, datafeed);
     this.createdBy = CREATED_BY_LABEL.GEO;
     this._sparseData = isSparseDataJob(job, datafeed);
-    const detectors = getRichDetectors(job, datafeed, this.additionalFields, false);
+    const detectors = getRichDetectors(
+      this.newJobCapsService,
+      job,
+      datafeed,
+      this.additionalFields,
+      false
+    );
 
     this.removeSplitField();
     this.removeAllDetectors();

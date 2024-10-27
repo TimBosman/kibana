@@ -23,17 +23,26 @@
 // ***********************************************************
 
 // force ESM in this module
-import type { SecuritySolutionDescribeBlockFtrConfig } from '@kbn/security-solution-plugin/scripts/run_cypress/utils';
 
 export {};
 
-import 'cypress-react-selector';
+// @ts-expect-error ts(2306)  module has some interesting ways of importing, see https://github.com/cypress-io/cypress/blob/0871b03c5b21711cd23056454da8f23dcaca4950/npm/grep/README.md#support-file
 import registerCypressGrep from '@cypress/grep';
 
-import type { ServerlessRoleName } from './roles';
-import { login } from '../../../../test_serverless/functional/test_suites/security/cypress/tasks/login';
-
 registerCypressGrep();
+
+import type { SecuritySolutionDescribeBlockFtrConfig } from '@kbn/security-solution-plugin/scripts/run_cypress/utils';
+import { login } from '@kbn/security-solution-plugin/public/management/cypress/tasks/login';
+
+import type { LoadedRoleAndUser } from '@kbn/test-suites-serverless/shared/lib';
+import type { ServerlessRoleName } from './roles';
+
+import { waitUntil } from '../tasks/wait_until';
+import { isCloudServerless, isServerless } from '../tasks/serverless';
+
+export interface LoadUserAndRoleCyTaskOptions {
+  name: ServerlessRoleName;
+}
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -45,6 +54,12 @@ declare global {
     }
 
     interface Chainable {
+      task(
+        name: 'loadUserAndRole',
+        arg: LoadUserAndRoleCyTaskOptions,
+        options?: Partial<Loggable & Timeoutable>
+      ): Chainable<LoadedRoleAndUser>;
+
       getBySel(...args: Parameters<Cypress.Chainable['get']>): Chainable<JQuery<HTMLElement>>;
 
       getBySelContains(
@@ -53,7 +68,9 @@ declare global {
 
       clickOutside(): Chainable<JQuery<HTMLBodyElement>>;
 
-      login(role?: ServerlessRoleName | 'elastic'): void;
+      login(role: ServerlessRoleName, useCookiesForMKI?: boolean): void;
+
+      waitUntil(fn: () => Cypress.Chainable): Cypress.Chainable | undefined;
     }
   }
 }
@@ -72,7 +89,23 @@ Cypress.Commands.add(
   () => cy.get('body').click(0, 0) // 0,0 here are the x and y coordinates
 );
 
-Cypress.Commands.add('login', login);
+Cypress.Commands.add('login', (role, useCookiesForMKI = true) => {
+  // MKI does not support multiple logins throughout the test suite using cookies.
+  // Until a better alternative is found, we will prevent multiple logins in the MKI environment in test suites.
+  if (isCloudServerless && !useCookiesForMKI) {
+    return;
+  }
+
+  if (isServerless && !isCloudServerless) {
+    // Do not use login.with in MKI env, default to login which will route to proper login method
+    return login.with(role, 'changeme');
+  }
+
+  // @ts-expect-error hackish way to provide a new role in Osquery ESS only (Reader)
+  return login(role);
+});
+
+Cypress.Commands.add('waitUntil', waitUntil);
 
 // Alternatively you can use CommonJS syntax:
 // require('./commands')

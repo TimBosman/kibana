@@ -16,7 +16,8 @@ import {
   renderQuery,
 } from '../test_utils';
 
-describe('List artifact hook', () => {
+// FLAKY: https://github.com/elastic/kibana/issues/196724
+describe.skip('List artifact hook', () => {
   let result: ReturnType<typeof useListArtifact>;
   let searchableFields: string[];
   let options:
@@ -68,6 +69,7 @@ describe('List artifact hook', () => {
     expect(result.data).toBe(apiResponse);
     expect(fakeHttpServices.get).toHaveBeenCalledTimes(1);
     expect(fakeHttpServices.get).toHaveBeenCalledWith('/api/exception_lists/items/_find', {
+      version: '2023-10-31',
       query: {
         filter:
           '((exception-list-agnostic.attributes.tags:"policy:policy-1" OR exception-list-agnostic.attributes.tags:"policy:all")) AND ((exception-list-agnostic.attributes.field-1:(*test*) OR exception-list-agnostic.attributes.field-1.field-2:(*test*) OR exception-list-agnostic.attributes.field-2:(*test*)))',

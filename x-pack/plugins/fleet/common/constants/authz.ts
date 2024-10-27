@@ -10,7 +10,7 @@ import { DEFAULT_APP_CATEGORIES } from '@kbn/core-application-common';
 
 const SECURITY_SOLUTION_APP_ID = 'siem';
 
-interface PrivilegeMapObject {
+export interface PrivilegeMapObject {
   appId: string;
   privilegeSplit: string;
   privilegeType: 'ui' | 'api';
@@ -161,5 +161,26 @@ export const ENDPOINT_PRIVILEGES: Record<string, PrivilegeMapObject> = deepFreez
     privilegeSplit: '-',
     privilegeType: 'api',
     privilegeName: 'writeExecuteOperations',
+  },
+  writeScanOperations: {
+    appId: DEFAULT_APP_CATEGORIES.security.id,
+    privilegeSplit: '-',
+    privilegeType: 'api',
+    privilegeName: 'writeScanOperations',
+  },
+});
+
+export const ENDPOINT_EXCEPTIONS_PRIVILEGES: Record<string, PrivilegeMapObject> = deepFreeze({
+  showEndpointExceptions: {
+    appId: DEFAULT_APP_CATEGORIES.security.id,
+    privilegeSplit: '-',
+    privilegeType: 'api',
+    privilegeName: 'showEndpointExceptions',
+  },
+  crudEndpointExceptions: {
+    appId: DEFAULT_APP_CATEGORIES.security.id,
+    privilegeSplit: '-',
+    privilegeType: 'api',
+    privilegeName: 'crudEndpointExceptions',
   },
 });

@@ -15,7 +15,7 @@ import type {
   GetCaseConnectorsResponse,
 } from '../../../common/types/api';
 import { GetCaseConnectorsResponseRt } from '../../../common/types/api';
-import { decodeOrThrow } from '../../../common/api';
+import { decodeOrThrow } from '../../common/runtime_types';
 import {
   isConnectorUserAction,
   isCreateCaseUserAction,
@@ -33,6 +33,7 @@ import type {
   ExternalService,
   UserActionAttributes,
 } from '../../../common/types/domain';
+import { ConnectorTypes } from '../../../common/types/domain';
 
 export const getConnectors = async (
   { caseId }: GetConnectorsRequest,
@@ -142,7 +143,33 @@ const getConnectorsInfo = async ({
     await getActionConnectors(actionsClient, logger, connectorIds),
   ]);
 
-  return createConnectorInfoResult({ actionConnectors, connectors, pushInfo, latestUserAction });
+  /**
+   * TODO: Remove when all connectors support the status and
+   * the severity user actions or if there is a mechanism to
+   * define supported user actions per connector type
+   */
+  const hasAdditionalUserActionsConnector = actionConnectors.some(
+    (actionConnector) =>
+      actionConnector.actionTypeId === ConnectorTypes.casesWebhook ||
+      actionConnector.actionTypeId === ConnectorTypes.theHive
+  );
+  let latestAdditionalUserActionConnector: SavedObject<UserActionAttributes> | undefined;
+  if (hasAdditionalUserActionsConnector) {
+    // if cases webhook connector, we need to fetch latestUserAction again because
+    // the cases webhook connector includes extra fields other case connectors do not track
+    latestAdditionalUserActionConnector = await userActionService.getMostRecentUserAction(
+      caseId,
+      true
+    );
+  }
+
+  return createConnectorInfoResult({
+    actionConnectors,
+    connectors,
+    pushInfo,
+    latestUserAction,
+    latestAdditionalUserActionConnector,
+  });
 };
 
 const getActionConnectors = async (
@@ -267,11 +294,13 @@ const createConnectorInfoResult = ({
   connectors,
   pushInfo,
   latestUserAction,
+  latestAdditionalUserActionConnector,
 }: {
   actionConnectors: ActionResult[];
   connectors: CaseConnectorActivity[];
   pushInfo: Map<string, EnrichedPushInfo>;
   latestUserAction?: SavedObject<UserActionAttributes>;
+  latestAdditionalUserActionConnector?: SavedObject<UserActionAttributes>;
 }) => {
   const results: GetCaseConnectorsResponse = {};
   const actionConnectorsMap = new Map(
@@ -282,7 +311,17 @@ const createConnectorInfoResult = ({
     const connectorDetails = actionConnectorsMap.get(aggregationConnector.connectorId);
     const connector = getConnectorInfoFromSavedObject(aggregationConnector.fields);
 
-    const latestUserActionCreatedAt = getDate(latestUserAction?.attributes.created_at);
+    const latestUserActionCreatedAt = getDate(
+      /**
+       * TODO: Remove when all connectors support the status and
+       * the severity user actions or if there is a mechanism to
+       * define supported user actions per connector type
+       */
+      connectorDetails?.actionTypeId === ConnectorTypes.casesWebhook ||
+        connectorDetails?.actionTypeId === ConnectorTypes.theHive
+        ? latestAdditionalUserActionConnector?.attributes.created_at
+        : latestUserAction?.attributes.created_at
+    );
 
     if (connector != null) {
       const enrichedPushInfo = pushInfo.get(aggregationConnector.connectorId);

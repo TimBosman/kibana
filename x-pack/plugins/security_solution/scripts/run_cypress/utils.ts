@@ -11,7 +11,36 @@ import * as parser from '@babel/parser';
 import generate from '@babel/generator';
 import type { ExpressionStatement, ObjectExpression, ObjectProperty } from '@babel/types';
 import { schema, type TypeOf } from '@kbn/config-schema';
-import { getExperimentalAllowedValues } from '../../common/experimental_features';
+import chalk from 'chalk';
+
+/**
+ * Retrieve test files using a glob pattern.
+ * If process.env.RUN_ALL_TESTS is true, returns all matching files, otherwise, return files that should be run by this job based on process.env.BUILDKITE_PARALLEL_JOB_COUNT and process.env.BUILDKITE_PARALLEL_JOB
+ */
+export const retrieveIntegrations = (integrationsPaths: string[]) => {
+  const nonSkippedSpecs = integrationsPaths.filter((filePath) => !isSkipped(filePath));
+
+  if (process.env.RUN_ALL_TESTS === 'true') {
+    return nonSkippedSpecs;
+  } else {
+    // The number of instances of this job were created
+    const chunksTotal: number = process.env.BUILDKITE_PARALLEL_JOB_COUNT
+      ? parseInt(process.env.BUILDKITE_PARALLEL_JOB_COUNT, 10)
+      : 1;
+    // An index which uniquely identifies this instance of the job
+    const chunkIndex: number = process.env.BUILDKITE_PARALLEL_JOB
+      ? parseInt(process.env.BUILDKITE_PARALLEL_JOB, 10)
+      : 0;
+
+    const nonSkippedSpecsForChunk: string[] = [];
+
+    for (let i = chunkIndex; i < nonSkippedSpecs.length; i += chunksTotal) {
+      nonSkippedSpecsForChunk.push(nonSkippedSpecs[i]);
+    }
+
+    return nonSkippedSpecsForChunk;
+  }
+};
 
 export const isSkipped = (filePath: string): boolean => {
   const testFile = fs.readFileSync(filePath, { encoding: 'utf8' });
@@ -39,9 +68,10 @@ export const parseTestFileConfig = (filePath: string): SecuritySolutionDescribeB
     plugins: ['typescript'],
   });
 
-  const expressionStatement = _.find(ast.program.body, ['type', 'ExpressionStatement']) as
-    | ExpressionStatement
-    | undefined;
+  const expressionStatement = _.find(ast.program.body, {
+    type: 'ExpressionStatement',
+    expression: { callee: { name: 'describe' } },
+  }) as ExpressionStatement | undefined;
 
   const callExpression = expressionStatement?.expression;
   // @ts-expect-error
@@ -70,6 +100,7 @@ export const parseTestFileConfig = (filePath: string): SecuritySolutionDescribeB
 
     try {
       // TODO:PT need to assess implication of using this approach to get the JSON back out
+      // eslint-disable-next-line no-new-func
       const ftrConfigJson = new Function(`return ${ftrConfigCode}`)();
       return TestFileFtrConfigSchema.validate(ftrConfigJson);
     } catch (err) {
@@ -85,21 +116,7 @@ export const parseTestFileConfig = (filePath: string): SecuritySolutionDescribeB
 const TestFileFtrConfigSchema = schema.object(
   {
     license: schema.maybe(schema.string()),
-    enableExperimental: schema.maybe(
-      schema.arrayOf(
-        schema.string({
-          validate: (value) => {
-            const allowedValues = getExperimentalAllowedValues();
-
-            if (!allowedValues.includes(value)) {
-              return `Invalid [enableExperimental] value {${value}.\nValid values are: [${allowedValues.join(
-                ', '
-              )}]`;
-            }
-          },
-        })
-      )
-    ),
+    kbnServerArgs: schema.maybe(schema.arrayOf(schema.string())),
     productTypes: schema.maybe(
       // TODO:PT write validate function to ensure that only the correct combinations are used
       schema.arrayOf(
@@ -119,3 +136,23 @@ const TestFileFtrConfigSchema = schema.object(
 );
 
 export type SecuritySolutionDescribeBlockFtrConfig = TypeOf<typeof TestFileFtrConfigSchema>;
+
+export const getOnBeforeHook = (module: unknown, beforeSpecFilePath: string): Function => {
+  if (typeof module !== 'object' || module === null) {
+    throw new Error(
+      `${chalk.bold(
+        beforeSpecFilePath
+      )} expected to explicitly export function member named "onBeforeHook"`
+    );
+  }
+
+  if (!('onBeforeHook' in module) || typeof module.onBeforeHook !== 'function') {
+    throw new Error(
+      `${chalk.bold('onBeforeHook')} exported from ${chalk.bold(
+        beforeSpecFilePath
+      )} is not a function`
+    );
+  }
+
+  return module.onBeforeHook;
+};

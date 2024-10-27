@@ -7,9 +7,9 @@
 
 import { partition } from 'lodash/fp';
 import { Readable } from 'stream';
-import { createPromiseFromStreams } from '@kbn/utils';
 import type { RuleAction, ThreatMapping } from '@kbn/securitysolution-io-ts-alerting-types';
 import type { PartialRule } from '@kbn/alerting-plugin/server';
+import type { ActionsClient } from '@kbn/actions-plugin/server';
 
 import type { RuleToImport } from '../../../../../common/api/detection_engine/rule_management';
 import { getCreateRulesSchemaMock } from '../../../../../common/api/detection_engine/model/rule_schema/mocks';
@@ -26,6 +26,7 @@ import {
   getInvalidConnectors,
   swapActionIds,
   migrateLegacyActionsIds,
+  migrateLegacyInvestigationFields,
 } from './utils';
 import { getRuleMock } from '../../routes/__mocks__/request_responses';
 import type { PartialFilter } from '../../types';
@@ -35,9 +36,8 @@ import { createBulkErrorObject } from '../../routes/utils';
 import type { RuleAlertType } from '../../rule_schema';
 import { getMlRuleParams, getQueryRuleParams, getThreatRuleParams } from '../../rule_schema/mocks';
 
-import { createRulesAndExceptionsStreamFromNdJson } from '../logic/import/create_rules_stream_from_ndjson';
-import type { RuleExceptionsPromiseFromStreams } from '../logic/import/import_rules_utils';
-import { internalRuleToAPIResponse } from '../normalization/rule_converters';
+import { createPromiseFromRuleImportStream } from '../logic/import/create_promise_from_rule_import_stream';
+import { internalRuleToAPIResponse } from '../logic/detection_rules_client/converters/internal_rule_to_api_response';
 
 type PromiseFromStreams = RuleToImport | Error;
 
@@ -48,15 +48,18 @@ const createMockImportRule = async (rule: ReturnType<typeof getCreateRulesSchema
       this.push(null);
     },
   });
-  const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-    ndJsonStream,
-    ...createRulesAndExceptionsStreamFromNdJson(1000),
-  ]);
+  const [{ rules }] = await createPromiseFromRuleImportStream({
+    stream: ndJsonStream,
+    objectLimit: 1000,
+  });
   return rules;
 };
 
 describe('utils', () => {
   const { clients } = requestContextMock.createTools();
+  const actionsClient = {
+    isSystemAction: jest.fn((id: string) => id === 'system-connector-.cases'),
+  } as unknown as jest.Mocked<ActionsClient>;
 
   describe('internalRuleToAPIResponse', () => {
     test('should work with a full data set', () => {
@@ -428,10 +431,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
       const [errors, output] = getTupleDuplicateErrorsAndUniqueRules(rules, false);
       const isInstanceOfError = output[0] instanceof Error;
 
@@ -449,10 +452,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
 
       const [errors, output] = getTupleDuplicateErrorsAndUniqueRules(rules, false);
 
@@ -480,10 +483,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
 
       const [errors, output] = getTupleDuplicateErrorsAndUniqueRules(rules, false);
       const isInstanceOfError = output[0] instanceof Error;
@@ -502,10 +505,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
 
       const [errors, output] = getTupleDuplicateErrorsAndUniqueRules(rules, true);
 
@@ -523,10 +526,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
 
       const [errors, output] = getTupleDuplicateErrorsAndUniqueRules(rules, false);
       const isInstanceOfError = output[0] instanceof Error;
@@ -626,7 +629,8 @@ describe('utils', () => {
       const res = await migrateLegacyActionsIds(
         // @ts-expect-error
         [rule],
-        soClient
+        soClient,
+        actionsClient
       );
       expect(res).toEqual([{ ...rule, actions: [{ ...mockAction, id: 'new-post-8.0-id' }] }]);
     });
@@ -648,7 +652,8 @@ describe('utils', () => {
       const res = await migrateLegacyActionsIds(
         // @ts-expect-error
         [rule],
-        soClient
+        soClient,
+        actionsClient
       );
       expect(res).toEqual([
         {
@@ -678,7 +683,7 @@ describe('utils', () => {
 
       soClient.find.mockRejectedValueOnce(new Error('failed to query'));
 
-      const res = await migrateLegacyActionsIds(rules, soClient);
+      const res = await migrateLegacyActionsIds(rules, soClient, actionsClient);
       expect(soClient.find.mock.calls).toHaveLength(2);
       const [error, ruleRes] = partition<PromiseFromStreams, Error>(
         (item): item is Error => item instanceof Error
@@ -721,7 +726,8 @@ describe('utils', () => {
       const res = await migrateLegacyActionsIds(
         // @ts-expect-error
         [rule],
-        soClient
+        soClient,
+        actionsClient
       );
       expect(res[1] instanceof Error).toBeTruthy();
       expect((res[1] as unknown as Error).message).toEqual(
@@ -763,7 +769,8 @@ describe('utils', () => {
       const res = await migrateLegacyActionsIds(
         // @ts-expect-error
         [rule, rule],
-        soClient
+        soClient,
+        actionsClient
       );
       expect(res[0]).toEqual({ ...rule, actions: [{ ...mockAction, id: 'new-post-8.0-id' }] });
       expect(res[1]).toEqual({ ...rule, actions: [] });
@@ -778,6 +785,25 @@ describe('utils', () => {
           },
         })
       );
+    });
+    test('does not migrate system actions', async () => {
+      const mockSystemAction: RuleAction = {
+        group: 'group string',
+        id: 'system-connector-.cases',
+        action_type_id: '.case',
+        params: {},
+      };
+      const rule: ReturnType<typeof getCreateRulesSchemaMock> = {
+        ...getCreateRulesSchemaMock('rule-1'),
+        actions: [mockSystemAction],
+      };
+      const res = await migrateLegacyActionsIds(
+        // @ts-expect-error
+        [rule],
+        soClient,
+        actionsClient
+      );
+      expect(res).toEqual([{ ...rule, actions: [{ ...mockSystemAction }] }]);
     });
   });
   describe('getInvalidConnectors', () => {
@@ -795,10 +821,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
 
       clients.actionsClient.getAll.mockResolvedValue([]);
       const [errors, output] = await getInvalidConnectors(rules, clients.actionsClient);
@@ -826,10 +852,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
       clients.actionsClient.getAll.mockResolvedValue([]);
       const [errors, output] = await getInvalidConnectors(rules, clients.actionsClient);
       expect(output.length).toEqual(0);
@@ -862,10 +888,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
       clients.actionsClient.getAll.mockResolvedValue([
         {
           id: '123',
@@ -907,10 +933,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
       clients.actionsClient.getAll.mockResolvedValue([
         {
           id: '123',
@@ -967,10 +993,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
       clients.actionsClient.getAll.mockResolvedValue([
         {
           id: '123',
@@ -1034,10 +1060,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
       clients.actionsClient.getAll.mockResolvedValue([
         {
           id: '123',
@@ -1103,10 +1129,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
       clients.actionsClient.getAll.mockResolvedValue([
         {
           id: '123',
@@ -1213,10 +1239,10 @@ describe('utils', () => {
           this.push(null);
         },
       });
-      const [{ rules }] = await createPromiseFromStreams<RuleExceptionsPromiseFromStreams[]>([
-        ndJsonStream,
-        ...createRulesAndExceptionsStreamFromNdJson(1000),
-      ]);
+      const [{ rules }] = await createPromiseFromRuleImportStream({
+        stream: ndJsonStream,
+        objectLimit: 1000,
+      });
       clients.actionsClient.getAll.mockResolvedValue([
         {
           id: '123',
@@ -1257,6 +1283,28 @@ describe('utils', () => {
           rule_id: 'rule-1',
         },
       ]);
+    });
+  });
+
+  describe('migrateLegacyInvestigationFields', () => {
+    test('should return undefined if value not set', () => {
+      const result = migrateLegacyInvestigationFields(undefined);
+      expect(result).toEqual(undefined);
+    });
+
+    test('should migrate array to object', () => {
+      const result = migrateLegacyInvestigationFields(['foo']);
+      expect(result).toEqual({ field_names: ['foo'] });
+    });
+
+    test('should migrate empty array to undefined', () => {
+      const result = migrateLegacyInvestigationFields([]);
+      expect(result).toEqual(undefined);
+    });
+
+    test('should not migrate if already intended type', () => {
+      const result = migrateLegacyInvestigationFields({ field_names: ['foo'] });
+      expect(result).toEqual({ field_names: ['foo'] });
     });
   });
 });

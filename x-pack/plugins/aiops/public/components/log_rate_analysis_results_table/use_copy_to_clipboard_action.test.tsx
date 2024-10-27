@@ -7,27 +7,27 @@
 
 import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
-import { render, act } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { renderHook } from '@testing-library/react-hooks';
 
-import type { SignificantTerm } from '@kbn/ml-agg-utils';
+import type { SignificantItem } from '@kbn/ml-agg-utils';
 
-import { finalSignificantTermGroups } from '../../../common/__mocks__/artificial_logs/final_significant_term_groups';
-import { significantTerms } from '../../../common/__mocks__/artificial_logs/significant_terms';
+import { finalSignificantItemGroups } from '@kbn/aiops-test-utils/artificial_logs/final_significant_item_groups';
+import { significantTerms } from '@kbn/aiops-test-utils/artificial_logs/significant_terms';
+import type { GroupTableItem } from '@kbn/aiops-log-rate-analysis/state';
 
 import { getGroupTableItems } from './get_group_table_items';
 import { useCopyToClipboardAction } from './use_copy_to_clipboard_action';
-import type { GroupTableItem } from './types';
 
 interface Action {
-  render: (tableItem: SignificantTerm | GroupTableItem) => ReactElement;
+  render: (tableItem: SignificantItem | GroupTableItem) => ReactElement;
 }
 
 const execCommandMock = (global.document.execCommand = jest.fn());
 const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
 describe('useCopyToClipboardAction', () => {
-  it('renders the action for a single significant term', async () => {
+  it('renders the action for a single significant item', async () => {
     execCommandMock.mockImplementationOnce(() => true);
     const { result } = renderHook(() => useCopyToClipboardAction());
     const { findByText, getByTestId } = render(
@@ -36,7 +36,7 @@ describe('useCopyToClipboardAction', () => {
 
     const button = getByTestId('aiopsTableActionButtonCopyToClipboard enabled');
 
-    userEvent.hover(button);
+    await userEvent.hover(button);
 
     // The tooltip from EUI takes 250ms to appear, so we must
     // use a `find*` query to asynchronously poll for it.
@@ -44,9 +44,7 @@ describe('useCopyToClipboardAction', () => {
       await findByText('Copy field/value pair as KQL syntax to clipboard')
     ).toBeInTheDocument();
 
-    await act(async () => {
-      await userEvent.click(button);
-    });
+    await userEvent.click(button);
 
     // EUI implements copy-to-clipboard with deprecated `document.execCommand`.
     // We can assert that is has been triggered, but the combo with jsdom doesn't
@@ -57,21 +55,19 @@ describe('useCopyToClipboardAction', () => {
 
   it('renders the action for a group of items', async () => {
     execCommandMock.mockImplementationOnce(() => true);
-    const groupTableItems = getGroupTableItems(finalSignificantTermGroups);
+    const groupTableItems = getGroupTableItems(finalSignificantItemGroups);
     const { result } = renderHook(useCopyToClipboardAction);
     const { findByText, getByText } = render((result.current as Action).render(groupTableItems[0]));
 
     const button = getByText('Copy to clipboard');
 
-    userEvent.hover(button);
+    await userEvent.hover(button);
 
     // The tooltip from EUI takes 250ms to appear, so we must
     // use a `find*` query to asynchronously poll for it.
     expect(await findByText('Copy group items as KQL syntax to clipboard')).toBeInTheDocument();
 
-    await act(async () => {
-      await userEvent.click(button);
-    });
+    await userEvent.click(button);
 
     // EUI implements copy-to-clipboard with deprecated `document.execCommand`.
     // We can assert that is has been triggered, but the combo with jsdom doesn't

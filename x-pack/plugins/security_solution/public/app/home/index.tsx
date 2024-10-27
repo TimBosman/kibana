@@ -8,16 +8,12 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 
-import type { AppMountParameters } from '@kbn/core/public';
 import { DragDropContextWrapper } from '../../common/components/drag_and_drop/drag_drop_context_wrapper';
 import { SecuritySolutionAppWrapper } from '../../common/components/page';
 
 import { HelpMenu } from '../../common/components/help_menu';
-import {
-  useInitSourcerer,
-  getScopeFromPath,
-  useSourcererDataView,
-} from '../../common/containers/sourcerer';
+import { getScopeFromPath } from '../../sourcerer/containers/sourcerer_paths';
+import { useSourcererDataView } from '../../sourcerer/containers';
 import { GlobalHeader } from './global_header';
 import { ConsoleManager } from '../../management/components/console/components/console_manager';
 
@@ -29,13 +25,14 @@ import { useUpdateExecutionContext } from '../../common/hooks/use_update_executi
 import { useUpgradeSecurityPackages } from '../../detection_engine/rule_management/logic/use_upgrade_security_packages';
 import { useSetupDetectionEngineHealthApi } from '../../detection_engine/rule_monitoring';
 import { TopValuesPopover } from '../components/top_values_popover/top_values_popover';
+import { AssistantOverlay } from '../../assistant/overlay';
+import { useInitSourcerer } from '../../sourcerer/containers/use_init_sourcerer';
 
 interface HomePageProps {
   children: React.ReactNode;
-  setHeaderActionMenu: AppMountParameters['setHeaderActionMenu'];
 }
 
-const HomePageComponent: React.FC<HomePageProps> = ({ children, setHeaderActionMenu }) => {
+const HomePageComponent: React.FC<HomePageProps> = ({ children }) => {
   const { pathname } = useLocation();
   useInitSourcerer(getScopeFromPath(pathname));
   useUrlState();
@@ -57,12 +54,13 @@ const HomePageComponent: React.FC<HomePageProps> = ({ children, setHeaderActionM
       <ConsoleManager>
         <TourContextProvider>
           <>
-            <GlobalHeader setHeaderActionMenu={setHeaderActionMenu} />
+            <GlobalHeader />
             <DragDropContextWrapper browserFields={browserFields}>
               {children}
             </DragDropContextWrapper>
             <HelpMenu />
             <TopValuesPopover />
+            <AssistantOverlay />
           </>
         </TourContextProvider>
       </ConsoleManager>

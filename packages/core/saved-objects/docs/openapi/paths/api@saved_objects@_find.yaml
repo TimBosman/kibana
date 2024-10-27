@@ -1,6 +1,7 @@
 get:
-  summary: Retrieve a paginated set of Kibana saved objects.
+  summary: Search for saved objects 
   operationId: findSavedObjects
+  description: Retrieve a paginated set of Kibana saved objects.
   deprecated: true
   tags:
     - saved objects
@@ -105,7 +106,3 @@ get:
             application/json:
               schema:
                 $ref: '../components/schemas/400_response.yaml'
-  servers:
-     - url: https://localhost:5601
-servers:
-      - url: https://localhost:5601

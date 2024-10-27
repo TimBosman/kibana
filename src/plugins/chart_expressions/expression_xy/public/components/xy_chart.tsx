@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -30,11 +31,14 @@ import {
   Tooltip,
   XYChartSeriesIdentifier,
   SettingsProps,
+  LEGACY_LIGHT_THEME,
 } from '@elastic/charts';
 import { partition } from 'lodash';
 import { IconType } from '@elastic/eui';
+import { i18n } from '@kbn/i18n';
 import { PaletteRegistry } from '@kbn/coloring';
 import { RenderMode } from '@kbn/expressions-plugin/common';
+import { ESQL_TABLE_TYPE } from '@kbn/data-plugin/common';
 import type { DataPublicPluginStart } from '@kbn/data-plugin/public';
 import { EmptyPlaceholder, LegendToggle } from '@kbn/charts-plugin/public';
 import { EventAnnotationServiceType } from '@kbn/event-annotation-plugin/public';
@@ -50,7 +54,7 @@ import {
   LegendSizeToPixels,
 } from '@kbn/visualizations-plugin/common/constants';
 import { PersistedState } from '@kbn/visualizations-plugin/public';
-import { getOverridesFor } from '@kbn/chart-expressions-common';
+import { getOverridesFor, ChartSizeSpec } from '@kbn/chart-expressions-common';
 import type {
   FilterEvent,
   BrushEvent,
@@ -144,6 +148,8 @@ export type XYChartRenderProps = Omit<XYChartProps, 'canNavigateToLens'> & {
   renderComplete: () => void;
   uiState?: PersistedState;
   timeFormat: string;
+  setChartSize: (chartSizeSpec: ChartSizeSpec) => void;
+  shouldShowLegendAction?: (actionId: string) => boolean;
 };
 
 function nonNullable<T>(v: T): v is NonNullable<T> {
@@ -197,6 +203,7 @@ export function XYChart({
   onClickMultiValue,
   layerCellValueActions,
   onSelectRange,
+  setChartSize,
   interactive = true,
   syncColors,
   syncTooltips,
@@ -215,7 +222,6 @@ export function XYChart({
     emphasizeFitting,
     valueLabels,
     hideEndzones,
-    valuesInLegend,
     yAxisConfigs,
     xAxisConfig,
     splitColumnAccessor,
@@ -224,7 +230,6 @@ export function XYChart({
     annotations,
   } = args;
   const chartRef = useRef<Chart>(null);
-  const chartTheme = chartsThemeService.useChartsTheme();
   const chartBaseTheme = chartsThemeService.useChartsBaseTheme();
   const darkMode = chartsThemeService.useDarkMode();
   const filteredLayers = getFilteredLayers(layers);
@@ -285,16 +290,39 @@ export function XYChart({
   const onRenderChange = useCallback(
     (isRendered: boolean = true) => {
       if (isRendered) {
-        // this requestAnimationFrame call is a temporary fix for https://github.com/elastic/elastic-charts/issues/2124
-        window.requestAnimationFrame(() => {
-          renderComplete();
-        });
+        renderComplete();
       }
     },
     [renderComplete]
   );
 
   const dataLayers: CommonXYDataLayerConfig[] = filteredLayers.filter(isDataLayer);
+
+  const isTimeViz = isTimeChart(dataLayers);
+
+  useEffect(() => {
+    const chartSizeSpec: ChartSizeSpec =
+      isTimeViz && !isHorizontalChart(dataLayers)
+        ? {
+            aspectRatio: {
+              x: 16,
+              y: 9,
+            },
+            minDimensions: {
+              y: { value: 300, unit: 'pixels' },
+              x: { value: 100, unit: 'percentage' },
+            },
+          }
+        : {
+            maxDimensions: {
+              x: { value: 100, unit: 'percentage' },
+              y: { value: 100, unit: 'percentage' },
+            },
+          };
+
+    setChartSize(chartSizeSpec);
+  }, [dataLayers, isTimeViz, setChartSize]);
+
   const formattedDatatables = useMemo(
     () =>
       getFormattedTablesByLayers(dataLayers, formatFactory, splitColumnAccessor, splitRowAccessor),
@@ -373,11 +401,10 @@ export function XYChart({
       (layer) => isDataLayer(layer) && layer.splitAccessors && layer.splitAccessors.length
     );
 
-  const isTimeViz = isTimeChart(dataLayers);
-
   const defaultXScaleType = isTimeViz ? XScaleTypes.TIME : XScaleTypes.ORDINAL;
 
   const isHistogramViz = dataLayers.every((l) => l.isHistogram);
+  const isEsqlMode = dataLayers.some((l) => l.table?.meta?.type === ESQL_TABLE_TYPE);
   const hasBars = dataLayers.some((l) => l.seriesType === SeriesTypes.BAR);
 
   const { baseDomain: rawXDomain, extendedDomain: xDomain } = getXDomain(
@@ -496,8 +523,8 @@ export function XYChart({
     let min: number = NaN;
     let max: number = NaN;
     if (extent.mode === 'custom') {
-      const { inclusiveZeroError, boundaryError } = validateExtent(hasBarOrArea, extent);
-      if ((!inclusiveZeroError && !boundaryError) || extent.enforce) {
+      const validExtent = validateExtent(hasBarOrArea, extent);
+      if (validExtent || extent.enforce) {
         min = extent.lowerBound ?? NaN;
         max = extent.upperBound ?? NaN;
       }
@@ -626,7 +653,12 @@ export function XYChart({
         : undefined;
     const xAxisColumnIndex = table.columns.findIndex((el) => el.id === xAccessor);
 
-    const context: BrushEvent['data'] = { range: [min, max], table, column: xAxisColumnIndex };
+    const context: BrushEvent['data'] = {
+      range: [min, max],
+      table,
+      column: xAxisColumnIndex,
+      ...(isEsqlMode ? { timeFieldName: table.columns[xAxisColumnIndex].name } : {}),
+    };
     onSelectRange(context);
   };
 
@@ -754,7 +786,7 @@ export function XYChart({
               formattedDatatables,
               xAxisFormatter,
               formatFactory,
-              interactive && !args.detailedTooltip
+              interactive && !args.detailedTooltip && !isEsqlMode
             )}
             customTooltip={
               args.detailedTooltip
@@ -787,6 +819,7 @@ export function XYChart({
               />
             }
             onRenderChange={onRenderChange}
+            pointerUpdateDebounce={0} // use the `handleCursorUpdate` debounce time
             onPointerUpdate={syncCursor ? handleCursorUpdate : undefined}
             externalPointerEvents={{
               tooltip: { visible: syncTooltips, placement: Placement.Right },
@@ -796,11 +829,11 @@ export function XYChart({
             showLegend={showLegend}
             legendPosition={legend?.isInside ? legendInsideParams : legend.position}
             legendSize={LegendSizeToPixels[legend.legendSize ?? DEFAULT_LEGEND_SIZE]}
+            legendValues={isHistogramViz ? legend.legendStats : []}
+            legendTitle={getLegendTitle(legend.title, dataLayers[0], legend.isTitleVisible)}
             theme={[
               {
-                ...chartTheme,
                 barSeriesStyle: {
-                  ...chartTheme.barSeriesStyle,
                   ...valueLabelsStyling,
                 },
                 background: {
@@ -811,7 +844,8 @@ export function XYChart({
                 },
                 // if not title or labels are shown for axes, add some padding if required by reference line markers
                 chartMargins: {
-                  ...chartTheme.chartPaddings,
+                  // Temporary margin defaults
+                  ...LEGACY_LIGHT_THEME.chartMargins,
                   ...computeChartMargins(
                     linesPaddings,
                     { ...tickLabelsVisibilitySettings, x: xAxisConfig?.showLabels },
@@ -830,6 +864,7 @@ export function XYChart({
             allowBrushingLastHistogramBin={isTimeViz}
             rotation={shouldRotate ? 90 : 0}
             xDomain={xDomain}
+            // enable brushing only for time charts, for both ES|QL and DSL queries
             onBrushEnd={interactive ? (brushHandler as BrushEndListener) : undefined}
             onElementClick={interactive ? clickHandler : undefined}
             legendAction={
@@ -845,7 +880,6 @@ export function XYChart({
                   )
                 : undefined
             }
-            showLegendExtra={isHistogramViz && valuesInLegend}
             ariaLabel={args.ariaLabel}
             ariaUseDefaultSummary={!args.ariaLabel}
             orderOrdinalBinsBy={
@@ -855,6 +889,7 @@ export function XYChart({
                   }
                 : undefined
             }
+            locale={i18n.getLocale()}
             {...settingsOverrides}
           />
           <XYCurrentTime
@@ -949,6 +984,7 @@ export function XYChart({
               syncColors={syncColors}
               valueLabels={valueLabels}
               fillOpacity={args.fillOpacity}
+              minBarHeight={args.minBarHeight}
               formatFactory={formatFactory}
               paletteService={paletteService}
               fittingFunction={fittingFunction}
@@ -964,6 +1000,7 @@ export function XYChart({
               fieldFormats={fieldFormats}
               uiState={uiState}
               singleTable={singleTable}
+              isDarkMode={darkMode}
             />
           )}
           {referenceLineLayers.length ? (
@@ -982,7 +1019,7 @@ export function XYChart({
             <Annotations
               rangeAnnotations={rangeAnnotations}
               groupedLineAnnotations={groupedLineAnnotations}
-              formatter={xAxisFormatter}
+              timeFormat={timeFormat}
               isHorizontal={shouldRotate}
               paddingMap={linesPaddings}
               isBarChart={filteredBarLayers.length > 0}
@@ -992,9 +1029,9 @@ export function XYChart({
                 rangeAnnotations.length && shouldHideDetails
                   ? OUTSIDE_RECT_ANNOTATION_WIDTH_SUGGESTION
                   : shouldUseNewTimeAxis
-                  ? Number(MULTILAYER_TIME_AXIS_STYLE.tickLine?.padding || 0) +
-                    Number(chartTheme.axes?.tickLabel?.fontSize || 0)
-                  : Number(chartTheme.axes?.tickLine?.size) || OUTSIDE_RECT_ANNOTATION_WIDTH
+                  ? Number(MULTILAYER_TIME_AXIS_STYLE.tickLine?.padding ?? 0) +
+                    chartBaseTheme.axes.tickLabel.fontSize
+                  : Math.max(chartBaseTheme.axes.tickLine.size, OUTSIDE_RECT_ANNOTATION_WIDTH)
               }
             />
           ) : null}
@@ -1002,4 +1039,24 @@ export function XYChart({
       </LegendColorPickerWrapperContext.Provider>
     </div>
   );
+}
+
+const defaultLegendTitle = i18n.translate('expressionXY.xyChart.legendTitle', {
+  defaultMessage: 'Legend',
+});
+
+function getLegendTitle(
+  title: string | undefined,
+  layer?: CommonXYDataLayerConfig,
+  isTitleVisible?: boolean
+) {
+  if (!isTitleVisible) {
+    return undefined;
+  }
+  if (typeof title === 'string' && title.length > 0) {
+    return title;
+  }
+  return layer?.splitAccessors?.[0]
+    ? getColumnByAccessor(layer.splitAccessors?.[0], layer?.table.columns)?.name
+    : defaultLegendTitle;
 }

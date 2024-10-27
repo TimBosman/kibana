@@ -121,7 +121,15 @@ const RuleSnoozeSchedulerPanel: React.FunctionComponent<PanelOpts> = ({
   const minDate = useMemo(
     // If the initial schedule is earlier than now, set minDate to it
     // Set minDate to now if the initial schedule is in the future
-    () => moment.min(moment(), moment(initialSchedule?.rRule.dtstart ?? undefined)),
+    () =>
+      moment
+        .min(moment(), moment(initialSchedule?.rRule.dtstart ?? undefined))
+        // Allow the time on minDate to be earlier than the current time
+        // This is useful especially when the user is trying to create a recurring schedule
+        // that starts today, and should start at a time earlier than the current time on future
+        // occurrences
+        .hour(0)
+        .minute(0),
     [initialSchedule]
   );
 
@@ -188,7 +196,7 @@ const RuleSnoozeSchedulerPanel: React.FunctionComponent<PanelOpts> = ({
   }, [setSelectingEndDate]);
 
   const selectStartDT = useCallback(
-    (date, clearEndDT) => {
+    (date: Moment, clearEndDT: boolean) => {
       setStartDT(moment.max(date, minDate));
       if (clearEndDT) {
         setEndDT(null);
@@ -199,7 +207,7 @@ const RuleSnoozeSchedulerPanel: React.FunctionComponent<PanelOpts> = ({
     [setStartDT, setSelectingEndDate, minDate]
   );
   const selectEndDT = useCallback(
-    (date) => {
+    (date: Moment) => {
       setEndDT(date.add(1, 'minutes'));
       setSelectingEndTime(true);
       setSelectingEndDate(false);
@@ -208,7 +216,7 @@ const RuleSnoozeSchedulerPanel: React.FunctionComponent<PanelOpts> = ({
   );
 
   const onSelectFromInline = useCallback(
-    (date) => {
+    (date: Moment) => {
       const dateAsMoment = moment(date);
       const newDateAfterStart = !startDT || dateAsMoment.isSameOrAfter(startDT);
       const isEndDateTimeChange =
@@ -220,6 +228,7 @@ const RuleSnoozeSchedulerPanel: React.FunctionComponent<PanelOpts> = ({
 
       const applyToEndDate =
         !isStartDateTimeChange && (selectingEndDate || (isEndDateTimeChange && selectingEndTime));
+
       if (applyToEndDate && newDateAfterStart) {
         selectEndDT(date);
       } else selectStartDT(date, !isStartDateTimeChange);

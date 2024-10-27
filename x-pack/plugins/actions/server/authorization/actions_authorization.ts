@@ -12,12 +12,12 @@ import {
   ACTION_SAVED_OBJECT_TYPE,
   ACTION_TASK_PARAMS_SAVED_OBJECT_TYPE,
 } from '../constants/saved_objects';
+import { isBidirectionalConnectorType } from '../lib/bidirectional_connectors';
 import { AuthorizationMode } from './get_authorization_mode_by_source';
 
 export interface ConstructorOptions {
   request: KibanaRequest;
   authorization?: SecurityPluginSetup['authz'];
-  authentication?: SecurityPluginSetup['authc'];
   // In order to support legacy Alerts which predate the introduction of the
   // Actions feature in Kibana we need a way of "dialing down" the level of
   // authorization for certain opearations.
@@ -44,10 +44,10 @@ export class ActionsAuthorization {
   private readonly request: KibanaRequest;
   private readonly authorization?: SecurityPluginSetup['authz'];
   private readonly authorizationMode: AuthorizationMode;
+
   constructor({
     request,
     authorization,
-    authentication,
     authorizationMode = AuthorizationMode.RBAC,
   }: ConstructorOptions) {
     this.request = request;
@@ -74,7 +74,15 @@ export class ActionsAuthorization {
           : [authorization.actions.savedObject.get(ACTION_SAVED_OBJECT_TYPE, operation)];
 
         const { hasAllRequested } = await checkPrivileges({
-          kibana: [...privileges, ...additionalPrivileges],
+          kibana: [
+            ...privileges,
+            ...additionalPrivileges,
+            // SentinelOne and Crowdstrike sub-actions require that a user have `all` privilege to Actions and Connectors.
+            // This is a temporary solution until a more robust RBAC approach can be implemented for sub-actions
+            isBidirectionalConnectorType(actionTypeId)
+              ? 'api:actions:execute-advanced-connectors'
+              : 'api:actions:execute-basic-connectors',
+          ],
         });
         if (!hasAllRequested) {
           throw Boom.forbidden(

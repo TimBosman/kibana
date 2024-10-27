@@ -1,13 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { i18n } from '@kbn/i18n';
+import { TooltipWrapper } from '@kbn/visualization-utils';
 import {
   EuiFormRow,
   EuiColorPicker,
@@ -17,7 +19,6 @@ import {
   euiPaletteColorBlind,
 } from '@elastic/eui';
 import { getColorAlpha, makeColorWithAlpha } from '@kbn/coloring';
-import { TooltipWrapper } from './tooltip_wrapper';
 
 const tooltipContent = {
   auto: i18n.translate('visualizationUiComponents.colorPicker.tooltip.auto', {
@@ -28,23 +29,27 @@ const tooltipContent = {
   }),
 };
 
-export const ColorPicker = ({
-  overwriteColor,
-  defaultColor,
-  setConfig,
-  label,
-  disableHelpTooltip,
-  disabledMessage,
-  showAlpha,
-}: {
+export interface ColorPickerProps {
   overwriteColor?: string | null;
   defaultColor?: string | null;
+  isClearable?: boolean;
   setConfig: (config: { color?: string }) => void;
   label?: string;
   disableHelpTooltip?: boolean;
   disabledMessage?: string;
   showAlpha?: boolean;
-}) => {
+}
+
+export const ColorPicker = ({
+  overwriteColor,
+  defaultColor,
+  isClearable,
+  setConfig,
+  label,
+  disableHelpTooltip,
+  disabledMessage,
+  showAlpha,
+}: ColorPickerProps) => {
   const [colorText, setColorText] = useState(overwriteColor || defaultColor);
   const [validatedColor, setValidatedColor] = useState(overwriteColor || defaultColor);
   const [currentColorAlpha, setCurrentColorAlpha] = useState(getColorAlpha(colorText));
@@ -93,16 +98,16 @@ export const ColorPicker = ({
       fullWidth
       data-test-subj="indexPattern-dimension-colorPicker"
       compressed
-      isClearable={Boolean(overwriteColor)}
+      isClearable={typeof isClearable !== 'undefined' ? isClearable : Boolean(overwriteColor)}
       onChange={handleColor}
       color={isDisabled ? '' : colorText}
       disabled={isDisabled}
-      placeholder={
-        defaultColor?.toUpperCase() ||
-        i18n.translate('visualizationUiComponents.colorPicker.seriesColor.auto', {
-          defaultMessage: 'Auto',
-        })
-      }
+      placeholder={' '}
+      onBlur={() => {
+        if (!colorText) {
+          setColorText(validatedColor ?? defaultColor);
+        }
+      }}
       aria-label={inputLabel}
       showAlpha={showAlpha}
       swatches={

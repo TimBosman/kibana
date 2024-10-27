@@ -4,6 +4,7 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
+import { v4 as uuidv4 } from 'uuid';
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   EuiEmptyPrompt,
@@ -23,7 +24,7 @@ import { SectionLoading } from '../../shared_imports';
 import { ProcessTree } from '../process_tree';
 import type { AlertStatusEventEntityIdMap, Process, ProcessEvent } from '../../../common';
 import type { DisplayOptionsState } from '../session_view_display_options';
-import type { SessionViewDeps, SessionViewTelemetryKey } from '../../types';
+import type { SessionViewDeps, SessionViewIndices, SessionViewTelemetryKey } from '../../types';
 import { SessionViewDetailPanel } from '../session_view_detail_panel';
 import { SessionViewSearchBar } from '../session_view_search_bar';
 import { SessionViewDisplayOptions } from '../session_view_display_options';
@@ -36,7 +37,14 @@ import {
   useFetchGetTotalIOBytes,
 } from './hooks';
 import { LOCAL_STORAGE_DISPLAY_OPTIONS_KEY } from '../../../common/constants';
-import { CLOUD_DEFEND_INDEX, ENDPOINT_INDEX } from '../../methods';
+import {
+  AUDITBEAT_DATA_SOURCE,
+  AUDITBEAT_INDEX,
+  CLOUD_DEFEND_DATA_SOURCE,
+  CLOUD_DEFEND_INDEX,
+  ELASTIC_DEFEND_DATA_SOURCE,
+  ENDPOINT_INDEX,
+} from '../../methods';
 import { REFRESH_SESSION, TOGGLE_TTY_PLAYER, DETAIL_PANEL } from './translations';
 
 /**
@@ -63,16 +71,13 @@ export const SessionView = ({
 
   // track session open telemetry
   useEffect(() => {
-    let source = '';
-    // append 'app' details (which telemtry source is this from?)
-    if (index === CLOUD_DEFEND_INDEX) {
-      source += 'cloud-defend';
-    } else if (index === ENDPOINT_INDEX) {
-      source += 'endpoint';
-    } else {
-      // any telemetry producers setting process.entry_leader.entity_id will cause sessionview action to appear in timeline tables.
-      source += 'unknown';
-    }
+    const sourceMap: Record<string, SessionViewIndices> = {
+      [CLOUD_DEFEND_INDEX]: CLOUD_DEFEND_DATA_SOURCE,
+      [ENDPOINT_INDEX]: ELASTIC_DEFEND_DATA_SOURCE,
+      [AUDITBEAT_INDEX]: AUDITBEAT_DATA_SOURCE,
+    };
+
+    const source = sourceMap[index] || 'unknown';
 
     const eventKey: SessionViewTelemetryKey = `loaded_from_${source}_${
       investigatedAlertId ? 'alert' : 'log'
@@ -98,6 +103,7 @@ export const SessionView = ({
   const [currentJumpToCursor, setCurrentJumpToCursor] = useState(jumpToCursor);
   const [currentJumpToEntityId, setCurrentJumpToEntityId] = useState(jumpToEntityId);
   const [currentJumpToOutputEntityId, setCurrentJumpToOutputEntityId] = useState('');
+  const sessionViewId = useMemo(() => `session-view-uuid-${uuidv4()}`, []);
 
   const styles = useStyles({ height, isFullScreen });
 
@@ -399,13 +405,13 @@ export const SessionView = ({
       <EuiResizableContainer>
         {(EuiResizablePanel, EuiResizableButton, { togglePanel }) => {
           detailPanelCollapseFn.current = () => {
-            togglePanel?.('session-detail-panel', { direction: 'left' });
+            togglePanel?.(sessionViewId, { direction: 'left' });
           };
 
           return (
             <>
               <EuiResizablePanel initialSize={100} minSize="60%" paddingSize="none">
-                {hasError && (
+                {hasError ? (
                   <EuiEmptyPrompt
                     iconType="warning"
                     color="danger"
@@ -426,7 +432,7 @@ export const SessionView = ({
                       </p>
                     }
                   />
-                )}
+                ) : null}
 
                 {hasData && (
                   <div css={styles.processTree}>
@@ -458,13 +464,14 @@ export const SessionView = ({
 
               <EuiResizableButton css={styles.resizeHandle} />
               <EuiResizablePanel
-                id="session-detail-panel"
+                id={sessionViewId}
                 initialSize={30}
                 minSize="320px"
                 paddingSize="none"
                 css={styles.detailPanel}
               >
                 <SessionViewDetailPanel
+                  index={index}
                   alerts={alerts}
                   alertsCount={alertsCount}
                   isFetchingAlerts={isFetchingAlerts}

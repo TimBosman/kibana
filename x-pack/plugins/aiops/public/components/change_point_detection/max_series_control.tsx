@@ -10,7 +10,7 @@ import { FormattedMessage } from '@kbn/i18n-react';
 import { EuiFieldNumber, EuiFormRow, EuiIcon, EuiToolTip } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { type NumberValidationResult, numberValidator } from '@kbn/ml-agg-utils';
-import { MAX_SERIES } from '../../embeddable/const';
+import { MAX_SERIES } from '../../embeddables/change_point_chart/const';
 
 const maxSeriesValidator = numberValidator({ min: 1, max: MAX_SERIES, integerOnly: true });
 
@@ -42,6 +42,7 @@ export const MaxSeriesControl: FC<{
       label={inline ? undefined : label}
     >
       <EuiFieldNumber
+        data-test-subj="aiopsMaxSeriesControlFieldNumber"
         disabled={disabled}
         prepend={inline ? label : undefined}
         append={

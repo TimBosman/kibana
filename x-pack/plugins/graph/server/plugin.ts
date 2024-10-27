@@ -6,12 +6,13 @@
  */
 
 import { i18n } from '@kbn/i18n';
-import { Plugin, CoreSetup, CoreStart } from '@kbn/core/server';
+import { Plugin, CoreSetup, CoreStart, PluginInitializerContext } from '@kbn/core/server';
 import { DEFAULT_APP_CATEGORIES } from '@kbn/core/server';
 import { LicensingPluginSetup, LicensingPluginStart } from '@kbn/licensing-plugin/server';
 import { HomeServerPluginSetup } from '@kbn/home-plugin/server';
-import { PluginSetupContract as FeaturesPluginSetup } from '@kbn/features-plugin/server';
+import { FeaturesPluginSetup } from '@kbn/features-plugin/server';
 import { ContentManagementServerSetup } from '@kbn/content-management-plugin/server';
+import { KibanaFeatureScope } from '@kbn/features-plugin/common';
 import { LicenseState } from './lib/license_state';
 import { registerSearchRoute } from './routes/search';
 import { registerExploreRoute } from './routes/explore';
@@ -22,6 +23,8 @@ import { GraphStorage } from './content_management/graph_storage';
 
 export class GraphPlugin implements Plugin {
   private licenseState: LicenseState | null = null;
+
+  constructor(private readonly initializerContext: PluginInitializerContext) {}
 
   public setup(
     core: CoreSetup,
@@ -45,7 +48,10 @@ export class GraphPlugin implements Plugin {
 
     contentManagement.register({
       id: CONTENT_ID,
-      storage: new GraphStorage(),
+      storage: new GraphStorage({
+        throwOnResultValidationError: this.initializerContext.env.mode.dev,
+        logger: this.initializerContext.logger.get(),
+      }),
       version: {
         latest: LATEST_VERSION,
       },
@@ -63,6 +69,7 @@ export class GraphPlugin implements Plugin {
         }),
         order: 600,
         category: DEFAULT_APP_CATEGORIES.kibana,
+        scope: [KibanaFeatureScope.Spaces, KibanaFeatureScope.Security],
         app: ['graph', 'kibana'],
         catalogue: ['graph'],
         minimumLicense: 'platinum',

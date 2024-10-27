@@ -20,13 +20,15 @@ export {
   updateIndexSettings,
   loadIndexStats,
   loadIndexMapping,
-  loadIndexData,
   useLoadIndexTemplates,
   simulateIndexTemplate,
   useLoadNodesPlugins,
   loadIndex,
   useLoadIndexMappings,
   loadIndexStatistics,
+  useLoadIndexSettings,
+  createIndex,
+  useLoadInferenceEndpoints,
 } from './api';
 
 export { sortTable } from './sort_table';

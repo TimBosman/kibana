@@ -8,12 +8,11 @@
 import {
   configureStore,
   getDefaultMiddleware,
-  PreloadedState,
-  Action,
-  Dispatch,
-  MiddlewareAPI,
+  type PreloadedState,
+  type Action,
+  type Dispatch,
+  type MiddlewareAPI,
 } from '@reduxjs/toolkit';
-import { createLogger } from 'redux-logger';
 import { useDispatch, useSelector, TypedUseSelectorHook } from 'react-redux';
 import { makeLensReducer, lensActions, getPreloadedState } from './lens_slice';
 import { LensState, LensStoreDeps } from './types';
@@ -89,15 +88,6 @@ export const makeConfigureStore = (
   if (customMiddleware) {
     middleware.push(customMiddleware);
   }
-  if (process.env.NODE_ENV === 'development') {
-    middleware.push(
-      createLogger({
-        // @ts-ignore
-        predicate: () => window.ELASTIC_LENS_LOGGER,
-      })
-    );
-  }
-
   return configureStore({
     reducer: {
       lens: makeLensReducer(storeDeps),

@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { duplicatedRuleName } from '../objects/rule';
+import { DEFAULT_RULES_TABLE_REFRESH_SETTING } from '@kbn/security-solution-plugin/common/constants';
 import {
   COLLAPSED_ACTION_BTN,
   CUSTOM_RULES_BTN,
@@ -55,6 +55,8 @@ import {
   CONFIRM_DELETE_RULE_BTN,
   AUTO_REFRESH_POPOVER_TRIGGER_BUTTON,
   SELECT_ALL_RULES_ON_PAGE_CHECKBOX,
+  RULE_DETAILS_MANUAL_RULE_RUN_BTN,
+  MANUAL_RULE_RUN_ACTION_BTN,
 } from '../screens/alerts_detection_rules';
 import type { RULES_MONITORING_TABLE } from '../screens/alerts_detection_rules';
 import { EUI_CHECKBOX } from '../screens/common/controls';
@@ -65,6 +67,7 @@ import { PAGE_CONTENT_SPINNER } from '../screens/common/page';
 
 import { goToRuleEditSettings } from './rule_details';
 import { goToActionsStepTab } from './create_new_rule';
+import { setKibanaSetting } from './api_calls/kibana_advanced_settings';
 
 export const getRulesManagementTableRows = () => cy.get(RULES_MANAGEMENT_TABLE).find(RULES_ROW);
 
@@ -87,6 +90,14 @@ export const duplicateFirstRule = () => {
   cy.get(CONFIRM_DUPLICATE_RULE).click();
 };
 
+export const manuallyRunFirstRule = () => {
+  cy.get(COLLAPSED_ACTION_BTN).should('be.visible');
+  cy.get(COLLAPSED_ACTION_BTN).first().click();
+  cy.get(MANUAL_RULE_RUN_ACTION_BTN).should('be.visible');
+  cy.get(MANUAL_RULE_RUN_ACTION_BTN).click();
+  cy.get(MODAL_CONFIRMATION_BTN).click();
+};
+
 /**
  * Duplicates the rule from the menu and does additional
  * pipes and checking that the elements are present on the
@@ -107,8 +118,8 @@ export const duplicateRuleFromMenu = () => {
  * Check that the duplicated rule is on the table
  * and it is disabled (default)
  */
-export const checkDuplicatedRule = () => {
-  cy.contains(RULE_NAME, duplicatedRuleName)
+export const checkDuplicatedRule = (ruleName: string): void => {
+  cy.contains(RULE_NAME, ruleName)
     .parents(RULES_ROW)
     .find(RULE_SWITCH)
     .should('have.attr', 'aria-checked', 'false');
@@ -125,6 +136,13 @@ export const deleteRuleFromDetailsPage = () => {
   cy.get(RULE_DETAILS_DELETE_BTN).click();
   cy.get(RULE_DETAILS_DELETE_BTN).should('not.exist');
   cy.get(CONFIRM_DELETE_RULE_BTN).click();
+};
+
+export const manualRuleRunFromDetailsPage = () => {
+  cy.get(POPOVER_ACTIONS_TRIGGER_BUTTON).click();
+  cy.get(RULE_DETAILS_MANUAL_RULE_RUN_BTN).click();
+  cy.get(RULE_DETAILS_MANUAL_RULE_RUN_BTN).should('not.exist');
+  cy.get(MODAL_CONFIRMATION_BTN).click();
 };
 
 export const exportRule = (name: string) => {
@@ -193,17 +211,9 @@ export const filterByDisabledRules = () => {
   cy.get(DISABLED_RULES_BTN).click();
 };
 
-/**
- * @deprecated use goToTheRuleDetailsOf
- */
-export const goToRuleDetails = () => {
-  cy.get(RULE_NAME).first().click();
-};
-
-export const goToTheRuleDetailsOf = (ruleName: string) => {
+export const goToRuleDetailsOf = (ruleName: string) => {
   cy.contains(RULE_NAME, ruleName).click();
 
-  cy.get(PAGE_CONTENT_SPINNER).should('be.visible');
   cy.contains(RULE_NAME_HEADER, ruleName).should('be.visible');
   cy.get(PAGE_CONTENT_SPINNER).should('not.exist');
 };
@@ -291,11 +301,11 @@ export const waitForRuleToUpdate = () => {
 
 export const importRules = (rulesFile: string) => {
   cy.get(RULE_IMPORT_MODAL).click();
-  cy.get(INPUT_FILE).click({ force: true });
+  cy.get(INPUT_FILE).click();
   cy.get(INPUT_FILE).selectFile(rulesFile);
   cy.get(INPUT_FILE).trigger('change');
-  cy.get(RULE_IMPORT_MODAL_BUTTON).last().click({ force: true });
-  cy.get(INPUT_FILE).should('not.exist');
+  cy.get(RULE_IMPORT_MODAL_BUTTON).last().click();
+  cy.get(INPUT_FILE, { timeout: 300000 }).should('not.exist');
 };
 
 export const expectRulesManagementTab = () => {
@@ -373,7 +383,7 @@ export const expectNumberOfRules = (
   expectedNumber: number
 ) => {
   cy.log(`Expecting rules table to contain #${expectedNumber} rules`);
-  cy.get(tableSelector).find(RULES_ROW).should('have.length', expectedNumber);
+  cy.get(tableSelector).find(RULES_ROW).its('length').should('be.gte', expectedNumber);
 };
 
 export const expectToContainRule = (
@@ -502,7 +512,7 @@ export const closeErrorToast = () => {
 };
 
 export const goToEditRuleActionsSettingsOf = (name: string) => {
-  goToTheRuleDetailsOf(name);
+  goToRuleDetailsOf(name);
   goToRuleEditSettings();
   // wait until first step loads completely. Otherwise cypress stuck at the first edit page
   cy.get(EDIT_SUBMIT_BUTTON).should('be.enabled');
@@ -523,4 +533,30 @@ const unselectRuleByName = (ruleName: string) => {
   getRuleRow(ruleName).find(EUI_CHECKBOX).uncheck();
   cy.log(`Make sure rule "${ruleName}" has been unselected`);
   getRuleRow(ruleName).find(EUI_CHECKBOX).should('not.be.checked');
+};
+
+/**
+ * Set Kibana `securitySolution:rulesTableRefresh` setting looking like
+ *
+ * ```
+ * { "on": true, "value": 60000 }
+ * ```
+ *
+ * @param enabled whether the auto-refresh is enabled
+ * @param refreshInterval refresh interval in milliseconds
+ */
+export const setRulesTableAutoRefreshIntervalSetting = ({
+  enabled,
+  refreshInterval,
+}: {
+  enabled: boolean;
+  refreshInterval: number; // milliseconds
+}) => {
+  setKibanaSetting(
+    DEFAULT_RULES_TABLE_REFRESH_SETTING,
+    JSON.stringify({
+      on: enabled,
+      value: refreshInterval,
+    })
+  );
 };

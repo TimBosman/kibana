@@ -14,14 +14,11 @@ import {
 import { wrapError } from '../client/error_wrapper';
 import type { RouteInitialization } from '../types';
 
-export function notificationsRoutes({ router, routeGuard, enabledFeatures }: RouteInitialization) {
-  /**
-   * @apiGroup Notifications
-   *
-   * @api {get} /internal/ml/notifications Get notifications
-   * @apiName GetNotifications
-   * @apiDescription Retrieves notifications based on provided criteria.
-   */
+export function notificationsRoutes({
+  router,
+  routeGuard,
+  getEnabledFeatures,
+}: RouteInitialization) {
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/notifications`,
@@ -33,6 +30,8 @@ export function notificationsRoutes({ router, routeGuard, enabledFeatures }: Rou
           'access:ml:canGetTrainedModels',
         ],
       },
+      summary: 'Get notifications',
+      description: 'Retrieves notifications based on provided criteria.',
     })
     .addVersion(
       {
@@ -49,7 +48,7 @@ export function notificationsRoutes({ router, routeGuard, enabledFeatures }: Rou
             const notificationsService = new NotificationsService(
               client,
               mlSavedObjectService,
-              enabledFeatures
+              getEnabledFeatures()
             );
 
             const results = await notificationsService.searchMessages(request.query);
@@ -64,13 +63,6 @@ export function notificationsRoutes({ router, routeGuard, enabledFeatures }: Rou
       )
     );
 
-  /**
-   * @apiGroup Notifications
-   *
-   * @api {get} /internal/ml/notifications/count Get notification counts
-   * @apiName GetNotificationCounts
-   * @apiDescription Counts notifications by level.
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/notifications/count`,
@@ -82,6 +74,8 @@ export function notificationsRoutes({ router, routeGuard, enabledFeatures }: Rou
           'access:ml:canGetTrainedModels',
         ],
       },
+      summary: 'Get notification counts',
+      description: 'Counts notifications by level.',
     })
     .addVersion(
       {
@@ -98,7 +92,7 @@ export function notificationsRoutes({ router, routeGuard, enabledFeatures }: Rou
             const notificationsService = new NotificationsService(
               client,
               mlSavedObjectService,
-              enabledFeatures
+              getEnabledFeatures()
             );
 
             const results = await notificationsService.countMessages(request.query);

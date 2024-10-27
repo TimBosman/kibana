@@ -1,14 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import Boom from '@hapi/boom';
 import { errors } from '@elastic/elasticsearch';
-import { ZodError } from 'zod';
+import type { Boom } from '@hapi/boom';
+import { stringifyZodError } from '@kbn/zod-helpers';
+import { ZodError } from '@kbn/zod';
 import { BadRequestError } from '../bad_request_error';
 
 export interface OutputError {
@@ -16,8 +18,15 @@ export interface OutputError {
   statusCode: number;
 }
 
+// We can't import `isBoom` from @hapi/boom today because we get transpilation errors in Webpack 4
+// due to the usage of the operator ?? inside the `@hapi/boom` library and its dependencies.
+// TODO: Might be able to use the library's `isBoom` when Webpack 5 is merged (https://github.com/elastic/kibana/pull/191106)
+function isBoom(err: unknown): err is Boom {
+  return err instanceof Error && `isBoom` in err && !!err.isBoom;
+}
+
 export const transformError = (err: Error & Partial<errors.ResponseError>): OutputError => {
-  if (Boom.isBoom(err)) {
+  if (isBoom(err)) {
     return {
       message: err.output.payload.message,
       statusCode: err.output.statusCode,
@@ -60,15 +69,3 @@ export const transformError = (err: Error & Partial<errors.ResponseError>): Outp
     }
   }
 };
-
-export function stringifyZodError(err: ZodError<any>) {
-  return err.issues
-    .map((issue) => {
-      // If the path is empty, the error is for the root object
-      if (issue.path.length === 0) {
-        return issue.message;
-      }
-      return `${issue.path.join('.')}: ${issue.message}`;
-    })
-    .join(', ');
-}

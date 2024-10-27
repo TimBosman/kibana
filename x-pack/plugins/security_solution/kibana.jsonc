@@ -1,11 +1,15 @@
 {
   "type": "plugin",
   "id": "@kbn/security-solution-plugin",
-  "owner": "@elastic/security-solution",
+  "owner": [
+    "@elastic/security-solution"
+  ],
+  "group": "security",
+  "visibility": "private",
   "plugin": {
     "id": "securitySolution",
-    "server": true,
     "browser": true,
+    "server": true,
     "configPath": [
       "xpack",
       "securitySolution"
@@ -28,7 +32,6 @@
       "eventLog",
       "features",
       "fieldFormats",
-      "guidedOnboarding",
       "inspector",
       "kubernetesSecurity",
       "lens",
@@ -47,12 +50,17 @@
       "files",
       "controls",
       "dataViewEditor",
+      "savedObjectsManagement",
+      "expressions",
       "stackConnectors",
       "discover",
-      "notifications"
+      "notifications",
+      "savedSearch",
+      "unifiedDocViewer",
+      "charts",
+      "entityManager"
     ],
     "optionalPlugins": [
-      "cloudExperiments",
       "encryptedSavedObjects",
       "fleet",
       "ml",
@@ -61,10 +69,14 @@
       "usageCollection",
       "lists",
       "home",
+      "management",
       "telemetry",
       "dataViewFieldEditor",
       "osquery",
-      "savedObjectsTaggingOss"
+      "savedObjectsTaggingOss",
+      "guidedOnboarding",
+      "integrationAssistant",
+      "serverless"
     ],
     "requiredBundles": [
       "esUiShared",
@@ -74,8 +86,7 @@
       "usageCollection",
       "lists",
       "ml",
-      "unifiedSearch",
-      "cloudChat"
+      "unifiedSearch"
     ],
     "extraPublicDirs": [
       "common"

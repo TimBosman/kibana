@@ -1,21 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { DataView, DataViewField, DataViewType } from '@kbn/data-views-plugin/common';
 import { RequestAdapter } from '@kbn/inspector-plugin/common';
-import { Suggestion } from '@kbn/lens-plugin/public';
 import { renderHook } from '@testing-library/react-hooks';
 import { act } from 'react-test-renderer';
-import { UnifiedHistogramFetchStatus } from '../../types';
+import type { DatatableColumn } from '@kbn/expressions-plugin/common';
+import { convertDatatableColumnToDataViewFieldSpec } from '@kbn/data-view-utils';
+import { UnifiedHistogramFetchStatus, UnifiedHistogramSuggestionContext } from '../../types';
 import { dataViewMock } from '../../__mocks__/data_view';
 import { dataViewWithTimefieldMock } from '../../__mocks__/data_view_with_timefield';
-import { currentSuggestionMock } from '../../__mocks__/suggestions';
-import { lensTablesAdapterMock } from '../../__mocks__/lens_table_adapter';
+import { lensAdaptersMock } from '../../__mocks__/lens_adapters';
 import { unifiedHistogramServicesMock } from '../../__mocks__/services';
 import {
   createStateService,
@@ -29,12 +30,12 @@ describe('useStateProps', () => {
     breakdownField: 'bytes',
     chartHidden: false,
     lensRequestAdapter: new RequestAdapter(),
-    lensTablesAdapter: lensTablesAdapterMock,
+    lensAdapters: lensAdaptersMock,
     timeInterval: 'auto',
     topPanelHeight: 100,
     totalHitsStatus: UnifiedHistogramFetchStatus.uninitialized,
     totalHitsResult: undefined,
-    currentSuggestion: undefined,
+    currentSuggestionContext: undefined,
   };
 
   const getStateService = (options: Omit<UnifiedHistogramStateOptions, 'services'>) => {
@@ -48,7 +49,7 @@ describe('useStateProps', () => {
     jest.spyOn(stateService, 'setTimeInterval');
     jest.spyOn(stateService, 'setLensRequestAdapter');
     jest.spyOn(stateService, 'setTotalHits');
-    jest.spyOn(stateService, 'setCurrentSuggestion');
+    jest.spyOn(stateService, 'setCurrentSuggestionContext');
     return stateService;
   };
 
@@ -61,6 +62,7 @@ describe('useStateProps', () => {
         query: { language: 'kuery', query: '' },
         requestAdapter: new RequestAdapter(),
         searchSessionId: '123',
+        columns: undefined,
       })
     );
     expect(result.current).toMatchInlineSnapshot(`
@@ -84,41 +86,46 @@ describe('useStateProps', () => {
           "total": undefined,
         },
         "isPlainRecord": false,
-        "lensTablesAdapter": Object {
-          "default": Object {
-            "columns": Array [
-              Object {
-                "id": "col-0-1",
-                "meta": Object {
-                  "dimensionName": "Slice size",
-                  "type": "number",
-                },
-                "name": "Field 1",
+        "lensAdapters": Object {
+          "tables": Object {
+            "tables": Object {
+              "default": Object {
+                "columns": Array [
+                  Object {
+                    "id": "col-0-1",
+                    "meta": Object {
+                      "dimensionName": "Slice size",
+                      "type": "number",
+                    },
+                    "name": "Field 1",
+                  },
+                  Object {
+                    "id": "col-0-2",
+                    "meta": Object {
+                      "dimensionName": "Slice",
+                      "type": "number",
+                    },
+                    "name": "Field 2",
+                  },
+                ],
+                "rows": Array [
+                  Object {
+                    "col-0-1": 0,
+                    "col-0-2": 0,
+                    "col-0-3": 0,
+                    "col-0-4": 0,
+                  },
+                ],
+                "type": "datatable",
               },
-              Object {
-                "id": "col-0-2",
-                "meta": Object {
-                  "dimensionName": "Slice",
-                  "type": "number",
-                },
-                "name": "Field 2",
-              },
-            ],
-            "rows": Array [
-              Object {
-                "col-0-1": 0,
-                "col-0-2": 0,
-                "col-0-3": 0,
-                "col-0-4": 0,
-              },
-            ],
-            "type": "datatable",
+            },
           },
         },
+        "lensEmbeddableOutput$": undefined,
         "onBreakdownFieldChange": [Function],
         "onChartHiddenChange": [Function],
         "onChartLoad": [Function],
-        "onSuggestionChange": [Function],
+        "onSuggestionContextChange": [Function],
         "onTimeIntervalChange": [Function],
         "onTopPanelHeightChange": [Function],
         "onTotalHitsChange": [Function],
@@ -128,6 +135,7 @@ describe('useStateProps', () => {
             "_eventsCount": 0,
             "_maxListeners": undefined,
             "requests": Map {},
+            Symbol(shapeMode): false,
             Symbol(kCapture): false,
           },
           "searchSessionId": "123",
@@ -145,11 +153,14 @@ describe('useStateProps', () => {
         query: { esql: 'FROM index' },
         requestAdapter: new RequestAdapter(),
         searchSessionId: '123',
+        columns: undefined,
       })
     );
     expect(result.current).toMatchInlineSnapshot(`
       Object {
-        "breakdown": undefined,
+        "breakdown": Object {
+          "field": undefined,
+        },
         "chart": Object {
           "hidden": false,
           "timeInterval": "auto",
@@ -159,41 +170,46 @@ describe('useStateProps', () => {
           "total": undefined,
         },
         "isPlainRecord": true,
-        "lensTablesAdapter": Object {
-          "default": Object {
-            "columns": Array [
-              Object {
-                "id": "col-0-1",
-                "meta": Object {
-                  "dimensionName": "Slice size",
-                  "type": "number",
-                },
-                "name": "Field 1",
+        "lensAdapters": Object {
+          "tables": Object {
+            "tables": Object {
+              "default": Object {
+                "columns": Array [
+                  Object {
+                    "id": "col-0-1",
+                    "meta": Object {
+                      "dimensionName": "Slice size",
+                      "type": "number",
+                    },
+                    "name": "Field 1",
+                  },
+                  Object {
+                    "id": "col-0-2",
+                    "meta": Object {
+                      "dimensionName": "Slice",
+                      "type": "number",
+                    },
+                    "name": "Field 2",
+                  },
+                ],
+                "rows": Array [
+                  Object {
+                    "col-0-1": 0,
+                    "col-0-2": 0,
+                    "col-0-3": 0,
+                    "col-0-4": 0,
+                  },
+                ],
+                "type": "datatable",
               },
-              Object {
-                "id": "col-0-2",
-                "meta": Object {
-                  "dimensionName": "Slice",
-                  "type": "number",
-                },
-                "name": "Field 2",
-              },
-            ],
-            "rows": Array [
-              Object {
-                "col-0-1": 0,
-                "col-0-2": 0,
-                "col-0-3": 0,
-                "col-0-4": 0,
-              },
-            ],
-            "type": "datatable",
+            },
           },
         },
+        "lensEmbeddableOutput$": undefined,
         "onBreakdownFieldChange": [Function],
         "onChartHiddenChange": [Function],
         "onChartLoad": [Function],
-        "onSuggestionChange": [Function],
+        "onSuggestionContextChange": [Function],
         "onTimeIntervalChange": [Function],
         "onTopPanelHeightChange": [Function],
         "onTotalHitsChange": [Function],
@@ -203,19 +219,60 @@ describe('useStateProps', () => {
             "_eventsCount": 0,
             "_maxListeners": undefined,
             "requests": Map {},
+            Symbol(shapeMode): false,
             Symbol(kCapture): false,
           },
           "searchSessionId": "123",
         },
       }
     `);
+
+    expect(result.current.chart).toStrictEqual({ hidden: false, timeInterval: 'auto' });
+    expect(result.current.breakdown).toStrictEqual({ field: undefined });
+    expect(result.current.isPlainRecord).toBe(true);
   });
 
-  it('should return the correct props when a text based language is used', () => {
+  it('should return the correct props when an ES|QL query is used with transformational commands', () => {
     const stateService = getStateService({
       initialState: {
         ...initialState,
-        currentSuggestion: currentSuggestionMock,
+        currentSuggestionContext: undefined,
+      },
+    });
+    const { result } = renderHook(() =>
+      useStateProps({
+        stateService,
+        dataView: dataViewWithTimefieldMock,
+        query: { esql: 'FROM index | keep field1' },
+        requestAdapter: new RequestAdapter(),
+        searchSessionId: '123',
+        columns: undefined,
+      })
+    );
+    expect(result.current.chart).toStrictEqual({ hidden: false, timeInterval: 'auto' });
+    expect(result.current.breakdown).toBe(undefined);
+    expect(result.current.isPlainRecord).toBe(true);
+  });
+
+  it('should return the correct props when an ES|QL query is used with breakdown field', () => {
+    const breakdownField = 'extension';
+    const esqlColumns = [
+      {
+        name: 'bytes',
+        meta: { type: 'number' },
+        id: 'bytes',
+      },
+      {
+        name: 'extension',
+        meta: { type: 'string' },
+        id: 'extension',
+      },
+    ] as DatatableColumn[];
+    const stateService = getStateService({
+      initialState: {
+        ...initialState,
+        currentSuggestionContext: undefined,
+        breakdownField,
       },
     });
     const { result } = renderHook(() =>
@@ -225,11 +282,52 @@ describe('useStateProps', () => {
         query: { esql: 'FROM index' },
         requestAdapter: new RequestAdapter(),
         searchSessionId: '123',
+        columns: esqlColumns,
       })
     );
-    expect(result.current.chart).toStrictEqual({ hidden: false, timeInterval: 'auto' });
-    expect(result.current.breakdown).toBe(undefined);
-    expect(result.current.isPlainRecord).toBe(true);
+
+    const breakdownColumn = esqlColumns.find((c) => c.name === breakdownField)!;
+    const selectedField = new DataViewField(
+      convertDatatableColumnToDataViewFieldSpec(breakdownColumn)
+    );
+    expect(result.current.breakdown).toStrictEqual({ field: selectedField });
+  });
+
+  it('should call the setBreakdown cb when an ES|QL query is used', () => {
+    const breakdownField = 'extension';
+    const esqlColumns = [
+      {
+        name: 'bytes',
+        meta: { type: 'number' },
+        id: 'bytes',
+      },
+      {
+        name: 'extension',
+        meta: { type: 'string' },
+        id: 'extension',
+      },
+    ] as DatatableColumn[];
+    const stateService = getStateService({
+      initialState: {
+        ...initialState,
+        currentSuggestionContext: undefined,
+      },
+    });
+    const { result } = renderHook(() =>
+      useStateProps({
+        stateService,
+        dataView: dataViewWithTimefieldMock,
+        query: { esql: 'FROM index' },
+        requestAdapter: new RequestAdapter(),
+        searchSessionId: '123',
+        columns: esqlColumns,
+      })
+    );
+    const { onBreakdownFieldChange } = result.current;
+    act(() => {
+      onBreakdownFieldChange({ name: breakdownField } as DataViewField);
+    });
+    expect(stateService.setBreakdownField).toHaveBeenLastCalledWith(breakdownField);
   });
 
   it('should return the correct props when a rollup data view is used', () => {
@@ -244,6 +342,7 @@ describe('useStateProps', () => {
         query: { language: 'kuery', query: '' },
         requestAdapter: new RequestAdapter(),
         searchSessionId: '123',
+        columns: undefined,
       })
     );
     expect(result.current).toMatchInlineSnapshot(`
@@ -255,41 +354,46 @@ describe('useStateProps', () => {
           "total": undefined,
         },
         "isPlainRecord": false,
-        "lensTablesAdapter": Object {
-          "default": Object {
-            "columns": Array [
-              Object {
-                "id": "col-0-1",
-                "meta": Object {
-                  "dimensionName": "Slice size",
-                  "type": "number",
-                },
-                "name": "Field 1",
+        "lensAdapters": Object {
+          "tables": Object {
+            "tables": Object {
+              "default": Object {
+                "columns": Array [
+                  Object {
+                    "id": "col-0-1",
+                    "meta": Object {
+                      "dimensionName": "Slice size",
+                      "type": "number",
+                    },
+                    "name": "Field 1",
+                  },
+                  Object {
+                    "id": "col-0-2",
+                    "meta": Object {
+                      "dimensionName": "Slice",
+                      "type": "number",
+                    },
+                    "name": "Field 2",
+                  },
+                ],
+                "rows": Array [
+                  Object {
+                    "col-0-1": 0,
+                    "col-0-2": 0,
+                    "col-0-3": 0,
+                    "col-0-4": 0,
+                  },
+                ],
+                "type": "datatable",
               },
-              Object {
-                "id": "col-0-2",
-                "meta": Object {
-                  "dimensionName": "Slice",
-                  "type": "number",
-                },
-                "name": "Field 2",
-              },
-            ],
-            "rows": Array [
-              Object {
-                "col-0-1": 0,
-                "col-0-2": 0,
-                "col-0-3": 0,
-                "col-0-4": 0,
-              },
-            ],
-            "type": "datatable",
+            },
           },
         },
+        "lensEmbeddableOutput$": undefined,
         "onBreakdownFieldChange": [Function],
         "onChartHiddenChange": [Function],
         "onChartLoad": [Function],
-        "onSuggestionChange": [Function],
+        "onSuggestionContextChange": [Function],
         "onTimeIntervalChange": [Function],
         "onTopPanelHeightChange": [Function],
         "onTotalHitsChange": [Function],
@@ -299,6 +403,7 @@ describe('useStateProps', () => {
             "_eventsCount": 0,
             "_maxListeners": undefined,
             "requests": Map {},
+            Symbol(shapeMode): false,
             Symbol(kCapture): false,
           },
           "searchSessionId": "123",
@@ -316,6 +421,7 @@ describe('useStateProps', () => {
         query: { language: 'kuery', query: '' },
         requestAdapter: new RequestAdapter(),
         searchSessionId: '123',
+        columns: undefined,
       })
     );
     expect(result.current).toMatchInlineSnapshot(`
@@ -327,41 +433,46 @@ describe('useStateProps', () => {
           "total": undefined,
         },
         "isPlainRecord": false,
-        "lensTablesAdapter": Object {
-          "default": Object {
-            "columns": Array [
-              Object {
-                "id": "col-0-1",
-                "meta": Object {
-                  "dimensionName": "Slice size",
-                  "type": "number",
-                },
-                "name": "Field 1",
+        "lensAdapters": Object {
+          "tables": Object {
+            "tables": Object {
+              "default": Object {
+                "columns": Array [
+                  Object {
+                    "id": "col-0-1",
+                    "meta": Object {
+                      "dimensionName": "Slice size",
+                      "type": "number",
+                    },
+                    "name": "Field 1",
+                  },
+                  Object {
+                    "id": "col-0-2",
+                    "meta": Object {
+                      "dimensionName": "Slice",
+                      "type": "number",
+                    },
+                    "name": "Field 2",
+                  },
+                ],
+                "rows": Array [
+                  Object {
+                    "col-0-1": 0,
+                    "col-0-2": 0,
+                    "col-0-3": 0,
+                    "col-0-4": 0,
+                  },
+                ],
+                "type": "datatable",
               },
-              Object {
-                "id": "col-0-2",
-                "meta": Object {
-                  "dimensionName": "Slice",
-                  "type": "number",
-                },
-                "name": "Field 2",
-              },
-            ],
-            "rows": Array [
-              Object {
-                "col-0-1": 0,
-                "col-0-2": 0,
-                "col-0-3": 0,
-                "col-0-4": 0,
-              },
-            ],
-            "type": "datatable",
+            },
           },
         },
+        "lensEmbeddableOutput$": undefined,
         "onBreakdownFieldChange": [Function],
         "onChartHiddenChange": [Function],
         "onChartLoad": [Function],
-        "onSuggestionChange": [Function],
+        "onSuggestionContextChange": [Function],
         "onTimeIntervalChange": [Function],
         "onTopPanelHeightChange": [Function],
         "onTotalHitsChange": [Function],
@@ -371,6 +482,7 @@ describe('useStateProps', () => {
             "_eventsCount": 0,
             "_maxListeners": undefined,
             "requests": Map {},
+            Symbol(shapeMode): false,
             Symbol(kCapture): false,
           },
           "searchSessionId": "123",
@@ -388,6 +500,7 @@ describe('useStateProps', () => {
         query: { language: 'kuery', query: '' },
         requestAdapter: new RequestAdapter(),
         searchSessionId: '123',
+        columns: undefined,
       })
     );
     const {
@@ -397,7 +510,7 @@ describe('useStateProps', () => {
       onChartHiddenChange,
       onChartLoad,
       onBreakdownFieldChange,
-      onSuggestionChange,
+      onSuggestionContextChange,
     } = result.current;
     act(() => {
       onTopPanelHeightChange(200);
@@ -429,9 +542,13 @@ describe('useStateProps', () => {
     expect(stateService.setBreakdownField).toHaveBeenLastCalledWith('field');
 
     act(() => {
-      onSuggestionChange({ title: 'Stacked Bar' } as Suggestion);
+      onSuggestionContextChange({
+        suggestion: { title: 'Stacked Bar' },
+      } as UnifiedHistogramSuggestionContext);
     });
-    expect(stateService.setCurrentSuggestion).toHaveBeenLastCalledWith({ title: 'Stacked Bar' });
+    expect(stateService.setCurrentSuggestionContext).toHaveBeenLastCalledWith({
+      suggestion: { title: 'Stacked Bar' },
+    });
   });
 
   it('should clear lensRequestAdapter when chart is hidden', () => {
@@ -443,6 +560,7 @@ describe('useStateProps', () => {
         query: { language: 'kuery', query: '' },
         requestAdapter: new RequestAdapter(),
         searchSessionId: '123',
+        columns: undefined,
       })
     );
     (stateService.setLensRequestAdapter as jest.Mock).mockClear();
@@ -462,6 +580,7 @@ describe('useStateProps', () => {
       query: { language: 'kuery', query: '' },
       requestAdapter: new RequestAdapter(),
       searchSessionId: '123',
+      columns: undefined,
     };
     const hook = renderHook((props: Parameters<typeof useStateProps>[0]) => useStateProps(props), {
       initialProps,

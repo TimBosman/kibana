@@ -5,7 +5,6 @@
  * 2.0.
  */
 
-import * as Url from 'url';
 import { PackagePolicy } from '@kbn/fleet-plugin/common';
 import {
   AGENT_CONFIG_PATH,
@@ -17,7 +16,7 @@ import expect from '@kbn/expect';
 import { get } from 'lodash';
 import type { SourceMap } from '@kbn/apm-plugin/server/routes/source_maps/route';
 import { APIReturnType } from '@kbn/apm-plugin/public/services/rest/create_call_apm_api';
-import { createEsClientForTesting } from '@kbn/test';
+import { createEsClientForFtrConfig } from '@kbn/test';
 import {
   APM_AGENT_CONFIGURATION_INDEX,
   APM_SOURCE_MAP_INDEX,
@@ -30,7 +29,7 @@ import {
   deletePackagePolicy,
   getPackagePolicy,
   setupFleet,
-} from './apm_package_policy_setup';
+} from './helpers';
 import { getBettertest } from '../../common/bettertest';
 import { expectToReject } from '../../common/utils/expect_to_reject';
 
@@ -41,14 +40,10 @@ export default function ApiTest(ftrProviderContext: FtrProviderContext) {
   const supertest = getService('supertest');
   const es = getService('es');
   const bettertest = getBettertest(supertest);
+  const configService = getService('config');
 
   function createEsClientWithApiKeyAuth({ id, apiKey }: { id: string; apiKey: string }) {
-    const config = getService('config');
-    return createEsClientForTesting({
-      esUrl: Url.format(config.get('servers.elasticsearch')),
-      requestTimeout: config.get('timeouts.esRequestTimeout'),
-      auth: { apiKey: { id, api_key: apiKey } },
-    });
+    return createEsClientForFtrConfig(configService, { auth: { apiKey: { id, api_key: apiKey } } });
   }
 
   async function createConfiguration(configuration: any) {
@@ -120,8 +115,8 @@ export default function ApiTest(ftrProviderContext: FtrProviderContext) {
 
     before(async () => {
       await setupFleet(bettertest);
-      agentPolicyId = await createAgentPolicy(bettertest);
-      packagePolicyId = await createPackagePolicy(bettertest, agentPolicyId);
+      agentPolicyId = await createAgentPolicy({ bettertest });
+      packagePolicyId = await createPackagePolicy({ bettertest, agentPolicyId });
       apmPackagePolicy = await getPackagePolicy(bettertest, packagePolicyId); // make sure to get the latest package policy
     });
 
@@ -147,7 +142,7 @@ export default function ApiTest(ftrProviderContext: FtrProviderContext) {
       });
 
       it('has api key that provides access to source maps only', async () => {
-        const [id, apiKey] = get(apmPackagePolicy, SOURCE_MAP_API_KEY_PATH).split(':');
+        const [id, apiKey] = get(apmPackagePolicy, SOURCE_MAP_API_KEY_PATH, '').split(':');
         expect(id).to.not.be.empty();
         expect(apiKey).to.not.be.empty();
 
@@ -157,7 +152,7 @@ export default function ApiTest(ftrProviderContext: FtrProviderContext) {
       });
 
       it('has api api key that provides access to the agent configurations index', async () => {
-        const [id, apiKey] = get(apmPackagePolicy, AGENT_CONFIG_API_KEY_PATH).split(':');
+        const [id, apiKey] = get(apmPackagePolicy, AGENT_CONFIG_API_KEY_PATH, '').split(':');
         expect(id).to.not.be.empty();
         expect(apiKey).to.not.be.empty();
 
@@ -170,7 +165,7 @@ export default function ApiTest(ftrProviderContext: FtrProviderContext) {
       });
 
       it('throws when querying agent config index with source map api key', async () => {
-        const [id, apiKey] = get(apmPackagePolicy, SOURCE_MAP_API_KEY_PATH).split(':');
+        const [id, apiKey] = get(apmPackagePolicy, SOURCE_MAP_API_KEY_PATH, '').split(':');
         expect(id).to.not.be.empty();
         expect(apiKey).to.not.be.empty();
 
@@ -194,7 +189,7 @@ export default function ApiTest(ftrProviderContext: FtrProviderContext) {
         });
 
         it('sets the expected agent configs on the new package policy object', async () => {
-          const agentConfigs = get(packagePolicyWithAgentConfig, AGENT_CONFIG_PATH);
+          const agentConfigs = get(packagePolicyWithAgentConfig, AGENT_CONFIG_PATH)!;
           const { service, config } = agentConfigs[0];
           expect(service).to.eql({});
           expect(config).to.eql({ transaction_sample_rate: '0.55' });

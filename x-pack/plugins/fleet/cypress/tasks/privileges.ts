@@ -5,9 +5,10 @@
  * 2.0.
  */
 
+import { request } from './common';
 import { constructUrlWithUser, getEnvAuth } from './login';
 
-interface User {
+export interface User {
   username: string;
   password: string;
   description?: string;
@@ -59,6 +60,7 @@ export const FleetAllIntegrAllRole: Role = {
           privileges: ['all'],
         },
       ],
+      cluster: ['manage_service_account'],
     },
     kibana: [
       {
@@ -88,6 +90,7 @@ export const FleetAllIntegrReadRole: Role = {
           privileges: ['all'],
         },
       ],
+      cluster: ['manage_service_account'],
     },
     kibana: [
       {
@@ -115,6 +118,7 @@ export const FleetAllIntegrNoneRole: Role = {
           privileges: ['all'],
         },
       ],
+      cluster: ['manage_service_account'],
     },
     kibana: [
       {
@@ -132,6 +136,34 @@ export const FleetAllIntegrNoneUser: User = {
   password: 'password',
   roles: [FleetAllIntegrNoneRole.name],
 };
+export const FleetAgentsReadIntegrNoneRole: Role = {
+  name: 'fleet_agents_read_int_none_role',
+  privileges: {
+    elasticsearch: {
+      indices: [
+        {
+          names: ['*'],
+          privileges: ['all'],
+        },
+      ],
+      cluster: ['manage_service_account'],
+    },
+    kibana: [
+      {
+        feature: {
+          fleetv2: ['minimal_read', 'agents_read'],
+          fleet: ['none'],
+        },
+        spaces: ['*'],
+      },
+    ],
+  },
+};
+export const FleetAgentsReadIntegrNoneUser: User = {
+  username: 'fleet_agents_read_int_none_role',
+  password: 'password',
+  roles: [FleetAgentsReadIntegrNoneRole.name],
+};
 export const FleetNoneIntegrAllRole: Role = {
   name: 'fleet_none_int_all_role',
   privileges: {
@@ -142,6 +174,7 @@ export const FleetNoneIntegrAllRole: Role = {
           privileges: ['all'],
         },
       ],
+      cluster: ['manage_service_account'],
     },
     kibana: [
       {
@@ -158,6 +191,117 @@ export const FleetNoneIntegrAllUser: User = {
   username: 'fleet_none_int_all_user',
   password: 'password',
   roles: [FleetNoneIntegrAllRole.name],
+};
+
+export const getIntegrationsAutoImportRole = (feature: FeaturesPrivileges): Role => ({
+  name: 'automatic_import_integrations_read_role',
+  privileges: {
+    elasticsearch: {
+      indices: [
+        {
+          names: ['*'],
+          privileges: ['all'],
+        },
+      ],
+      cluster: ['manage_service_account'],
+    },
+    kibana: [
+      {
+        feature,
+        spaces: ['*'],
+      },
+    ],
+  },
+});
+
+export const AutomaticImportConnectorNoneRole: Role = {
+  name: 'automatic_import_connectors_none_role',
+  privileges: {
+    elasticsearch: {
+      indices: [
+        {
+          names: ['*'],
+          privileges: ['all'],
+        },
+      ],
+      cluster: ['manage_service_account'],
+    },
+    kibana: [
+      {
+        feature: {
+          fleetv2: ['all'],
+          fleet: ['all'],
+          actions: ['none'],
+        },
+        spaces: ['*'],
+      },
+    ],
+  },
+};
+export const AutomaticImportConnectorNoneUser: User = {
+  username: 'automatic_import_connectors_none_user',
+  password: 'password',
+  roles: [AutomaticImportConnectorNoneRole.name],
+};
+
+export const AutomaticImportConnectorReadRole: Role = {
+  name: 'automatic_import_connectors_read_role',
+  privileges: {
+    elasticsearch: {
+      indices: [
+        {
+          names: ['*'],
+          privileges: ['all'],
+        },
+      ],
+      cluster: ['manage_service_account'],
+    },
+    kibana: [
+      {
+        feature: {
+          fleetv2: ['all'],
+          fleet: ['all'],
+          actions: ['read'],
+        },
+        spaces: ['*'],
+      },
+    ],
+  },
+};
+export const AutomaticImportConnectorReadUser: User = {
+  username: 'automatic_import_connectors_read_user',
+  password: 'password',
+  roles: [AutomaticImportConnectorReadRole.name],
+};
+
+export const AutomaticImportConnectorAllRole: Role = {
+  name: 'automatic_import_connectors_all_role',
+  privileges: {
+    elasticsearch: {
+      indices: [
+        {
+          names: ['*'],
+          privileges: ['all'],
+        },
+      ],
+      cluster: ['manage_service_account'],
+    },
+    kibana: [
+      {
+        feature: {
+          fleetv2: ['all'],
+          fleet: ['all'],
+          actions: ['all'],
+        },
+        spaces: ['*'],
+      },
+    ],
+  },
+};
+export const AutomaticImportConnectorAllUser: User = {
+  username: 'automatic_import_connectors_all_user',
+  password: 'password',
+  roles: [AutomaticImportConnectorAllRole.name],
 };
 
 export const BuiltInEditorUser: User = {
@@ -186,7 +330,7 @@ export const createRoles = (roles: Role[]) => {
   const envUser = getEnvAuth();
   for (const role of roles) {
     cy.log(`Creating role: ${JSON.stringify(role)}`);
-    cy.request({
+    request({
       body: role.privileges,
       headers: { 'kbn-xsrf': 'cypress-creds-via-config' },
       method: 'PUT',
@@ -202,7 +346,7 @@ export const deleteRoles = (roles: Role[]) => {
 
   for (const role of roles) {
     cy.log(`Deleting role: ${JSON.stringify(role)}`);
-    cy.request({
+    request({
       headers: { 'kbn-xsrf': 'cypress-creds-via-config' },
       method: 'DELETE',
       url: constructUrlWithUser(envUser, `/api/security/role/${role.name}`),
@@ -221,7 +365,7 @@ export const createUsers = (users: User[]) => {
   for (const user of users) {
     const userInfo = getUserInfo(user);
     cy.log(`Creating user: ${JSON.stringify(user)}`);
-    cy.request({
+    request({
       body: {
         username: user.username,
         password: user.password,
@@ -242,7 +386,7 @@ export const deleteUsers = (users: User[]) => {
   const envUser = getEnvAuth();
   for (const user of users) {
     cy.log(`Deleting user: ${JSON.stringify(user)}`);
-    cy.request({
+    request({
       headers: { 'kbn-xsrf': 'cypress-creds-via-config' },
       method: 'DELETE',
       url: constructUrlWithUser(envUser, `/internal/security/users/${user.username}`),

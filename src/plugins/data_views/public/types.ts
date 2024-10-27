@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { ExpressionsSetup } from '@kbn/expressions-plugin/public';
@@ -109,8 +110,9 @@ export interface DataViewsPublicStartDependencies {
 /**
  * Data plugin public Setup contract
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface DataViewsPublicPluginSetup {}
+export interface DataViewsPublicPluginSetup {
+  enableRollups: () => void;
+}
 
 export interface DataViewsServicePublic extends DataViewsServicePublicMethods {
   getCanSaveSync: () => boolean;
@@ -120,7 +122,14 @@ export interface DataViewsServicePublic extends DataViewsServicePublicMethods {
     showAllIndices?: boolean;
     isRollupIndex: (indexName: string) => boolean;
   }) => Promise<MatchedItem[]>;
+  getRollupsEnabled: () => boolean;
   scriptedFieldsEnabled: boolean;
+  /**
+   * Get existing index pattern list by providing string array index pattern list.
+   * @param indices - index pattern list
+   * @returns index pattern list of index patterns that match indices
+   */
+  getExistingIndices: (indices: string[]) => Promise<string[]>;
 }
 
 export type DataViewsContract = DataViewsServicePublic;

@@ -7,7 +7,6 @@
 
 import type { CoreSetup, CoreStart, Plugin, PluginInitializerContext } from '@kbn/core/public';
 
-import { getSecurityGetStartedComponent } from './get_started';
 import { getDashboardsLandingCallout } from './components/dashboards_landing_callout';
 import type {
   SecuritySolutionServerlessPluginSetup,
@@ -18,9 +17,12 @@ import type {
 } from './types';
 import { registerUpsellings } from './upselling';
 import { createServices } from './common/services/create_services';
-import { configureNavigation } from './navigation';
-import { setRoutes } from './pages/routes';
-import { projectAppLinksSwitcher } from './navigation/links/app_links';
+import { startNavigation } from './navigation';
+import {
+  parseExperimentalConfigValue,
+  type ExperimentalFeatures,
+} from '../common/experimental_features';
+import { setOnboardingSettings } from './onboarding';
 
 export class SecuritySolutionServerlessPlugin
   implements
@@ -32,16 +34,25 @@ export class SecuritySolutionServerlessPlugin
     >
 {
   private config: ServerlessSecurityPublicConfig;
+  private experimentalFeatures: ExperimentalFeatures;
 
   constructor(private readonly initializerContext: PluginInitializerContext) {
     this.config = this.initializerContext.config.get<ServerlessSecurityPublicConfig>();
+    this.experimentalFeatures = {} as ExperimentalFeatures;
   }
 
   public setup(
-    _core: CoreSetup,
+    core: CoreSetup,
     setupDeps: SecuritySolutionServerlessPluginSetupDeps
   ): SecuritySolutionServerlessPluginSetup {
-    setupDeps.securitySolution.setAppLinksSwitcher(projectAppLinksSwitcher);
+    const { securitySolution } = setupDeps;
+
+    this.experimentalFeatures = parseExperimentalConfigValue(
+      this.config.enableExperimental,
+      securitySolution.experimentalFeatures
+    ).features;
+
+    setupDeps.discover.showInlineTopNav();
 
     return {};
   }
@@ -52,17 +63,16 @@ export class SecuritySolutionServerlessPlugin
   ): SecuritySolutionServerlessPluginStart {
     const { securitySolution } = startDeps;
     const { productTypes } = this.config;
+    const services = createServices(core, startDeps, this.experimentalFeatures);
 
-    const services = createServices(core, startDeps);
+    registerUpsellings(productTypes, services);
 
-    registerUpsellings(securitySolution.getUpselling(), this.config.productTypes, services);
+    securitySolution.setComponents({
+      DashboardsLandingCallout: getDashboardsLandingCallout(services),
+    });
 
-    securitySolution.setGetStartedPage(getSecurityGetStartedComponent(services, productTypes));
-    securitySolution.setDashboardsLandingCallout(getDashboardsLandingCallout(services));
-    securitySolution.setIsILMAvailable(false);
-
-    configureNavigation(services, this.config);
-    setRoutes(services);
+    setOnboardingSettings(services);
+    startNavigation(services);
 
     return {};
   }

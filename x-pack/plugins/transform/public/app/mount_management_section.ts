@@ -5,14 +5,15 @@
  * 2.0.
  */
 
-import { CoreSetup } from '@kbn/core/public';
-import { ManagementAppMountParams } from '@kbn/management-plugin/public';
+import type { CoreSetup } from '@kbn/core/public';
+import type { ManagementAppMountParams } from '@kbn/management-plugin/public';
 import { Storage } from '@kbn/kibana-utils-plugin/public';
 
-import { PluginsDependencies } from '../plugin';
-import { getMlSharedImports } from '../shared_imports';
+import { type TransformEnabledFeatures } from './serverless_context';
+import type { PluginsDependencies } from '../plugin';
 
-import { AppDependencies } from './app_dependencies';
+import type { ExperimentalFeatures } from '../../server/config';
+import type { AppDependencies } from './app_dependencies';
 import { breadcrumbService } from './services/navigation';
 import { docTitleService } from './services/navigation';
 import { textService } from './services/text';
@@ -22,7 +23,9 @@ const localStorage = new Storage(window.localStorage);
 
 export async function mountManagementSection(
   coreSetup: CoreSetup<PluginsDependencies>,
-  params: ManagementAppMountParams
+  params: ManagementAppMountParams,
+  isServerless: boolean,
+  experimentalFeatures: ExperimentalFeatures
 ) {
   const { element, setBreadcrumbs, history } = params;
   const { http, getStartServices } = coreSetup;
@@ -44,6 +47,7 @@ export async function mountManagementSection(
   const {
     data,
     dataViews,
+    dataViewEditor,
     share,
     spaces,
     triggersActionsUi,
@@ -67,6 +71,7 @@ export async function mountManagementSection(
     application,
     chrome,
     data,
+    dataViewEditor,
     dataViews,
     docLinks,
     http,
@@ -79,10 +84,8 @@ export async function mountManagementSection(
     uiSettings,
     settings,
     history,
-    savedObjectsPlugin: plugins.savedObjects,
     share,
     spaces,
-    ml: await getMlSharedImports(),
     triggersActionsUi,
     unifiedSearch,
     charts,
@@ -92,7 +95,15 @@ export async function mountManagementSection(
     contentManagement,
   };
 
-  const unmountAppCallback = renderApp(element, appDependencies);
+  const enabledFeatures: TransformEnabledFeatures = {
+    showNodeInfo: !isServerless,
+  };
+  const unmountAppCallback = renderApp(
+    element,
+    appDependencies,
+    enabledFeatures,
+    experimentalFeatures
+  );
 
   return () => {
     docTitle.reset();

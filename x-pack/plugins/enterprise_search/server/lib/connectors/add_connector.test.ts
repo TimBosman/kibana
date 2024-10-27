@@ -7,20 +7,27 @@
 
 import { IScopedClusterClient } from '@kbn/core/server';
 
-import { CURRENT_CONNECTORS_INDEX } from '../..';
-import { ConnectorStatus } from '../../../common/types/connectors';
+import {
+  createConnector,
+  fetchConnectorByIndexName,
+  deleteConnectorById,
+} from '@kbn/search-connectors';
+
 import { ErrorCode } from '../../../common/types/error_codes';
 
 import { fetchCrawlerByIndexName } from '../crawler/fetch_crawlers';
+import { generateApiKey } from '../indices/generate_api_key';
 import { textAnalysisSettings } from '../indices/text_analysis';
 
 import { addConnector } from './add_connector';
-import { deleteConnectorById } from './delete_connector';
-import { fetchConnectorByIndexName } from './fetch_connectors';
 
-jest.mock('./fetch_connectors', () => ({ fetchConnectorByIndexName: jest.fn() }));
-jest.mock('./delete_connector', () => ({ deleteConnectorById: jest.fn() }));
+jest.mock('@kbn/search-connectors', () => ({
+  createConnector: jest.fn(),
+  deleteConnectorById: jest.fn(),
+  fetchConnectorByIndexName: jest.fn(),
+}));
 jest.mock('../crawler/fetch_crawlers', () => ({ fetchCrawlerByIndexName: jest.fn() }));
+jest.mock('../indices/generate_api_key', () => ({ generateApiKey: jest.fn() }));
 
 describe('addConnector lib function', () => {
   const mockClient = {
@@ -47,7 +54,7 @@ describe('addConnector lib function', () => {
             default_extract_binary_content: true,
             default_name: 'ent-search-generic-ingestion',
             default_reduce_whitespace: true,
-            default_run_ml_inference: false,
+            default_run_ml_inference: true,
           },
           version: '1',
         },
@@ -57,117 +64,97 @@ describe('addConnector lib function', () => {
 
   it('should add connector', async () => {
     mockClient.asCurrentUser.index.mockImplementation(() => ({ _id: 'fakeId' }));
+    (createConnector as jest.Mock).mockImplementation(() => ({
+      id: 'fakeId',
+      index_name: 'index_name',
+    }));
     mockClient.asCurrentUser.indices.exists.mockImplementation(() => false);
     (fetchConnectorByIndexName as jest.Mock).mockImplementation(() => undefined);
     (fetchCrawlerByIndexName as jest.Mock).mockImplementation(() => undefined);
     mockClient.asCurrentUser.indices.getMapping.mockImplementation(() => connectorsIndicesMapping);
+    (generateApiKey as jest.Mock).mockImplementation(() => undefined);
 
     await expect(
       addConnector(mockClient as unknown as IScopedClusterClient, {
         indexName: 'index_name',
         isNative: false,
         language: 'fr',
+        name: 'index_name',
       })
     ).resolves.toEqual(expect.objectContaining({ id: 'fakeId', index_name: 'index_name' }));
-    expect(mockClient.asCurrentUser.index).toHaveBeenCalledWith({
-      document: {
-        api_key_id: null,
-        configuration: {},
-        custom_scheduling: {},
-        description: null,
-        error: null,
-        features: null,
-        filtering: [
-          {
-            active: {
-              advanced_snippet: {
-                created_at: expect.any(String),
-                updated_at: expect.any(String),
-                value: {},
-              },
-              rules: [
-                {
-                  created_at: expect.any(String),
-                  field: '_',
-                  id: 'DEFAULT',
-                  order: 0,
-                  policy: 'include',
-                  rule: 'regex',
-                  updated_at: expect.any(String),
-                  value: '.*',
-                },
-              ],
-              validation: {
-                errors: [],
-                state: 'valid',
-              },
-            },
-            domain: 'DEFAULT',
-            draft: {
-              advanced_snippet: {
-                created_at: expect.any(String),
-                updated_at: expect.any(String),
-                value: {},
-              },
-              rules: [
-                {
-                  created_at: expect.any(String),
-                  field: '_',
-                  id: 'DEFAULT',
-                  order: 0,
-                  policy: 'include',
-                  rule: 'regex',
-                  updated_at: expect.any(String),
-                  value: '.*',
-                },
-              ],
-              validation: {
-                errors: [],
-                state: 'valid',
-              },
-            },
-          },
-        ],
-        index_name: 'index_name',
-        is_native: false,
-        language: 'fr',
-        last_access_control_sync_error: null,
-        last_access_control_sync_scheduled_at: null,
-        last_access_control_sync_status: null,
-        last_incremental_sync_scheduled_at: null,
-        last_seen: null,
-        last_sync_error: null,
-        last_sync_scheduled_at: null,
-        last_sync_status: null,
-        last_synced: null,
-        name: 'index_name',
-        pipeline: {
-          extract_binary_content: true,
-          name: 'ent-search-generic-ingestion',
-          reduce_whitespace: true,
-          run_ml_inference: false,
-        },
-        scheduling: {
-          access_control: { enabled: false, interval: '0 0 0 * * ?' },
-          full: { enabled: false, interval: '0 0 0 * * ?' },
-          incremental: { enabled: false, interval: '0 0 0 * * ?' },
-        },
-        service_type: null,
-        status: ConnectorStatus.CREATED,
-        sync_now: false,
+    expect(createConnector).toHaveBeenCalledWith(mockClient.asCurrentUser, {
+      indexName: 'index_name',
+      isNative: false,
+      language: 'fr',
+      name: 'index_name',
+      pipeline: {
+        extract_binary_content: true,
+        name: 'ent-search-generic-ingestion',
+        reduce_whitespace: true,
+        run_ml_inference: true,
       },
-      index: CURRENT_CONNECTORS_INDEX,
-      refresh: 'wait_for',
     });
     expect(mockClient.asCurrentUser.indices.create).toHaveBeenCalledWith({
       index: 'index_name',
       mappings: {},
       settings: { ...textAnalysisSettings('fr'), auto_expand_replicas: '0-3', number_of_shards: 2 },
     });
+
+    // non-native connector should not generate API key or update secrets storage
+    expect(generateApiKey).toBeCalledTimes(0);
+  });
+
+  it('should add a native connector', async () => {
+    mockClient.asCurrentUser.index.mockImplementation(() => ({ _id: 'fakeId' }));
+    (createConnector as jest.Mock).mockImplementation(() => ({
+      id: 'fakeId',
+      index_name: 'index_name',
+    }));
+    mockClient.asCurrentUser.indices.exists.mockImplementation(() => false);
+    (fetchConnectorByIndexName as jest.Mock).mockImplementation(() => undefined);
+    (fetchCrawlerByIndexName as jest.Mock).mockImplementation(() => undefined);
+    mockClient.asCurrentUser.indices.getMapping.mockImplementation(() => connectorsIndicesMapping);
+    (generateApiKey as jest.Mock).mockImplementation(() => ({
+      id: 'api-key-id',
+      encoded: 'encoded-api-key',
+    }));
+
+    await expect(
+      addConnector(mockClient as unknown as IScopedClusterClient, {
+        indexName: 'index_name',
+        isNative: true,
+        language: 'ja',
+        name: 'index_name',
+      })
+    ).resolves.toEqual(expect.objectContaining({ id: 'fakeId', index_name: 'index_name' }));
+    expect(createConnector).toHaveBeenCalledWith(mockClient.asCurrentUser, {
+      indexName: 'index_name',
+      isNative: true,
+      language: 'ja',
+      name: 'index_name',
+      pipeline: {
+        extract_binary_content: true,
+        name: 'ent-search-generic-ingestion',
+        reduce_whitespace: true,
+        run_ml_inference: true,
+      },
+    });
+    expect(mockClient.asCurrentUser.indices.create).toHaveBeenCalledWith({
+      index: 'index_name',
+      mappings: {},
+      settings: { ...textAnalysisSettings('ja'), auto_expand_replicas: '0-3', number_of_shards: 2 },
+    });
+
+    // native connector should generate API key and update secrets storage
+    expect(generateApiKey).toHaveBeenCalledWith(mockClient, 'index_name', true);
   });
 
   it('should reject if index already exists', async () => {
     mockClient.asCurrentUser.index.mockImplementation(() => ({ _id: 'fakeId' }));
+    (createConnector as jest.Mock).mockImplementation(() => ({
+      id: 'fakeId',
+      index_name: 'index_name',
+    }));
     mockClient.asCurrentUser.indices.exists.mockImplementation(() => true);
     (fetchConnectorByIndexName as jest.Mock).mockImplementation(() => undefined);
     (fetchCrawlerByIndexName as jest.Mock).mockImplementation(() => undefined);
@@ -178,6 +165,7 @@ describe('addConnector lib function', () => {
         indexName: 'index_name',
         isNative: true,
         language: 'en',
+        name: '',
       })
     ).rejects.toEqual(new Error(ErrorCode.INDEX_ALREADY_EXISTS));
     expect(mockClient.asCurrentUser.indices.create).not.toHaveBeenCalled();
@@ -195,6 +183,7 @@ describe('addConnector lib function', () => {
         indexName: 'index_name',
         isNative: false,
         language: 'en',
+        name: '',
       })
     ).rejects.toEqual(new Error(ErrorCode.CONNECTOR_DOCUMENT_ALREADY_EXISTS));
     expect(mockClient.asCurrentUser.indices.create).not.toHaveBeenCalled();
@@ -202,6 +191,10 @@ describe('addConnector lib function', () => {
 
   it('should reject if crawler already exists', async () => {
     mockClient.asCurrentUser.index.mockImplementation(() => ({ _id: 'fakeId' }));
+    (createConnector as jest.Mock).mockImplementation(() => ({
+      id: 'fakeId',
+      index_name: 'index_name',
+    }));
     mockClient.asCurrentUser.indices.exists.mockImplementation(() => false);
     (fetchConnectorByIndexName as jest.Mock).mockImplementation(() => undefined);
     (fetchCrawlerByIndexName as jest.Mock).mockImplementation(() => true);
@@ -212,9 +205,11 @@ describe('addConnector lib function', () => {
         indexName: 'index_name',
         isNative: false,
         language: 'en',
+        name: '',
       })
     ).rejects.toEqual(new Error(ErrorCode.CRAWLER_ALREADY_EXISTS));
     expect(mockClient.asCurrentUser.indices.create).not.toHaveBeenCalled();
+    expect(createConnector).not.toHaveBeenCalled();
   });
 
   it('should reject with index already exists if connector and index already exist', async () => {
@@ -229,17 +224,27 @@ describe('addConnector lib function', () => {
         indexName: 'index_name',
         isNative: true,
         language: 'en',
+        name: '',
       })
     ).rejects.toEqual(new Error(ErrorCode.INDEX_ALREADY_EXISTS));
     expect(mockClient.asCurrentUser.indices.create).not.toHaveBeenCalled();
+    expect(createConnector).not.toHaveBeenCalled();
   });
 
   it('should replace connector if deleteExistingConnector flag is true', async () => {
     mockClient.asCurrentUser.index.mockImplementation(() => ({ _id: 'fakeId' }));
+    (createConnector as jest.Mock).mockImplementation(() => ({
+      id: 'fakeId',
+      index_name: 'index_name',
+    }));
     mockClient.asCurrentUser.indices.exists.mockImplementation(() => false);
     (fetchConnectorByIndexName as jest.Mock).mockImplementation(() => ({ id: 'connectorId' }));
     (fetchCrawlerByIndexName as jest.Mock).mockImplementation(() => undefined);
     mockClient.asCurrentUser.indices.getMapping.mockImplementation(() => connectorsIndicesMapping);
+    (generateApiKey as jest.Mock).mockImplementation(() => ({
+      id: 'api-key-id',
+      encoded: 'encoded-api-key',
+    }));
 
     await expect(
       addConnector(mockClient as unknown as IScopedClusterClient, {
@@ -247,98 +252,22 @@ describe('addConnector lib function', () => {
         indexName: 'index_name',
         isNative: true,
         language: null,
+        name: '',
       })
     ).resolves.toEqual(expect.objectContaining({ id: 'fakeId', index_name: 'index_name' }));
-    expect(deleteConnectorById).toHaveBeenCalledWith(mockClient, 'connectorId');
-    expect(mockClient.asCurrentUser.index).toHaveBeenCalledWith({
-      document: {
-        api_key_id: null,
-        configuration: {},
-        custom_scheduling: {},
-        description: null,
-        error: null,
-        features: null,
-        filtering: [
-          {
-            active: {
-              advanced_snippet: {
-                created_at: expect.any(String),
-                updated_at: expect.any(String),
-                value: {},
-              },
-              rules: [
-                {
-                  created_at: expect.any(String),
-                  field: '_',
-                  id: 'DEFAULT',
-                  order: 0,
-                  policy: 'include',
-                  rule: 'regex',
-                  updated_at: expect.any(String),
-                  value: '.*',
-                },
-              ],
-              validation: {
-                errors: [],
-                state: 'valid',
-              },
-            },
-            domain: 'DEFAULT',
-            draft: {
-              advanced_snippet: {
-                created_at: expect.any(String),
-                updated_at: expect.any(String),
-                value: {},
-              },
-              rules: [
-                {
-                  created_at: expect.any(String),
-                  field: '_',
-                  id: 'DEFAULT',
-                  order: 0,
-                  policy: 'include',
-                  rule: 'regex',
-                  updated_at: expect.any(String),
-                  value: '.*',
-                },
-              ],
-              validation: {
-                errors: [],
-                state: 'valid',
-              },
-            },
-          },
-        ],
-        index_name: 'index_name',
-        is_native: true,
-        language: null,
-        last_access_control_sync_error: null,
-        last_access_control_sync_scheduled_at: null,
-        last_access_control_sync_status: null,
-        last_incremental_sync_scheduled_at: null,
-        last_seen: null,
-        last_sync_error: null,
-        last_sync_scheduled_at: null,
-        last_sync_status: null,
-        last_synced: null,
-        name: 'index_name',
-        pipeline: {
-          extract_binary_content: true,
-          name: 'ent-search-generic-ingestion',
-          reduce_whitespace: true,
-          run_ml_inference: false,
-        },
-        scheduling: {
-          access_control: { enabled: false, interval: '0 0 0 * * ?' },
-          full: { enabled: false, interval: '0 0 0 * * ?' },
-          incremental: { enabled: false, interval: '0 0 0 * * ?' },
-        },
-        service_type: null,
-        status: ConnectorStatus.CREATED,
-        sync_now: false,
+    expect(deleteConnectorById).toHaveBeenCalledWith(mockClient.asCurrentUser, 'connectorId');
+    expect(createConnector).toHaveBeenCalledWith(mockClient.asCurrentUser, {
+      deleteExistingConnector: true,
+      indexName: 'index_name',
+      isNative: true,
+      language: null,
+      name: '',
+      pipeline: {
+        extract_binary_content: true,
+        name: 'ent-search-generic-ingestion',
+        reduce_whitespace: true,
+        run_ml_inference: true,
       },
-      index: CURRENT_CONNECTORS_INDEX,
-      refresh: 'wait_for',
     });
     expect(mockClient.asCurrentUser.indices.create).toHaveBeenCalledWith({
       index: 'index_name',

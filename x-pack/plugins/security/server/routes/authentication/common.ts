@@ -7,9 +7,9 @@
 
 import type { TypeOf } from '@kbn/config-schema';
 import { schema } from '@kbn/config-schema';
+import { parseNextURL } from '@kbn/std';
 
 import type { RouteDefinitionParams } from '..';
-import { parseNext } from '../../../common/parse_next';
 import {
   BasicAuthenticationProvider,
   canRedirectRequest,
@@ -48,6 +48,7 @@ export function defineCommonRoutes({
         validate: { query: schema.object({}, { unknowns: 'allow' }) },
         options: {
           access: 'public',
+          excludeFromOAS: true,
           authRequired: false,
           tags: [ROUTE_TAG_CAN_REDIRECT, ROUTE_TAG_AUTH_FLOW],
         },
@@ -89,17 +90,18 @@ export function defineCommonRoutes({
     '/internal/security/me',
     ...(buildFlavor !== 'serverless' ? ['/api/security/v1/me'] : []),
   ]) {
+    const deprecated = path === '/api/security/v1/me';
     router.get(
-      { path, validate: false },
-      createLicensedRouteHandler((context, request, response) => {
-        if (path === '/api/security/v1/me') {
+      { path, validate: false, options: { access: deprecated ? 'public' : 'internal' } },
+      createLicensedRouteHandler(async (context, request, response) => {
+        if (deprecated) {
           logger.warn(
             `The "${basePath.serverBasePath}${path}" endpoint is deprecated and will be removed in the next major version.`,
             { tags: ['deprecation'] }
           );
         }
-
-        return response.ok({ body: getAuthenticationService().getCurrentUser(request)! });
+        const { security: coreSecurity } = await context.core;
+        return response.ok({ body: coreSecurity.authc.getCurrentUser()! });
       })
     );
   }
@@ -157,9 +159,7 @@ export function defineCommonRoutes({
     },
     createLicensedRouteHandler(async (context, request, response) => {
       const { providerType, providerName, currentURL, params } = request.body;
-      logger.info(`Logging in with provider "${providerName}" (${providerType})`);
-
-      const redirectURL = parseNext(currentURL, basePath.serverBasePath);
+      const redirectURL = parseNextURL(currentURL, basePath.serverBasePath);
       const authenticationResult = await getAuthenticationService().login(request, {
         provider: { name: providerName },
         redirectURL,

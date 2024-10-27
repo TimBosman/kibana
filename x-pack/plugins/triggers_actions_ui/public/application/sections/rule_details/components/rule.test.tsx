@@ -6,7 +6,9 @@
  */
 
 import * as React from 'react';
+import { Suspense } from 'react';
 import { shallow } from 'enzyme';
+import { waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { mountWithIntl, nextTick } from '@kbn/test-jest-helpers';
 import { act } from 'react-dom/test-utils';
@@ -21,14 +23,33 @@ import { ruleTypeRegistryMock } from '../../../rule_type_registry.mock';
 import { useKibana } from '../../../../common/lib/kibana';
 import { useBulkGetMaintenanceWindows } from '../../alerts_table/hooks/use_bulk_get_maintenance_windows';
 import { getMaintenanceWindowMockMap } from '../../alerts_table/maintenance_windows/index.mock';
+import { loadRuleTypes } from '../../../lib/rule_api/rule_types';
 
-jest.mock('../../../../common/lib/kibana');
+jest.mock('../../../lib/rule_api/rule_types');
+jest.mocked(loadRuleTypes).mockResolvedValue([]);
+
+const mockUseKibanaReturnValue = createStartServicesMock();
+jest.mock('../../../../common/lib/kibana', () => ({
+  __esModule: true,
+  useKibana: jest.fn(() => ({
+    services: mockUseKibanaReturnValue,
+  })),
+}));
 jest.mock('../../../../common/get_experimental_features', () => ({
   getIsExperimentalFeatureEnabled: jest.fn(),
 }));
 jest.mock('../../alerts_table/hooks/use_bulk_get_maintenance_windows');
 jest.mock('../../../lib/rule_api/load_execution_log_aggregations', () => ({
   loadExecutionLogAggregations: jest.fn(),
+}));
+
+const mockAlertsTable = jest.fn(() => {
+  return <div data-test-subj="alertsTable" />;
+});
+jest.mock('../../alerts_table/alerts_table_state', () => ({
+  __esModule: true,
+  AlertsTableState: mockAlertsTable,
+  default: mockAlertsTable,
 }));
 
 const { loadExecutionLogAggregations } = jest.requireMock(
@@ -54,7 +75,7 @@ const useBulkGetMaintenanceWindowsMock = useBulkGetMaintenanceWindows as jest.Mo
 const ruleTypeRegistry = ruleTypeRegistryMock.create();
 
 import { getIsExperimentalFeatureEnabled } from '../../../../common/get_experimental_features';
-import { waitFor } from '@testing-library/react';
+import { createStartServicesMock } from '../../../../common/lib/kibana/kibana_react.mock';
 
 const fakeNow = new Date('2020-02-09T23:15:41.941Z');
 const fake2MinutesAgo = new Date('2020-02-09T23:13:41.941Z');
@@ -111,9 +132,11 @@ const queryClient = new QueryClient({
 
 const RuleComponentWithProvider = (props: RuleComponentProps) => {
   return (
-    <QueryClientProvider client={queryClient}>
-      <RuleComponent {...props} />
-    </QueryClientProvider>
+    <Suspense fallback={null}>
+      <QueryClientProvider client={queryClient}>
+        <RuleComponent {...props} />
+      </QueryClientProvider>
+    </Suspense>
   );
 };
 
@@ -128,12 +151,14 @@ describe('rules', () => {
           muted: false,
           actionGroupId: 'default',
           flapping: false,
+          tracked: true,
         },
         second_rule: {
           status: 'Active',
           muted: false,
           actionGroupId: 'action group id unknown',
           flapping: false,
+          tracked: true,
         },
       },
     });
@@ -192,11 +217,13 @@ describe('rules', () => {
         status: 'OK',
         muted: false,
         flapping: false,
+        tracked: true,
       },
       ['us-east']: {
         status: 'OK',
         muted: false,
         flapping: false,
+        tracked: true,
       },
     };
 
@@ -228,8 +255,8 @@ describe('rules', () => {
       mutedInstanceIds: ['us-west', 'us-east'],
     });
     const ruleType = mockRuleType();
-    const ruleUsWest: AlertStatus = { status: 'OK', muted: false, flapping: false };
-    const ruleUsEast: AlertStatus = { status: 'OK', muted: false, flapping: false };
+    const ruleUsWest: AlertStatus = { status: 'OK', muted: false, flapping: false, tracked: true };
+    const ruleUsEast: AlertStatus = { status: 'OK', muted: false, flapping: false, tracked: true };
 
     const wrapper = mountWithIntl(
       <RuleComponentWithProvider
@@ -243,11 +270,13 @@ describe('rules', () => {
               status: 'OK',
               muted: false,
               flapping: false,
+              tracked: true,
             },
             'us-east': {
               status: 'OK',
               muted: false,
               flapping: false,
+              tracked: true,
             },
           },
         })}
@@ -264,6 +293,48 @@ describe('rules', () => {
       alertToListItem(fakeNow.getTime(), 'us-east', ruleUsEast),
     ]);
   });
+
+  it('requests a table refresh when the refresh token changes', async () => {
+    jest.useFakeTimers();
+    const rule = mockRule({
+      enabled: false,
+    });
+    const ruleType = mockRuleType({
+      hasFieldsForAAD: true,
+    });
+    const ruleSummary = mockRuleSummary();
+    jest.setSystemTime(fake2MinutesAgo);
+
+    const wrapper = mountWithIntl(
+      <RuleComponentWithProvider
+        {...mockAPIs}
+        rule={rule}
+        ruleType={ruleType}
+        ruleSummary={ruleSummary}
+        readOnly={false}
+      />
+    );
+
+    await waitFor(() => wrapper.find('[data-test-subj="alertsTable"]'));
+
+    jest.setSystemTime(fakeNow);
+
+    wrapper.setProps({
+      refreshToken: {
+        resolve: () => undefined,
+        reject: () => undefined,
+      },
+    });
+
+    expect(mockAlertsTable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lastReloadRequestTime: fakeNow.getTime(),
+      }),
+      expect.anything()
+    );
+
+    jest.useRealTimers();
+  });
 });
 
 describe('alertToListItem', () => {
@@ -275,6 +346,7 @@ describe('alertToListItem', () => {
       activeStartDate: fake2MinutesAgo.toISOString(),
       actionGroupId: 'testing',
       flapping: false,
+      tracked: true,
     };
 
     expect(alertToListItem(fakeNow.getTime(), 'id', alert)).toEqual({
@@ -285,6 +357,7 @@ describe('alertToListItem', () => {
       sortPriority: 0,
       duration: fakeNow.getTime() - fake2MinutesAgo.getTime(),
       isMuted: false,
+      tracked: true,
     });
   });
 
@@ -295,6 +368,7 @@ describe('alertToListItem', () => {
       muted: false,
       activeStartDate: fake2MinutesAgo.toISOString(),
       flapping: false,
+      tracked: true,
     };
 
     expect(alertToListItem(fakeNow.getTime(), 'id', alert)).toEqual({
@@ -305,6 +379,7 @@ describe('alertToListItem', () => {
       sortPriority: 0,
       duration: fakeNow.getTime() - fake2MinutesAgo.getTime(),
       isMuted: false,
+      tracked: true,
     });
   });
 
@@ -316,6 +391,7 @@ describe('alertToListItem', () => {
       activeStartDate: fake2MinutesAgo.toISOString(),
       actionGroupId: 'default',
       flapping: false,
+      tracked: true,
     };
 
     expect(alertToListItem(fakeNow.getTime(), 'id', alert)).toEqual({
@@ -326,6 +402,7 @@ describe('alertToListItem', () => {
       sortPriority: 0,
       duration: fakeNow.getTime() - fake2MinutesAgo.getTime(),
       isMuted: true,
+      tracked: true,
     });
   });
 
@@ -335,6 +412,7 @@ describe('alertToListItem', () => {
       muted: false,
       actionGroupId: 'default',
       flapping: false,
+      tracked: true,
     };
 
     expect(alertToListItem(fakeNow.getTime(), 'id', alert)).toEqual({
@@ -345,6 +423,7 @@ describe('alertToListItem', () => {
       duration: 0,
       sortPriority: 0,
       isMuted: false,
+      tracked: true,
     });
   });
 
@@ -354,6 +433,7 @@ describe('alertToListItem', () => {
       muted: true,
       actionGroupId: 'default',
       flapping: false,
+      tracked: true,
     };
     expect(alertToListItem(fakeNow.getTime(), 'id', alert)).toEqual({
       alert: 'id',
@@ -363,6 +443,7 @@ describe('alertToListItem', () => {
       duration: 0,
       sortPriority: 1,
       isMuted: true,
+      tracked: true,
     });
   });
 });
@@ -457,12 +538,14 @@ describe('tabbed content', () => {
           muted: false,
           actionGroupId: 'default',
           flapping: false,
+          tracked: true,
         },
         second_rule: {
           status: 'Active',
           muted: false,
           actionGroupId: 'action group id unknown',
           flapping: false,
+          tracked: true,
         },
       },
     });
@@ -544,6 +627,7 @@ function mockRuleSummary(overloads: Partial<RuleSummary> = {}): RuleSummary {
         muted: false,
         actionGroupId: 'testActionGroup',
         flapping: false,
+        tracked: true,
       },
     },
     executionDuration: {

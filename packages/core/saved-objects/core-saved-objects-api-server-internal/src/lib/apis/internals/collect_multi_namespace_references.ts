@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { isNotFoundFromUnsupportedServer } from '@kbn/core-elasticsearch-server-internal';
@@ -108,12 +109,14 @@ export async function collectMultiNamespaceReferences(
   );
   const objectOriginsToSearchFor = foundObjects.map(({ type, id, originId }) => ({
     type,
-    origin: originId || id,
+    id,
+    origin: originId,
   }));
   const originsMap = await findSharedOriginObjects(
     createPointInTimeFinder,
     objectOriginsToSearchFor,
-    ALIAS_OR_SHARED_ORIGIN_SEARCH_PER_PAGE
+    ALIAS_OR_SHARED_ORIGIN_SEARCH_PER_PAGE,
+    options?.purpose
   );
   const results = objectsWithContext.map((obj) => {
     const aliasesVal = aliasesMap.get(getObjectKey(obj));

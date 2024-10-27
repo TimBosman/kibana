@@ -5,11 +5,13 @@
  * 2.0.
  */
 
-import { z } from 'zod';
+import { z } from '@kbn/zod';
 
 export const endpointFieldsRequestSchema = z.object({
   indices: z.array(z.string()),
   onlyCheckIfIndicesExist: z.boolean(),
 });
+
+export type EndpointFieldsRequestSchemaInput = z.input<typeof endpointFieldsRequestSchema>;
 
 export type EndpointFieldsRequestSchema = z.infer<typeof endpointFieldsRequestSchema>;

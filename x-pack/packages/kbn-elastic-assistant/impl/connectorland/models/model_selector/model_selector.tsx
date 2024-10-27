@@ -6,13 +6,14 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { EuiComboBox, EuiComboBoxOptionOption } from '@elastic/eui';
+import { EuiComboBox, EuiComboBoxOptionOption, EuiComboBoxProps } from '@elastic/eui';
 
 import * as i18n from './translations';
 
-export const MODEL_GPT_3_5_TURBO = 'gpt-3.5-turbo';
-export const MODEL_GPT_4 = 'gpt-4';
-const DEFAULT_MODELS = [MODEL_GPT_3_5_TURBO, MODEL_GPT_4];
+export const MODEL_GPT_4_TURBO = 'gpt-4-turbo';
+export const MODEL_GPT_4O_MINI = 'gpt-4o-mini';
+export const MODEL_GPT_4O = 'gpt-4o';
+const DEFAULT_MODELS = [MODEL_GPT_4O, MODEL_GPT_4_TURBO, MODEL_GPT_4O_MINI];
 
 interface Props {
   onModelSelectionChange?: (model?: string) => void;
@@ -29,9 +30,7 @@ export const ModelSelector: React.FC<Props> = React.memo(
   ({ models = DEFAULT_MODELS, onModelSelectionChange, selectedModel = DEFAULT_MODELS[0] }) => {
     // Form options
     const [options, setOptions] = useState<EuiComboBoxOptionOption[]>(
-      models.map((model) => ({
-        label: model,
-      }))
+      models.map((model) => ({ 'data-test-subj': model, label: model }))
     );
     const selectedOptions = useMemo<EuiComboBoxOptionOption[]>(() => {
       return selectedModel ? [{ label: selectedModel }] : [];
@@ -50,7 +49,9 @@ export const ModelSelector: React.FC<Props> = React.memo(
     );
 
     // Callback for when user types to create a new model
-    const onCreateOption = useCallback(
+    const onCreateOption = useCallback<
+      NonNullable<EuiComboBoxProps<string | number | string[] | undefined>['onCreateOption']>
+    >(
       (searchValue, flattenedOptions = []) => {
         if (!searchValue || !searchValue.trim().toLowerCase()) {
           return;
@@ -59,8 +60,7 @@ export const ModelSelector: React.FC<Props> = React.memo(
         const normalizedSearchValue = searchValue.trim().toLowerCase();
         const optionExists =
           flattenedOptions.findIndex(
-            (option: EuiComboBoxOptionOption) =>
-              option.label.trim().toLowerCase() === normalizedSearchValue
+            (option) => option.label.trim().toLowerCase() === normalizedSearchValue
           ) !== -1;
 
         const newOption = {
@@ -92,6 +92,7 @@ export const ModelSelector: React.FC<Props> = React.memo(
       <EuiComboBox
         aria-label={i18n.HELP_LABEL}
         compressed
+        data-test-subj="model-selector"
         isClearable={false}
         placeholder={i18n.PLACEHOLDER_TEXT}
         customOptionText={`${i18n.CUSTOM_OPTION_TEXT} {searchValue}`}

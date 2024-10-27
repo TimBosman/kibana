@@ -1,18 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import Url from 'url';
 import { format } from 'util';
 
 import axios, { AxiosResponse } from 'axios';
-import { ToolingLog } from '@kbn/tooling-log';
-import { Config } from '@kbn/test';
-import { KibanaServer } from '@kbn/ftr-common-functional-services';
+import { FtrService } from './ftr_context_provider';
 
 export interface Credentials {
   username: string;
@@ -22,12 +21,10 @@ export interface Credentials {
 function extractCookieValue(authResponse: AxiosResponse) {
   return authResponse.headers['set-cookie']?.[0].toString().split(';')[0].split('sid=')[1] ?? '';
 }
-export class Auth {
-  constructor(
-    private readonly config: Config,
-    private readonly log: ToolingLog,
-    private readonly kibanaServer: KibanaServer
-  ) {}
+export class AuthService extends FtrService {
+  private readonly config = this.ctx.getService('config');
+  private readonly log = this.ctx.getService('log');
+  private readonly kibanaServer = this.ctx.getService('kibanaServer');
 
   public async login(credentials?: Credentials) {
     const baseUrl = new URL(

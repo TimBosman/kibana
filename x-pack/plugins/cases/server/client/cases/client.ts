@@ -5,10 +5,9 @@
  * 2.0.
  */
 
-import type { Case, Cases, User } from '../../../common/types/domain';
+import type { Case, CaseCustomField, Cases, User } from '../../../common/types/domain';
 import type {
   CasePostRequest,
-  CasesFindRequest,
   CasesFindResponse,
   CaseResolveResponse,
   CasesBulkGetRequest,
@@ -18,6 +17,9 @@ import type {
   AllReportersFindRequest,
   GetRelatedCasesByAlertResponse,
   CasesBulkGetResponse,
+  BulkCreateCasesRequest,
+  BulkCreateCasesResponse,
+  CasesSearchRequest,
 } from '../../../common/types/api';
 import type { CasesClient } from '../client';
 import type { CasesClientInternal } from '../client_internal';
@@ -25,12 +27,15 @@ import type { CasesClientArgs } from '../types';
 import { bulkGet } from './bulk_get';
 import { create } from './create';
 import { deleteCases } from './delete';
-import { find } from './find';
+import { search } from './search';
 import type { CasesByAlertIDParams, GetParams } from './get';
 import { get, resolve, getCasesByAlertID, getReporters, getTags, getCategories } from './get';
 import type { PushParams } from './push';
 import { push } from './push';
-import { update } from './update';
+import { bulkUpdate } from './bulk_update';
+import { bulkCreate } from './bulk_create';
+import type { ReplaceCustomFieldArgs } from './replace_custom_field';
+import { replaceCustomField } from './replace_custom_field';
 
 /**
  * API for interacting with the cases entities.
@@ -41,11 +46,15 @@ export interface CasesSubClient {
    */
   create(data: CasePostRequest): Promise<Case>;
   /**
+   * Bulk create cases.
+   */
+  bulkCreate(data: BulkCreateCasesRequest): Promise<BulkCreateCasesResponse>;
+  /**
    * Returns cases that match the search criteria.
    *
    * If the `owner` field is left empty then all the cases that the user has access to will be returned.
    */
-  find(params: CasesFindRequest): Promise<CasesFindResponse>;
+  search(params: CasesSearchRequest): Promise<CasesFindResponse>;
   /**
    * Retrieves a single case with the specified ID.
    */
@@ -66,7 +75,7 @@ export interface CasesSubClient {
   /**
    * Update the specified cases with the passed in values.
    */
-  update(cases: CasesPatchRequest): Promise<Cases>;
+  bulkUpdate(cases: CasesPatchRequest): Promise<Cases>;
   /**
    * Delete a case and all its comments.
    *
@@ -89,6 +98,10 @@ export interface CasesSubClient {
    * Retrieves the cases ID and title that have the requested alert attached to them
    */
   getCasesByAlertID(params: CasesByAlertIDParams): Promise<GetRelatedCasesByAlertResponse>;
+  /**
+   * Replace custom field with specific customFieldId and CaseId
+   */
+  replaceCustomField(params: ReplaceCustomFieldArgs): Promise<CaseCustomField>;
 }
 
 /**
@@ -102,18 +115,21 @@ export const createCasesSubClient = (
   casesClientInternal: CasesClientInternal
 ): CasesSubClient => {
   const casesSubClient: CasesSubClient = {
-    create: (data: CasePostRequest) => create(data, clientArgs),
-    find: (params: CasesFindRequest) => find(params, clientArgs),
+    create: (data: CasePostRequest) => create(data, clientArgs, casesClient),
+    bulkCreate: (data: BulkCreateCasesRequest) => bulkCreate(data, clientArgs, casesClient),
+    search: (params: CasesSearchRequest) => search(params, clientArgs, casesClient),
     get: (params: GetParams) => get(params, clientArgs),
     resolve: (params: GetParams) => resolve(params, clientArgs),
     bulkGet: (params) => bulkGet(params, clientArgs),
     push: (params: PushParams) => push(params, clientArgs, casesClient),
-    update: (cases: CasesPatchRequest) => update(cases, clientArgs),
+    bulkUpdate: (cases: CasesPatchRequest) => bulkUpdate(cases, clientArgs, casesClient),
     delete: (ids: string[]) => deleteCases(ids, clientArgs),
     getTags: (params: AllTagsFindRequest) => getTags(params, clientArgs),
     getCategories: (params: AllCategoriesFindRequest) => getCategories(params, clientArgs),
     getReporters: (params: AllReportersFindRequest) => getReporters(params, clientArgs),
     getCasesByAlertID: (params: CasesByAlertIDParams) => getCasesByAlertID(params, clientArgs),
+    replaceCustomField: (params: ReplaceCustomFieldArgs) =>
+      replaceCustomField(params, clientArgs, casesClient),
   };
 
   return Object.freeze(casesSubClient);

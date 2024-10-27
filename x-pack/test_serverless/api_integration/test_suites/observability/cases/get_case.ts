@@ -6,32 +6,47 @@
  */
 
 import expect from '@kbn/expect';
-
+import type { RoleCredentials } from '../../../../shared/services';
 import { FtrProviderContext } from '../../../ftr_provider_context';
-import {
-  getCase,
-  createCase,
-  deleteCasesByESQuery,
-  getPostCaseRequest,
-  postCaseResp,
-} from './helpers/api';
-import { removeServerGeneratedPropertiesFromCase } from './helpers/omit';
 
 export default ({ getService }: FtrProviderContext): void => {
-  const supertest = getService('supertest');
-  const es = getService('es');
+  const svlCases = getService('svlCases');
+  const svlUserManager = getService('svlUserManager');
 
   describe('get_case', () => {
+    let roleAuthc: RoleCredentials;
+
+    before(async () => {
+      roleAuthc = await svlUserManager.createM2mApiKeyWithRoleScope('admin');
+    });
+
+    after(async () => {
+      await svlUserManager.invalidateM2mApiKeyWithRoleScope(roleAuthc);
+    });
+
     afterEach(async () => {
-      await deleteCasesByESQuery(es);
+      await svlCases.api.deleteCases();
     });
 
     it('should return a case', async () => {
-      const postedCase = await createCase(supertest, getPostCaseRequest());
-      const theCase = await getCase({ supertest, caseId: postedCase.id, includeComments: true });
+      const postedCase = await svlCases.api.createCase(
+        svlCases.api.getPostCaseRequest('observability'),
+        roleAuthc
+      );
+      const theCase = await svlCases.api.getCase(
+        {
+          caseId: postedCase.id,
+          includeComments: true,
+        },
+        roleAuthc
+      );
 
-      const data = removeServerGeneratedPropertiesFromCase(theCase);
-      expect(data).to.eql(postCaseResp());
+      const { created_by: createdBy, ...data } =
+        svlCases.omit.removeServerGeneratedPropertiesFromCase(theCase);
+      const { created_by: _, ...expectedData } = svlCases.api.postCaseResp('observability');
+
+      expect(data).to.eql(expectedData);
+      expect(createdBy).to.have.keys('full_name', 'email', 'username');
       expect(data.comments?.length).to.eql(0);
     });
   });

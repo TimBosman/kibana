@@ -19,6 +19,16 @@ export const getStatusRoute: CaseRoute = createCasesRoute({
   method: 'get',
   path: CASE_STATUS_URL,
   options: { deprecated: true },
+  routerOptions: {
+    access: 'public',
+    summary: `Get case status summary`,
+    tags: ['oas-tag:cases'],
+    description:
+      'Returns the number of cases that are open, closed, and in progress in the default space.',
+    // You must have `read` privileges for the **Cases** feature in the **Management**, **Observability**, or **Security** section of the Kibana feature privileges, depending on the owner of the cases you're seeking.
+    // @ts-expect-error TODO(https://github.com/elastic/kibana/issues/196095): Replace {RouteDeprecationInfo}
+    deprecated: true,
+  },
   handler: async ({ context, request, response }) => {
     try {
       const caseContext = await context.cases;

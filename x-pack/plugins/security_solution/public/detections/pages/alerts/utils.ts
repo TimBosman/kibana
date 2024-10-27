@@ -6,12 +6,11 @@
  */
 
 import { encode } from '@kbn/rison';
-import { expandableFlyoutStateFromEventMeta } from '../../../flyout/shared/hooks/url/expandable_flyout_state_from_event_meta';
+import { expandableFlyoutStateFromEventMeta } from '../../../flyout/document_details/shared/hooks/url/expandable_flyout_state_from_event_meta';
 
 export interface ResolveFlyoutParamsConfig {
   index: string;
   alertId: string;
-  isSecurityFlyoutEnabled: boolean;
 }
 
 /**
@@ -21,27 +20,14 @@ export interface ResolveFlyoutParamsConfig {
  * with Share Button on the Expandable Flyout
  */
 export const resolveFlyoutParams = (
-  { index, alertId, isSecurityFlyoutEnabled }: ResolveFlyoutParamsConfig,
+  { index, alertId }: ResolveFlyoutParamsConfig,
   currentParamsString: string | null
 ) => {
-  if (!isSecurityFlyoutEnabled) {
-    const legacyFlyoutString = encode({
-      panelView: 'eventDetail',
-      params: {
-        eventId: alertId,
-        indexName: index,
-      },
-    });
-    return legacyFlyoutString;
-  }
-
   if (currentParamsString) {
     return currentParamsString;
   }
 
-  const modernFlyoutString = encode(
+  return encode(
     expandableFlyoutStateFromEventMeta({ index, eventId: alertId, scopeId: 'alerts-page' })
   );
-
-  return modernFlyoutString;
 };

@@ -5,8 +5,9 @@
  * 2.0.
  */
 
+import { deleteAlertsAndRules } from '../../../../../tasks/api_calls/common';
 import {
-  goToTheRuleDetailsOf,
+  goToRuleDetailsOf,
   expectManagementTableRules,
   selectAllRules,
   disableAutoRefresh,
@@ -17,14 +18,11 @@ import {
   duplicateSelectedRulesWithNonExpiredExceptions,
 } from '../../../../../tasks/rules_bulk_actions';
 import { goToExceptionsTab, viewExpiredExceptionItems } from '../../../../../tasks/rule_details';
-import { login, visitSecurityDetectionRulesPage } from '../../../../../tasks/login';
+import { login } from '../../../../../tasks/login';
+import { visitRulesManagementTable } from '../../../../../tasks/rules_management';
 
 import { createRule } from '../../../../../tasks/api_calls/rules';
-import {
-  cleanKibana,
-  resetRulesTableState,
-  deleteAlertsAndRules,
-} from '../../../../../tasks/common';
+import { resetRulesTableState } from '../../../../../tasks/common';
 
 import { getNewRule } from '../../../../../objects/rule';
 
@@ -52,21 +50,15 @@ const EXPIRED_EXCEPTION_ITEM_NAME = 'Sample exception item';
 
 const NON_EXPIRED_EXCEPTION_ITEM_NAME = 'Sample exception item with future expiration';
 
-// Flaky on serverless
 describe(
   'Detection rules, bulk duplicate',
-  { tags: ['@ess', '@serverless', '@brokenInServerless'] },
+  { tags: ['@ess', '@serverless', '@skipInServerlessMKI'] },
   () => {
-    before(() => {
-      cleanKibana();
-    });
-
     beforeEach(() => {
       login();
       // Make sure persisted rules table state is cleared
       resetRulesTableState();
       deleteAlertsAndRules();
-      cy.task('esArchiverResetKibana');
       createRule(
         getNewRule({ name: RULE_NAME, ...defaultRuleData, rule_id: '1', enabled: false })
       ).then((response) => {
@@ -102,7 +94,7 @@ describe(
         ]);
       });
 
-      visitSecurityDetectionRulesPage();
+      visitRulesManagementTable();
       disableAutoRefresh();
     });
 
@@ -117,7 +109,7 @@ describe(
         selectAllRules();
         duplicateSelectedRulesWithExceptions();
         expectManagementTableRules([`${RULE_NAME} [Duplicate]`]);
-        goToTheRuleDetailsOf(`${RULE_NAME} [Duplicate]`);
+        goToRuleDetailsOf(`${RULE_NAME} [Duplicate]`);
         goToExceptionsTab();
         assertExceptionItemsExists(EXCEPTION_CARD_ITEM_NAME, [NON_EXPIRED_EXCEPTION_ITEM_NAME]);
         viewExpiredExceptionItems();
@@ -128,7 +120,7 @@ describe(
         selectAllRules();
         duplicateSelectedRulesWithNonExpiredExceptions();
         expectManagementTableRules([`${RULE_NAME} [Duplicate]`]);
-        goToTheRuleDetailsOf(`${RULE_NAME} [Duplicate]`);
+        goToRuleDetailsOf(`${RULE_NAME} [Duplicate]`);
         goToExceptionsTab();
         assertExceptionItemsExists(EXCEPTION_CARD_ITEM_NAME, [NON_EXPIRED_EXCEPTION_ITEM_NAME]);
         viewExpiredExceptionItems();

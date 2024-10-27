@@ -5,15 +5,21 @@
  * 2.0.
  */
 
-import type { RuleAction } from '@kbn/alerting-plugin/common';
-import type { NormalizedAlertAction } from '@kbn/alerting-plugin/server/rules_client';
-import type { NormalizedRuleAction } from '../api/detection_engine/rule_management/bulk_actions/bulk_actions_route';
+import type {
+  RuleAction as AlertingRuleAction,
+  RuleSystemAction as AlertingRuleSystemAction,
+} from '@kbn/alerting-plugin/common';
+import type {
+  NormalizedAlertAction,
+  NormalizedSystemAction,
+} from '@kbn/alerting-plugin/server/rules_client';
+import type { NormalizedRuleAction } from '../api/detection_engine/rule_management';
 import type {
   ResponseAction,
   RuleResponseAction,
 } from '../api/detection_engine/model/rule_response_actions';
-import { RESPONSE_ACTION_TYPES } from '../api/detection_engine/model/rule_response_actions';
-import type { RuleAlertAction } from './types';
+import { ResponseActionTypesEnum } from '../api/detection_engine/model/rule_response_actions';
+import type { RuleAction } from '../api/detection_engine/model';
 
 export const transformRuleToAlertAction = ({
   group,
@@ -23,14 +29,16 @@ export const transformRuleToAlertAction = ({
   uuid,
   frequency,
   alerts_filter: alertsFilter,
-}: RuleAlertAction): RuleAction => ({
-  group,
+}: RuleAction): AlertingRuleAction | AlertingRuleSystemAction => ({
   id,
-  params,
+  params: params as AlertingRuleAction['params'],
   actionTypeId,
-  ...(alertsFilter && { alertsFilter }),
+  ...(alertsFilter && {
+    alertsFilter: alertsFilter as AlertingRuleAction['alertsFilter'],
+  }),
   ...(uuid && { uuid }),
   ...(frequency && { frequency }),
+  ...(group && { group }),
 });
 
 export const transformAlertToRuleAction = ({
@@ -41,14 +49,26 @@ export const transformAlertToRuleAction = ({
   uuid,
   frequency,
   alertsFilter,
-}: RuleAction): RuleAlertAction => ({
-  group,
+}: AlertingRuleAction): RuleAction => ({
   id,
   params,
   action_type_id: actionTypeId,
   ...(alertsFilter && { alerts_filter: alertsFilter }),
   ...(uuid && { uuid }),
   ...(frequency && { frequency }),
+  ...(group && { group }),
+});
+
+export const transformAlertToRuleSystemAction = ({
+  id,
+  actionTypeId,
+  params,
+  uuid,
+}: AlertingRuleSystemAction): RuleAction => ({
+  id,
+  params,
+  action_type_id: actionTypeId,
+  ...(uuid && { uuid }),
 });
 
 export const transformNormalizedRuleToAlertAction = ({
@@ -57,12 +77,17 @@ export const transformNormalizedRuleToAlertAction = ({
   params,
   frequency,
   alerts_filter: alertsFilter,
-}: NormalizedRuleAction): NormalizedAlertAction => ({
-  group,
+}: NormalizedRuleAction): NormalizedAlertAction | NormalizedSystemAction => ({
   id,
-  params,
-  ...(alertsFilter && { alertsFilter }),
+  params: params as AlertingRuleAction['params'],
+  ...(alertsFilter && {
+    // We use "unknown" as the alerts filter type which is stricter than the one
+    // used in the alerting plugin (what they use is essentially "any"). So we
+    // have to to cast here
+    alertsFilter: alertsFilter as AlertingRuleAction['alertsFilter'],
+  }),
   ...(frequency && { frequency }),
+  ...(group && { group }),
 });
 
 export const transformAlertToNormalizedRuleAction = ({
@@ -71,7 +96,7 @@ export const transformAlertToNormalizedRuleAction = ({
   params,
   frequency,
   alertsFilter,
-}: RuleAction): NormalizedRuleAction => ({
+}: AlertingRuleAction): NormalizedRuleAction => ({
   group,
   id,
   params,
@@ -83,7 +108,7 @@ export const transformRuleToAlertResponseAction = ({
   action_type_id: actionTypeId,
   params,
 }: ResponseAction): RuleResponseAction => {
-  if (actionTypeId === RESPONSE_ACTION_TYPES.OSQUERY) {
+  if (actionTypeId === ResponseActionTypesEnum['.osquery']) {
     const {
       saved_query_id: savedQueryId,
       ecs_mapping: ecsMapping,
@@ -111,7 +136,7 @@ export const transformAlertToRuleResponseAction = ({
   actionTypeId,
   params,
 }: RuleResponseAction): ResponseAction => {
-  if (actionTypeId === RESPONSE_ACTION_TYPES.OSQUERY) {
+  if (actionTypeId === ResponseActionTypesEnum['.osquery']) {
     const { savedQueryId, ecsMapping, packId, ...rest } = params;
     return {
       params: {

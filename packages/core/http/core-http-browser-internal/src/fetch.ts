@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { isEmpty, omitBy } from 'lodash';
@@ -23,6 +24,7 @@ import {
   ELASTIC_HTTP_VERSION_HEADER,
   X_ELASTIC_INTERNAL_ORIGIN_REQUEST,
 } from '@kbn/core-http-common';
+import { KIBANA_BUILD_NR_HEADER } from '@kbn/core-http-common';
 import { HttpFetchError } from './http_fetch_error';
 import { HttpInterceptController } from './http_intercept_controller';
 import { interceptRequest, interceptResponse } from './intercept';
@@ -136,7 +138,7 @@ export class Fetch {
         'Content-Type': 'application/json',
         ...options.headers,
         'kbn-version': this.params.kibanaVersion,
-        'kbn-build-number': this.params.buildNumber,
+        [KIBANA_BUILD_NR_HEADER]: this.params.buildNumber,
         [ELASTIC_HTTP_VERSION_HEADER]: version,
         [X_ELASTIC_INTERNAL_ORIGIN_REQUEST]: 'Kibana',
         ...(!isEmpty(context) ? new ExecutionContextContainer(context).toHeader() : {}),

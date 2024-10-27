@@ -1,10 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import { i18n } from '@kbn/i18n';
 
 import {
@@ -51,6 +53,9 @@ const strings = {
     isPreview: i18n.translate('expressionTagcloud.functions.tagcloud.args.isPreviewHelpText', {
       defaultMessage: 'Set isPreview to true to avoid showing out of room warnings',
     }),
+    colorMapping: i18n.translate('expressionTagcloud.layer.colorMapping.help', {
+      defaultMessage: 'JSON key-value pairs of the color mapping model',
+    }),
   },
   dimension: {
     tags: i18n.translate('expressionTagcloud.functions.tagcloud.dimension.tags', {
@@ -66,7 +71,7 @@ export const errors = {
   invalidPercent: (percent: number) =>
     new Error(
       i18n.translate('expressionTagcloud.functions.tagcloud.invalidPercentErrorMessage', {
-        defaultMessage: "Invalid value: '{percent}'. Percentage must be between 0 and 1",
+        defaultMessage: "Invalid value: ''{percent}''. Percentage must be between 0 and 1",
         values: {
           percent,
         },
@@ -75,7 +80,7 @@ export const errors = {
   invalidImageUrl: (imageUrl: string) =>
     new Error(
       i18n.translate('expressionTagcloud.functions.tagcloud.invalidImageUrl', {
-        defaultMessage: "Invalid image url: '{imageUrl}'.",
+        defaultMessage: "Invalid image url: ''{imageUrl}''.",
         values: {
           imageUrl,
         },
@@ -146,6 +151,10 @@ export const tagcloudFunction: ExpressionTagcloudFunction = () => {
         default: false,
         required: false,
       },
+      colorMapping: {
+        types: ['string'],
+        help: argHelp.colorMapping,
+      },
     },
     fn(input, args, handlers) {
       validateAccessor(args.metric, input.columns);
@@ -167,6 +176,7 @@ export const tagcloudFunction: ExpressionTagcloudFunction = () => {
           (handlers.variables?.embeddableTitle as string) ??
           handlers.getExecutionContext?.()?.description,
         isPreview: Boolean(args.isPreview),
+        colorMapping: args.colorMapping,
       };
 
       if (handlers?.inspectorAdapters?.tables) {

@@ -5,21 +5,19 @@
  * 2.0.
  */
 
-import { setupServer } from '@kbn/core-test-helpers-test-utils';
-import { docLinksServiceMock, loggingSystemMock } from '@kbn/core/server/mocks';
-import type { ScreenshottingStart } from '@kbn/screenshotting-plugin/server';
-import { IUsageCounter } from '@kbn/usage-collection-plugin/server/usage_counters/usage_counter';
 import * as Rx from 'rxjs';
 import supertest from 'supertest';
+
+import { setupServer } from '@kbn/core-test-helpers-test-utils';
+import { docLinksServiceMock, loggingSystemMock } from '@kbn/core/server/mocks';
+import { INTERNAL_ROUTES } from '@kbn/reporting-common';
+import { createMockConfigSchema } from '@kbn/reporting-mocks-server';
+import { ScreenshottingStart } from '@kbn/screenshotting-plugin/server';
+import { IUsageCounter } from '@kbn/usage-collection-plugin/server/usage_counters/usage_counter';
 import { ReportingCore } from '../../../..';
-import { INTERNAL_ROUTES } from '../../../../../common/constants';
 import { reportingMock } from '../../../../mocks';
-import {
-  createMockConfigSchema,
-  createMockPluginSetup,
-  createMockReportingCore,
-} from '../../../../test_helpers';
-import type { ReportingRequestHandlerContext } from '../../../../types';
+import { createMockPluginSetup, createMockReportingCore } from '../../../../test_helpers';
+import { ReportingRequestHandlerContext } from '../../../../types';
 import { registerDiagnoseBrowser } from '../browser';
 
 type SetupServerReturn = Awaited<ReturnType<typeof setupServer>>;
@@ -27,7 +25,7 @@ type SetupServerReturn = Awaited<ReturnType<typeof setupServer>>;
 const devtoolMessage = 'DevTools listening on (ws://localhost:4000)';
 const fontNotFoundMessage = 'Could not find the default font';
 
-describe(`POST ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}`, () => {
+describe(`GET ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}`, () => {
   jest.setTimeout(6000);
   const reportingSymbol = Symbol('reporting');
   const mockLogger = loggingSystemMock.createLogger();
@@ -71,6 +69,7 @@ describe(`POST ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}`, () => {
     );
 
     usageCounter = {
+      domainId: 'abc123',
       incrementCounter: jest.fn(),
     };
     core.getUsageCounter = jest.fn().mockReturnValue(usageCounter);
@@ -90,7 +89,7 @@ describe(`POST ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}`, () => {
     screenshotting.diagnose.mockReturnValue(Rx.of(devtoolMessage));
 
     return supertest(httpSetup.server.listener)
-      .post(INTERNAL_ROUTES.DIAGNOSE.BROWSER)
+      .get(INTERNAL_ROUTES.DIAGNOSE.BROWSER)
       .expect(200)
       .then(({ body }) => {
         expect(body.success).toEqual(true);
@@ -106,7 +105,7 @@ describe(`POST ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}`, () => {
     screenshotting.diagnose.mockReturnValue(Rx.of(logs));
 
     return supertest(httpSetup.server.listener)
-      .post(INTERNAL_ROUTES.DIAGNOSE.BROWSER)
+      .get(INTERNAL_ROUTES.DIAGNOSE.BROWSER)
       .expect(200)
       .then(({ body }) => {
         expect(body).toMatchInlineSnapshot(`
@@ -121,6 +120,30 @@ describe(`POST ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}`, () => {
       });
   });
 
+  it('returns a response including log received from the browser + helpful link on font config error', async () => {
+    const fontErrorLog = `Fontconfig error: Cannot load default config file: No such file: (null)`;
+
+    registerDiagnoseBrowser(core, mockLogger);
+
+    await server.start();
+    screenshotting.diagnose.mockReturnValue(Rx.of(fontErrorLog));
+
+    return supertest(httpSetup.server.listener)
+      .get(INTERNAL_ROUTES.DIAGNOSE.BROWSER)
+      .expect(200)
+      .then(({ body }) => {
+        expect(body).toMatchInlineSnapshot(`
+          Object {
+            "help": Array [
+              "The browser couldn't start properly due to missing system font dependencies. Please see https://www.elastic.co/guide/en/kibana/test-branch/secure-reporting.html#install-reporting-packages",
+            ],
+            "logs": "${fontErrorLog}",
+            "success": false,
+          }
+        `);
+      });
+  });
+
   it('logs a message when the browser starts, but then has problems later', async () => {
     registerDiagnoseBrowser(core, mockLogger);
 
@@ -128,7 +151,7 @@ describe(`POST ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}`, () => {
     screenshotting.diagnose.mockReturnValue(Rx.of(`${devtoolMessage}\n${fontNotFoundMessage}`));
 
     return supertest(httpSetup.server.listener)
-      .post(INTERNAL_ROUTES.DIAGNOSE.BROWSER)
+      .get(INTERNAL_ROUTES.DIAGNOSE.BROWSER)
       .expect(200)
       .then(({ body }) => {
         expect(body).toMatchInlineSnapshot(`
@@ -152,11 +175,11 @@ describe(`POST ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}`, () => {
 
       screenshotting.diagnose.mockReturnValue(Rx.of(devtoolMessage));
 
-      await supertest(httpSetup.server.listener).post(INTERNAL_ROUTES.DIAGNOSE.BROWSER).expect(200);
+      await supertest(httpSetup.server.listener).get(INTERNAL_ROUTES.DIAGNOSE.BROWSER).expect(200);
 
       expect(usageCounter.incrementCounter).toHaveBeenCalledTimes(1);
       expect(usageCounter.incrementCounter).toHaveBeenCalledWith({
-        counterName: `post ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}:success`,
+        counterName: `get ${INTERNAL_ROUTES.DIAGNOSE.BROWSER}:success`,
         counterType: 'reportingApi',
       });
     });

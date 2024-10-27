@@ -14,7 +14,7 @@ export const pythonDefinition: LanguageDefinition = {
   apiReference: docLinks.pythonApiReference,
   basicConfig: docLinks.pythonBasicConfig,
   buildSearchQuery: `client.search(index="books", q="snow")`,
-  configureClient: ({ url, apiKey }) => `from elasticsearch import Elasticsearch
+  configureClient: ({ url, apiKey }) => `from elasticsearch_serverless import Elasticsearch
 
 client = Elasticsearch(
   "${url}",
@@ -29,7 +29,7 @@ client = Elasticsearch(
   },
   iconType: 'python.svg',
   id: Languages.PYTHON,
-  ingestData: `documents = [
+  ingestData: ({ ingestPipeline }) => `documents = [
   { "index": { "_index": "books", "_id": "9780553351927"}},
   {"name": "Snow Crash", "author": "Neal Stephenson", "release_date": "1992-06-01", "page_count": 470},
   { "index": { "_index": "books", "_id": "9780441017225"}},
@@ -44,8 +44,13 @@ client = Elasticsearch(
   {"name": "The Handmaid's Tale", "author": "Margaret Atwood", "release_date": "1985-06-01", "page_count": 311},
 ]
 
-client.bulk(operations=documents)`,
-  ingestDataIndex: ({ apiKey, url, indexName }) => `from elasticsearch import Elasticsearch
+client.bulk(operations=documents${ingestPipeline ? `, pipeline="${ingestPipeline}"` : ''})`,
+  ingestDataIndex: ({
+    apiKey,
+    url,
+    indexName,
+    ingestPipeline,
+  }) => `from elasticsearch_serverless import Elasticsearch
 
 client = Elasticsearch(
   "${url}",
@@ -57,12 +62,12 @@ documents = [
   {"name": "foo", "title": "bar"},
 ]
 
-client.bulk(operations=documents)
+client.bulk(operations=documents${ingestPipeline ? `, pipeline="${ingestPipeline}"` : ''})
 `,
-  installClient: `python -m pip install elasticsearch
+  installClient: `python -m pip install elasticsearch-serverless
 
 # If your application uses async/await in Python you can install with the async extra
-# python -m pip install elasticsearch[async]
+# python -m pip install elasticsearch_serverless[async]
   `,
   name: i18n.translate('xpack.serverlessSearch.languages.python', {
     defaultMessage: 'Python',

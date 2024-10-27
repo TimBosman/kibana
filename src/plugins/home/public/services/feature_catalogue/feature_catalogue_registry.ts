@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Capabilities } from '@kbn/core/public';
@@ -53,6 +54,8 @@ export interface FeatureCatalogueSolution {
   readonly path: string;
   /** An ordinal used to sort solutions relative to one another for display on the home page */
   readonly order: number;
+  /** Optional function to control visibility of this solution. */
+  readonly isVisible?: (capabilities: Capabilities) => boolean;
 }
 
 export class FeatureCatalogueRegistry {
@@ -116,7 +119,10 @@ export class FeatureCatalogueRegistry {
     }
     const capabilities = this.capabilities;
     return [...this.solutions.values()]
-      .filter((solution) => capabilities.catalogue[solution.id] !== false)
+      .filter(
+        (solution) =>
+          solution.isVisible?.(capabilities) ?? capabilities.catalogue[solution.id] !== false
+      )
       .sort(compareByKey('title'));
   }
 

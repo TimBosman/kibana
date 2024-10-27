@@ -15,7 +15,7 @@ import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 import type { KueryNode } from '@kbn/es-query';
 import type { CaseUserActionDeprecatedResponse } from '../../../common/types/api';
 import { UserActionTypes } from '../../../common/types/domain';
-import { decodeOrThrow } from '../../../common/api';
+import { decodeOrThrow } from '../../common/runtime_types';
 import {
   CASE_SAVED_OBJECT,
   CASE_USER_ACTION_SAVED_OBJECT,
@@ -235,7 +235,8 @@ export class CaseUserActionService {
   }
 
   public async getMostRecentUserAction(
-    caseId: string
+    caseId: string,
+    isCasesWebhook = false
   ): Promise<UserActionSavedObjectTransformed | undefined> {
     try {
       this.context.log.debug(
@@ -251,6 +252,12 @@ export class CaseUserActionService {
           UserActionTypes.description,
           UserActionTypes.tags,
           UserActionTypes.title,
+          /**
+           * TODO: Remove when all connectors support the status and
+           * the severity user actions or if there is a mechanism to
+           * define supported user actions per connector type
+           */
+          ...(isCasesWebhook ? [UserActionTypes.severity, UserActionTypes.status] : []),
         ],
         field: 'type',
         operator: 'or',

@@ -31,6 +31,8 @@ export enum TableId {
   kubernetesPageSessions = 'kubernetes-page-sessions',
   alertsOnCasePage = 'alerts-case-page',
   alertsRiskInputs = 'alerts-risk-inputs',
+  // New version of `alertsRiskInputs` designed to support multiple kinds of risk inputs
+  riskInputs = 'risk-inputs',
 }
 
 export enum TableEntityType {
@@ -52,6 +54,7 @@ export const tableEntity: Record<TableId, TableEntityType> = {
   [TableId.hostsPageSessions]: TableEntityType.session,
   [TableId.kubernetesPageSessions]: TableEntityType.session,
   [TableId.alertsRiskInputs]: TableEntityType.alert,
+  [TableId.riskInputs]: TableEntityType.alert,
 } as const;
 
 const TableIdLiteralRt = runtimeTypes.union([
@@ -77,4 +80,4 @@ export const VIEW_SELECTION = {
 
 export type ViewSelectionTypes = keyof typeof VIEW_SELECTION;
 
-export type ViewSelection = typeof VIEW_SELECTION[ViewSelectionTypes];
+export type ViewSelection = (typeof VIEW_SELECTION)[ViewSelectionTypes];

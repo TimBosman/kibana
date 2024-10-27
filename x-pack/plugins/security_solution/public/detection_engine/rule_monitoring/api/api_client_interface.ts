@@ -13,6 +13,7 @@ import type {
   RuleExecutionEventType,
   RuleExecutionResult,
   RuleExecutionStatus,
+  RuleRunType,
 } from '../../../../common/api/detection_engine/rule_monitoring';
 
 export interface IRuleMonitoringApiClient {
@@ -46,11 +47,21 @@ export interface RuleMonitoringApiCallArgs {
   signal?: AbortSignal;
 }
 
+export interface DateRange {
+  start?: string;
+  end?: string;
+}
+
 export interface FetchRuleExecutionEventsArgs extends RuleMonitoringApiCallArgs {
   /**
    * Saved Object ID of the rule (`rule.id`, not static `rule.rule_id`).
    */
   ruleId: string;
+
+  /**
+   * Filter by event message. If set, result will include events matching the search term.
+   */
+  searchTerm?: string;
 
   /**
    * Filter by event type. If set, result will include only events matching any of these.
@@ -61,6 +72,11 @@ export interface FetchRuleExecutionEventsArgs extends RuleMonitoringApiCallArgs 
    * Filter by log level. If set, result will include only events matching any of these.
    */
   logLevels?: LogLevel[];
+
+  /**
+   * Filter by date range. If set, result will include only events recorded in the specified date range.
+   */
+  dateRange?: DateRange;
 
   /**
    * What order to sort by (e.g. `asc` or `desc`).
@@ -124,4 +140,9 @@ export interface FetchRuleExecutionResultsArgs extends RuleMonitoringApiCallArgs
    * Number of results to fetch per page.
    */
   perPage?: number;
+
+  /**
+   * Array of `runTypeFilters` (e.g. `manual,scheduled`)
+   */
+  runTypeFilters?: RuleRunType[];
 }

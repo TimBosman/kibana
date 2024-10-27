@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { FtrProviderContext } from '../../../../ftr_provider_context';
@@ -16,7 +17,7 @@ export default function ({ loadTestFile, getService, getPageObjects }: FtrProvid
   const kibanaServer = getService('kibanaServer');
   const security = getService('security');
 
-  const { timePicker, dashboard, common } = getPageObjects(['timePicker', 'dashboard', 'common']);
+  const { timePicker, dashboard } = getPageObjects(['timePicker', 'dashboard']);
 
   const setup = async () => {
     await esArchiver.loadIfNeeded('test/functional/fixtures/es_archiver/dashboard/current/data');
@@ -29,12 +30,13 @@ export default function ({ loadTestFile, getService, getPageObjects }: FtrProvid
       defaultIndex: '0bf35f60-3dc9-11e8-8660-4d65aa086b3c',
     });
 
-    await common.navigateToApp('dashboard');
+    await dashboard.navigateToApp();
     await dashboard.gotoDashboardLandingPage();
     await dashboard.clickNewDashboard();
     await timePicker.setDefaultDataRange();
     await elasticChart.setNewChartUiDebugFlag();
     await dashboard.saveDashboard(OPTIONS_LIST_DASHBOARD_NAME, {
+      saveAsNew: true,
       exitFromEditMode: false,
       storeTimeWithDashboard: true,
     });
@@ -46,7 +48,7 @@ export default function ({ loadTestFile, getService, getPageObjects }: FtrProvid
     await kibanaServer.savedObjects.cleanStandardList();
   };
 
-  describe('Options list control', async () => {
+  describe('Options list control', () => {
     before(setup);
     after(teardown);
 

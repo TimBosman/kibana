@@ -30,6 +30,7 @@ describe('Cloud Plugin', () => {
       ...baseConfig,
       id: 'cloudId',
       cname: 'cloud.elastic.co',
+      csp: 'aws',
       ...configParts,
     });
     const plugin = new CloudPlugin(initContext);
@@ -77,6 +78,11 @@ describe('Cloud Plugin', () => {
         );
       });
 
+      it('exposes csp', () => {
+        const { setup } = setupPlugin();
+        expect(setup.csp).toBe('aws');
+      });
+
       it('exposes components decoded from the cloudId', () => {
         const decodedId: DecodedCloudId = {
           defaultPort: '9000',
@@ -96,6 +102,15 @@ describe('Cloud Plugin', () => {
         );
         expect(decodeCloudIdMock).toHaveBeenCalledTimes(1);
         expect(decodeCloudIdMock).toHaveBeenCalledWith('cloudId', expect.any(Object));
+      });
+
+      it('exposes `onboarding.default_solution`', () => {
+        const { setup } = setupPlugin({
+          onboarding: {
+            default_solution: 'Elasticsearch',
+          },
+        });
+        expect(setup.onboarding.defaultSolution).toBe('es');
       });
 
       describe('isServerlessEnabled', () => {
@@ -123,6 +138,27 @@ describe('Cloud Plugin', () => {
           },
         });
         expect(setup.serverless.projectId).toBe('my-awesome-project');
+      });
+
+      it('exposes `serverless.projectName`', () => {
+        const { setup } = setupPlugin({
+          serverless: {
+            project_id: 'my-awesome-project',
+            project_name: 'My Awesome Project',
+          },
+        });
+        expect(setup.serverless.projectName).toBe('My Awesome Project');
+      });
+
+      it('exposes `serverless.projectType`', () => {
+        const { setup } = setupPlugin({
+          serverless: {
+            project_id: 'my-awesome-project',
+            project_name: 'My Awesome Project',
+            project_type: 'security',
+          },
+        });
+        expect(setup.serverless.projectType).toBe('security');
       });
     });
   });

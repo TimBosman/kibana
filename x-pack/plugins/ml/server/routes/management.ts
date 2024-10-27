@@ -19,21 +19,12 @@ import type {
   AnalyticsManagementItems,
   TrainedModelsManagementItems,
 } from '../../common/types/management';
+import { filterForEnabledFeatureModels } from './trained_models';
 
 /**
  * Routes for management service
  */
-export function managementRoutes({ router, routeGuard }: RouteInitialization) {
-  /**
-   * @apiGroup Management
-   *
-   * @api {get} /internal/ml/management/list/:listType Management list
-   * @apiName ManagementList
-   * @apiDescription Returns a list of anomaly detection jobs, data frame analytics jobs or trained models
-   *
-   * @apiSchema (params) listTypeSchema
-   *
-   */
+export function managementRoutes({ router, routeGuard, getEnabledFeatures }: RouteInitialization) {
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/management/list/{listType}`,
@@ -45,6 +36,9 @@ export function managementRoutes({ router, routeGuard }: RouteInitialization) {
           'access:ml:canCreateTrainedModels',
         ],
       },
+      summary: 'Gets management list',
+      description:
+        'Retrieves the list of anomaly detection jobs, data frame analytics jobs or trained models.',
     })
     .addVersion(
       {
@@ -126,12 +120,14 @@ export function managementRoutes({ router, routeGuard }: RouteInitialization) {
                   trainedModelsSpaces(),
                 ]);
 
+                const filteredModels = filterForEnabledFeatureModels(models, getEnabledFeatures());
+
                 const modelStatsMapped = modelsStats.reduce((acc, cur) => {
                   acc[cur.model_id] = cur;
                   return acc;
                 }, {} as Record<string, estypes.MlTrainedModelStats>);
 
-                const modelsWithSpaces: TrainedModelsManagementItems[] = models.map((m) => {
+                const modelsWithSpaces: TrainedModelsManagementItems[] = filteredModels.map((m) => {
                   const id = m.model_id;
                   return {
                     id,

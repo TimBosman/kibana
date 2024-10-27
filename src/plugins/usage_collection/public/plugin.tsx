@@ -1,15 +1,16 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Reporter, ApplicationUsageTracker } from '@kbn/analytics';
 import type { UiCounterMetricType } from '@kbn/analytics';
 import type { Subscription } from 'rxjs';
-import React from 'react';
+import React, { FC, PropsWithChildren } from 'react';
 import type {
   PluginInitializerContext,
   Plugin,
@@ -18,6 +19,7 @@ import type {
   HttpSetup,
 } from '@kbn/core/public';
 import { Storage } from '@kbn/kibana-utils-plugin/public';
+import { isSyntheticsMonitor } from '@kbn/analytics-collection-utils';
 import type { ScreenshotModePluginStart } from '@kbn/screenshot-mode-plugin/public';
 import { createReporter, trackApplicationUsageChange } from './services';
 import { ApplicationUsageContext } from './components/track_application_view';
@@ -73,7 +75,7 @@ export interface UsageCollectionSetup {
      * }
      * ```
      */
-    ApplicationUsageTrackingProvider: React.FC;
+    ApplicationUsageTrackingProvider: FC<PropsWithChildren<unknown>>;
   };
 
   /** Report whenever a UI event occurs for UI counters to report it **/
@@ -109,17 +111,16 @@ export class UsageCollectionPlugin
   private subscriptions: Subscription[] = [];
   private reporter?: Reporter;
   private config: PublicConfigType;
-  constructor(initializerContext: PluginInitializerContext) {
-    this.config = initializerContext.config.get<PublicConfigType>();
+  constructor(private readonly initContext: PluginInitializerContext) {
+    this.config = initContext.config.get<PublicConfigType>();
   }
 
   public setup({ http }: CoreSetup): UsageCollectionSetup {
     const localStorage = new Storage(window.localStorage);
-    const debug = this.config.uiCounters.debug;
 
     this.reporter = createReporter({
       localStorage,
-      debug,
+      logger: this.initContext.logger.get('reporter'),
       fetch: http,
     });
 
@@ -150,7 +151,8 @@ export class UsageCollectionPlugin
     if (
       this.config.uiCounters.enabled &&
       !isUnauthenticated(http) &&
-      !screenshotMode.isScreenshotMode()
+      !screenshotMode.isScreenshotMode() &&
+      !isSyntheticsMonitor()
     ) {
       this.reporter.start();
       this.applicationUsageTracker.start();

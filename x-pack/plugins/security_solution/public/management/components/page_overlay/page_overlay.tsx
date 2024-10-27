@@ -24,14 +24,19 @@ const OverlayRootContainer = styled.div`
   position: fixed;
   overflow: hidden;
 
-  top: calc((${({ theme: { eui } }) => eui.euiHeaderHeightCompensation} * 2));
+  top: var(--euiFixedHeadersOffset, 0);
   bottom: 0;
   right: 0;
+  left: var(--euiCollapsibleNavOffset, 0);
 
-  height: calc(100% - ${({ theme: { eui } }) => eui.euiHeaderHeightCompensation} * 2);
-  width: 100%;
+  width: calc(100% - var(--euiCollapsibleNavOffset, 0));
+  height: calc(100% - var(--euiFixedHeadersOffset, 0));
 
-  z-index: ${({ theme: { eui } }) => eui.euiZFlyout};
+  border-left: 1px solid ${({ theme: { eui } }) => eui.euiColorLightestShade};
+
+  z-index: ${({ theme: { eui } }) =>
+    eui.euiZFlyout +
+    3}; // we need to have this response div rendered above the timeline flyout (with z-index at 1002)
 
   background-color: ${({ theme: { eui } }) => eui.euiColorEmptyShade};
 
@@ -88,17 +93,6 @@ const PageOverlayGlobalStyles = createGlobalStyle<{ theme: EuiTheme }>`
   //-------------------------------------------------------------------------------------------
   body.${PAGE_OVERLAY_DOCUMENT_BODY_FULLSCREEN_CLASSNAME} {
     ${FULL_SCREEN_CONTENT_OVERRIDES_CSS_STYLESHEET}
-  }
-
-  //-------------------------------------------------------------------------------------------
-  // Style overrides for when Page Overlay is displayed in serverless project
-  //-------------------------------------------------------------------------------------------
-  // With serverless, there is 1 less header displayed, thus the display of the page overlay
-  // need to be adjusted slightly so that it still display below the header
-  //-------------------------------------------------------------------------------------------
-  body.kbnBody.kbnBody--projectLayout:not(.${PAGE_OVERLAY_DOCUMENT_BODY_FULLSCREEN_CLASSNAME}) .${PAGE_OVERLAY_CSS_CLASSNAME} {
-    top: ${({ theme: { eui } }) => eui.euiHeaderHeightCompensation};
-    height: calc(100% - (${({ theme: { eui } }) => eui.euiHeaderHeightCompensation}));
   }
 `;
 
@@ -206,9 +200,9 @@ export const PageOverlay = memo<PageOverlayProps>(
     const isMounted = useIsMounted();
     const showInFullScreen = useHasFullScreenContent();
     const [openedOnPathName, setOpenedOnPathName] = useState<null | string>(null);
-    const portalEleRef = useRef<Node>();
+    const portalEleRef = useRef<HTMLElement | null>();
 
-    const setPortalEleRef: EuiPortalProps['portalRef'] = useCallback((node) => {
+    const setPortalEleRef = useCallback<NonNullable<EuiPortalProps['portalRef']>>((node) => {
       portalEleRef.current = node;
     }, []);
 
@@ -264,8 +258,6 @@ export const PageOverlay = memo<PageOverlayProps>(
     useEffect(() => {
       if (
         isMounted() &&
-        // @ts-expect-error ts upgrade v4.7.4
-        onHide &&
         hideOnUrlPathnameChange &&
         !isHidden &&
         openedOnPathName &&

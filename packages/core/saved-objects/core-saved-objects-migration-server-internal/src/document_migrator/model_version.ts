@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Logger } from '@kbn/logging';
@@ -61,10 +62,11 @@ export const getModelVersionTransforms = ({
     return {
       version: virtualVersion,
       transform: convertModelVersionTransformFn({
+        typeDefinition,
         log,
         modelVersion,
         virtualVersion,
-        definition,
+        modelVersionDefinition: definition,
       }),
       transformType: TransformType.Migrate,
     };
@@ -72,28 +74,31 @@ export const getModelVersionTransforms = ({
 };
 
 export const convertModelVersionTransformFn = ({
+  typeDefinition,
   virtualVersion,
   modelVersion,
-  definition,
+  modelVersionDefinition,
   log,
 }: {
+  typeDefinition: SavedObjectsType;
   virtualVersion: string;
   modelVersion: number;
-  definition: SavedObjectsModelVersion;
+  modelVersionDefinition: SavedObjectsModelVersion;
   log: Logger;
 }): TransformFn => {
   const context: SavedObjectModelTransformationContext = {
     log,
     modelVersion,
+    namespaceType: typeDefinition.namespaceType,
   };
-  const modelTransformFn = buildModelVersionTransformFn(definition.changes);
+  const modelTransformFn = buildModelVersionTransformFn(modelVersionDefinition.changes);
 
   return function convertedTransform(doc: SavedObjectUnsanitizedDoc) {
     try {
       const result = modelTransformFn(doc, context);
       return { transformedDoc: result.document, additionalDocs: [] };
     } catch (error) {
-      log.error(error);
+      log.error(`Error trying to transform document: ${error.message}`);
       throw new TransformSavedObjectDocumentError(error, virtualVersion);
     }
   };

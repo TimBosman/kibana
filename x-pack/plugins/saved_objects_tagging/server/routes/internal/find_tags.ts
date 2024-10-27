@@ -6,9 +6,9 @@
  */
 
 import { schema } from '@kbn/config-schema';
+import type { TagAttributes } from '../../../common/types';
 import type { TagsPluginRouter } from '../../types';
 import { tagSavedObjectTypeName } from '../../../common/constants';
-import { TagAttributes } from '../../../common/types';
 import { savedObjectToTag } from '../../services/tags';
 import { addConnectionCount } from '../lib';
 
@@ -33,7 +33,7 @@ export const registerInternalFindTagsRoute = (router: TagsPluginRouter) => {
         perPage: query.perPage,
         search: query.search,
         type: [tagSavedObjectTypeName],
-        searchFields: ['title', 'description'],
+        searchFields: ['name', 'description'],
       });
 
       const tags = findResponse.saved_objects.map(savedObjectToTag);

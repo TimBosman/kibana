@@ -5,10 +5,10 @@
  * 2.0.
  */
 import React, { useMemo, useReducer } from 'react';
-
+import { identity } from 'lodash';
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { FieldFormatsRegistry } from '@kbn/field-formats-plugin/common';
 import { waitForEuiPopoverOpen } from '@elastic/eui/lib/test/rtl';
-import { BulkActionsContext } from './context';
 import { AlertsTable } from '../alerts_table';
 import {
   Alerts,
@@ -25,6 +25,8 @@ import { createAppMockRenderer } from '../../test_utils';
 import { getCasesMockMap } from '../cases/index.mock';
 import { getMaintenanceWindowMockMap } from '../maintenance_windows/index.mock';
 import { createCasesServiceMock } from '../index.mock';
+import { AlertsTableContext } from '../contexts/alerts_table_context';
+import { AlertsQueryContext } from '@kbn/alerts-ui-shared/src/common/contexts/alerts_query_context';
 
 jest.mock('@kbn/data-plugin/public');
 jest.mock('@kbn/kibana-react-plugin/public/ui_settings/use_ui_setting', () => ({
@@ -44,13 +46,82 @@ const columns = [
   },
 ];
 
+const mockFieldFormatsRegistry = {
+  deserialize: jest.fn().mockImplementation(() => ({
+    id: 'string',
+    convert: jest.fn().mockImplementation(identity),
+  })),
+} as unknown as FieldFormatsRegistry;
+
 const mockCaseService = createCasesServiceMock();
 
 const mockKibana = jest.fn().mockReturnValue({
   services: {
     cases: mockCaseService,
+    notifications: {
+      toasts: {
+        addDanger: jest.fn(),
+        addSuccess: jest.fn(),
+      },
+    },
   },
 });
+
+const oldAlertsData = [
+  [
+    {
+      field: AlertsField.name,
+      value: ['one'],
+    },
+    {
+      field: AlertsField.reason,
+      value: ['two'],
+    },
+  ],
+  [
+    {
+      field: AlertsField.name,
+      value: ['three'],
+    },
+    {
+      field: AlertsField.reason,
+      value: ['four'],
+    },
+  ],
+] as FetchAlertData['oldAlertsData'];
+
+const ecsAlertsData = [
+  [
+    {
+      '@timestamp': ['2023-01-28T10:48:49.559Z'],
+      _id: 'SomeId',
+      _index: 'SomeIndex',
+      kibana: {
+        alert: {
+          rule: {
+            name: ['one'],
+          },
+          reason: ['two'],
+        },
+      },
+    },
+  ],
+  [
+    {
+      '@timestamp': ['2023-01-27T10:48:49.559Z'],
+      _id: 'SomeId2',
+      _index: 'SomeIndex',
+      kibana: {
+        alert: {
+          rule: {
+            name: ['three'],
+          },
+          reason: ['four'],
+        },
+      },
+    },
+  ],
+] as FetchAlertData['ecsAlertsData'];
 
 jest.mock('@kbn/kibana-react-plugin/public', () => {
   const original = jest.requireActual('@kbn/kibana-react-plugin/public');
@@ -62,6 +133,10 @@ jest.mock('@kbn/kibana-react-plugin/public', () => {
 });
 
 const originalGetComputedStyle = Object.assign({}, window.getComputedStyle);
+
+type AlertsTableWithBulkActionsContextProps = AlertsTableProps & {
+  initialBulkActionsState?: BulkActionsState;
+};
 
 describe('AlertsTable.BulkActions', () => {
   beforeAll(() => {
@@ -143,10 +218,9 @@ describe('AlertsTable.BulkActions', () => {
       body: jest.fn(),
       footer: jest.fn(),
     })),
-    getRenderCellValue: () =>
-      jest.fn().mockImplementation((props) => {
-        return `${props.colIndex}:${props.rowIndex}`;
-      }),
+    getRenderCellValue: jest.fn().mockImplementation((props) => {
+      return `${props.colIndex}:${props.rowIndex}`;
+    }),
   };
 
   const casesMap = getCasesMockMap();
@@ -160,24 +234,35 @@ describe('AlertsTable.BulkActions', () => {
     columns,
     deletedEventIds: [],
     disabledCellActions: [],
-    pageSize: 2,
     pageSizeOptions: [2, 4],
     leadingControlColumns: [],
-    showExpandToDetails: true,
     trailingControlColumns: [],
-    useFetchAlertsData: () => alertsData,
     visibleColumns: columns.map((c) => c.id),
     'data-test-subj': 'testTable',
-    updatedAt: Date.now(),
     onToggleColumn: () => {},
     onResetColumns: () => {},
     onChangeVisibleColumns: () => {},
     browserFields: {},
     query: {},
+    pageIndex: 0,
+    pageSize: 1,
+    sort: [],
+    isLoading: false,
+    alerts,
+    oldAlertsData,
+    ecsAlertsData,
+    querySnapshot: { request: [], response: [] },
+    refetchAlerts: refreshMockFn,
+    alertsCount: alerts.length,
+    onSortChange: () => {},
+    onPageChange: () => {},
+    fieldFormats: mockFieldFormatsRegistry,
   };
 
-  const tablePropsWithBulkActions = {
+  const tablePropsWithBulkActions: AlertsTableWithBulkActionsContextProps = {
     ...tableProps,
+    pageIndex: 0,
+    pageSize: 10,
     alertsTableConfiguration: {
       ...alertsTableConfiguration,
 
@@ -234,12 +319,13 @@ describe('AlertsTable.BulkActions', () => {
     isAllSelected: false,
     areAllVisibleRowsSelected: false,
     rowCount: 2,
+    updatedAt: Date.now(),
   };
 
   const AlertsTableWithBulkActionsContext: React.FunctionComponent<
-    AlertsTableProps & { initialBulkActionsState?: BulkActionsState }
+    AlertsTableWithBulkActionsContextProps
   > = (props) => {
-    const renderer = useMemo(() => createAppMockRenderer(), []);
+    const renderer = useMemo(() => createAppMockRenderer(AlertsQueryContext), []);
     const AppWrapper = renderer.AppWrapper;
 
     const initialBulkActionsState = useReducer(
@@ -249,9 +335,14 @@ describe('AlertsTable.BulkActions', () => {
 
     return (
       <AppWrapper>
-        <BulkActionsContext.Provider value={initialBulkActionsState}>
+        <AlertsTableContext.Provider
+          value={{
+            mutedAlerts: {},
+            bulkActions: initialBulkActionsState,
+          }}
+        >
           <AlertsTable {...props} />
-        </BulkActionsContext.Provider>
+        </AlertsTableContext.Provider>
       </AppWrapper>
     );
   };
@@ -331,15 +422,15 @@ describe('AlertsTable.BulkActions', () => {
         ] as unknown as Alerts,
       };
 
-      const props = {
+      const props: AlertsTableWithBulkActionsContextProps = {
         ...tablePropsWithBulkActions,
-        useFetchAlertsData: () => newAlertsData,
         initialBulkActionsState: {
           ...defaultBulkActionsState,
           isAllSelected: true,
           rowCount: 1,
           rowSelection: new Map([[0, { isLoading: false }]]),
         },
+        alerts: newAlertsData.alerts,
         alertsTableConfiguration: {
           ...alertsTableConfiguration,
           useBulkActions: () => [
@@ -385,6 +476,10 @@ describe('AlertsTable.BulkActions', () => {
             },
             {
               field: 'kibana.alert.workflow_tags',
+              value: [],
+            },
+            {
+              field: 'kibana.alert.workflow_assignee_ids',
               value: [],
             },
           ],
@@ -478,22 +573,18 @@ describe('AlertsTable.BulkActions', () => {
               _id: 'alert2',
             },
           ] as unknown as Alerts;
-          const props = {
+          const allAlerts = [...alerts, ...secondPageAlerts];
+          const props: AlertsTableWithBulkActionsContextProps = {
             ...tablePropsWithBulkActions,
-            alerts: secondPageAlerts,
-            useFetchAlertsData: () => {
-              return {
-                ...alertsData,
-                alerts: secondPageAlerts,
-                alertsCount: secondPageAlerts.length,
-                activePage: 1,
-              };
-            },
+            alerts: allAlerts,
+            alertsCount: allAlerts.length,
             initialBulkActionsState: {
               ...defaultBulkActionsState,
               areAllVisibleRowsSelected: true,
               rowSelection: new Map([[0, { isLoading: false }]]),
             },
+            pageIndex: 1,
+            pageSize: 2,
           };
           render(<AlertsTableWithBulkActionsContext {...props} />);
 
@@ -634,6 +725,10 @@ describe('AlertsTable.BulkActions', () => {
                   field: 'kibana.alert.workflow_tags',
                   value: [],
                 },
+                {
+                  field: 'kibana.alert.workflow_assignee_ids',
+                  value: [],
+                },
               ],
               ecs: {
                 _id: 'alert1',
@@ -700,8 +795,8 @@ describe('AlertsTable.BulkActions', () => {
             expect(within(selectedOptions[0]).getByRole('checkbox')).toBeDefined();
 
             // second row, first column
-            expect(within(selectedOptions[4]).getByLabelText('Loading')).toBeDefined();
-            expect(within(selectedOptions[4]).queryByRole('checkbox')).not.toBeInTheDocument();
+            expect(within(selectedOptions[3]).getByLabelText('Loading')).toBeDefined();
+            expect(within(selectedOptions[3]).queryByRole('checkbox')).not.toBeInTheDocument();
           });
 
           it('should hide the loading state on each selected row', async () => {
@@ -862,6 +957,10 @@ describe('AlertsTable.BulkActions', () => {
                     field: 'kibana.alert.workflow_tags',
                     value: [],
                   },
+                  {
+                    field: 'kibana.alert.workflow_assignee_ids',
+                    value: [],
+                  },
                 ],
                 ecs: {
                   _id: 'alert0',
@@ -886,6 +985,10 @@ describe('AlertsTable.BulkActions', () => {
                   },
                   {
                     field: 'kibana.alert.workflow_tags',
+                    value: [],
+                  },
+                  {
+                    field: 'kibana.alert.workflow_assignee_ids',
                     value: [],
                   },
                 ],
@@ -939,7 +1042,6 @@ describe('AlertsTable.BulkActions', () => {
           it('should call refresh function of use fetch alerts when bulk action 3 is clicked', async () => {
             const props = {
               ...tablePropsWithBulkActions,
-
               initialBulkActionsState: {
                 ...defaultBulkActionsState,
                 areAllVisibleRowsSelected: false,

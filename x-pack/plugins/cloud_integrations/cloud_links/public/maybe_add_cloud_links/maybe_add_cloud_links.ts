@@ -11,6 +11,7 @@ import { i18n } from '@kbn/i18n';
 import type { CloudStart } from '@kbn/cloud-plugin/public';
 import type { CoreStart } from '@kbn/core/public';
 import type { SecurityPluginStart } from '@kbn/security-plugin/public';
+import type { SharePluginStart } from '@kbn/share-plugin/public';
 import { createUserMenuLinks } from './user_menu_links';
 import { createHelpMenuLinks } from './help_menu_links';
 
@@ -18,6 +19,7 @@ export interface MaybeAddCloudLinksDeps {
   core: CoreStart;
   security: SecurityPluginStart;
   cloud: CloudStart;
+  share: SharePluginStart;
 }
 
 export function maybeAddCloudLinks({ core, security, cloud }: MaybeAddCloudLinksDeps): void {

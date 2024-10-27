@@ -13,7 +13,7 @@ import { AnalyticsPanel } from './analytics_panel';
 import { AnomalyTimelineService } from '../../services/anomaly_timeline_service';
 import { mlResultsServiceProvider } from '../../services/results_service';
 import { useMlKibana } from '../../contexts/kibana';
-import { usePermissionCheck } from '../../capabilities/check_capabilities';
+import { useEnabledFeatures } from '../../contexts/ml';
 
 interface Props {
   createAnomalyDetectionJobDisabled: boolean;
@@ -29,11 +29,11 @@ export const OverviewContent: FC<Props> = ({
   const {
     services: {
       uiSettings,
-      mlServices: { mlApiServices },
+      mlServices: { mlApi },
     },
   } = useMlKibana();
 
-  const [isADEnabled, isDFAEnabled] = usePermissionCheck(['isADEnabled', 'isDFAEnabled']);
+  const { isADEnabled, isDFAEnabled } = useEnabledFeatures();
 
   const timefilter = useTimefilter();
 
@@ -41,7 +41,7 @@ export const OverviewContent: FC<Props> = ({
 
   useEffect(() => {
     setAnomalyTimelineService(
-      new AnomalyTimelineService(timefilter, uiSettings, mlResultsServiceProvider(mlApiServices))
+      new AnomalyTimelineService(timefilter, uiSettings, mlResultsServiceProvider(mlApi))
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

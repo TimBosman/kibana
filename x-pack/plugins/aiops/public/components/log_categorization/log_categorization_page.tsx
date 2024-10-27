@@ -5,9 +5,12 @@
  * 2.0.
  */
 
-import React, { FC, useState, useEffect, useCallback, useMemo } from 'react';
+import type { FC } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
+import type { EuiComboBoxOptionOption } from '@elastic/eui';
+import { EuiHorizontalRule } from '@elastic/eui';
 import {
   EuiButton,
   EuiSpacer,
@@ -15,18 +18,20 @@ import {
   EuiFlexItem,
   EuiPageBody,
   EuiComboBox,
-  EuiComboBoxOptionOption,
   EuiFormRow,
   EuiSkeletonText,
 } from '@elastic/eui';
 
-import { Filter, Query } from '@kbn/es-query';
+import type { Filter, Query } from '@kbn/es-query';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { usePageUrlState, useUrlState } from '@kbn/ml-url-state';
-
 import type { FieldValidationResults } from '@kbn/ml-category-validator';
 import type { SearchQueryLanguage } from '@kbn/ml-query-utils';
+import { AIOPS_ANALYSIS_RUN_ORIGIN } from '@kbn/aiops-common/constants';
+import type { Category } from '@kbn/aiops-log-pattern-analysis/types';
+import { useTableState } from '@kbn/ml-in-memory-table/hooks/use_table_state';
+
 import { useDataSource } from '../../hooks/use_data_source';
 import { useData } from '../../hooks/use_data';
 import { useSearch } from '../../hooks/use_search';
@@ -34,19 +39,22 @@ import { useAiopsAppContext } from '../../hooks/use_aiops_app_context';
 import {
   getDefaultLogCategorizationAppState,
   type LogCategorizationPageUrlState,
-} from '../../application/utils/url_state';
+} from '../../application/url_state/log_pattern_analysis';
 
 import { SearchPanel } from '../search_panel';
 import { PageHeader } from '../page_header';
 
-import type { EventRate, Category, SparkLinesPerCategory } from './use_categorize_request';
+import type { EventRate } from './use_categorize_request';
 import { useCategorizeRequest } from './use_categorize_request';
 import { CategoryTable } from './category_table';
 import { DocumentCountChart } from './document_count_chart';
 import { InformationText } from './information_text';
-import { SamplingMenu } from './sampling_menu';
+import { SamplingMenu, useRandomSamplerStorage } from './sampling_menu';
 import { useValidateFieldRequest } from './use_validate_category_field';
 import { FieldValidationCallout } from './category_validation_callout';
+import { createDocumentStatsHash } from './utils';
+import { TableHeader } from './category_table/table_header';
+import { useActions } from './category_table/use_actions';
 
 const BAR_TARGET = 20;
 const DEFAULT_SELECTED_FIELD = 'message';
@@ -54,14 +62,16 @@ const DEFAULT_SELECTED_FIELD = 'message';
 export const LogCategorizationPage: FC = () => {
   const {
     notifications: { toasts },
+    embeddingOrigin,
   } = useAiopsAppContext();
   const { dataView, savedSearch } = useDataSource();
 
+  const randomSamplerStorage = useRandomSamplerStorage();
   const {
     runCategorizeRequest,
     cancelRequest: cancelCategorizationRequest,
     randomSampler,
-  } = useCategorizeRequest();
+  } = useCategorizeRequest(randomSamplerStorage);
   const { runValidateFieldRequest, cancelRequest: cancelValidationRequest } =
     useValidateFieldRequest();
   const [stateFromUrl, setUrlState] = usePageUrlState<LogCategorizationPageUrlState>(
@@ -70,19 +80,22 @@ export const LogCategorizationPage: FC = () => {
   );
   const [globalState, setGlobalState] = useUrlState('_g');
   const [selectedField, setSelectedField] = useState<string | undefined>();
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [selectedSavedSearch, setSelectedDataView] = useState(savedSearch);
+  const [highlightedCategory, setHighlightedCategory] = useState<Category | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
+  const [selectedSavedSearch, setSelectedSavedSearch] = useState(savedSearch);
+  const [previousDocumentStatsHash, setPreviousDocumentStatsHash] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [eventRate, setEventRate] = useState<EventRate>([]);
   const [pinnedCategory, setPinnedCategory] = useState<Category | null>(null);
   const [data, setData] = useState<{
     categories: Category[];
-    sparkLines: SparkLinesPerCategory;
+    displayExamples: boolean;
   } | null>(null);
   const [fieldValidationResult, setFieldValidationResult] = useState<FieldValidationResults | null>(
     null
   );
+  const tableState = useTableState<Category>([], 'key');
 
   const cancelRequest = useCallback(() => {
     cancelValidationRequest();
@@ -91,7 +104,7 @@ export const LogCategorizationPage: FC = () => {
 
   useEffect(() => {
     if (savedSearch) {
-      setSelectedDataView(savedSearch);
+      setSelectedSavedSearch(savedSearch);
     }
   }, [savedSearch]);
 
@@ -114,7 +127,7 @@ export const LogCategorizationPage: FC = () => {
       // When the user loads saved search and then clear or modify the query
       // we should remove the saved search and replace it with the index pattern id
       if (selectedSavedSearch !== null) {
-        setSelectedDataView(null);
+        setSelectedSavedSearch(null);
       }
 
       setUrlState({
@@ -143,6 +156,16 @@ export const LogCategorizationPage: FC = () => {
     BAR_TARGET
   );
 
+  const { getActions, openInDiscover } = useActions(
+    dataView.id!,
+    selectedField,
+    selectedCategories,
+    stateFromUrl,
+    timefilter,
+    undefined,
+    undefined
+  );
+
   useEffect(() => {
     if (globalState?.time !== undefined) {
       timefilter.setTime({
@@ -150,14 +173,13 @@ export const LogCategorizationPage: FC = () => {
         to: globalState.time.to,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(globalState?.time), timefilter]);
+  }, [globalState?.time, timefilter]);
 
   const fields = useMemo(
     () =>
       dataView.fields
         .filter(
-          ({ displayName, esTypes, count }) =>
+          ({ displayName, esTypes }) =>
             esTypes && esTypes.includes('text') && !['_id', '_index'].includes(displayName)
         )
         .map(({ displayName }) => ({
@@ -165,29 +187,6 @@ export const LogCategorizationPage: FC = () => {
         })),
     [dataView]
   );
-
-  useEffect(() => {
-    if (documentStats.documentCountStats?.buckets) {
-      randomSampler.setDocCount(documentStats.totalCount);
-      setEventRate(
-        Object.entries(documentStats.documentCountStats.buckets).map(([key, docCount]) => ({
-          key: +key,
-          docCount,
-        }))
-      );
-      setData(null);
-      setFieldValidationResult(null);
-      setTotalCount(documentStats.totalCount);
-    }
-  }, [
-    documentStats,
-    earliest,
-    latest,
-    searchQueryLanguage,
-    searchString,
-    searchQuery,
-    randomSampler,
-  ]);
 
   const loadCategories = useCallback(async () => {
     setLoading(true);
@@ -197,23 +196,46 @@ export const LogCategorizationPage: FC = () => {
     const { getIndexPattern, timeFieldName: timeField } = dataView;
     const index = getIndexPattern();
 
-    if (selectedField === undefined || timeField === undefined) {
+    if (
+      selectedField === undefined ||
+      timeField === undefined ||
+      earliest === undefined ||
+      latest === undefined
+    ) {
       setLoading(false);
       return;
     }
 
     cancelRequest();
 
+    const timeRange = {
+      from: earliest,
+      to: latest,
+    };
+
+    const runtimeMappings = dataView.getRuntimeMappings();
+
     try {
       const [validationResult, categorizationResult] = await Promise.all([
-        runValidateFieldRequest(index, selectedField, timeField, earliest, latest, searchQuery),
+        runValidateFieldRequest(
+          index,
+          selectedField,
+          timeField,
+          timeRange,
+          searchQuery,
+          runtimeMappings,
+          {
+            [AIOPS_ANALYSIS_RUN_ORIGIN]: embeddingOrigin,
+          }
+        ),
+
         runCategorizeRequest(
           index,
           selectedField,
           timeField,
-          earliest,
-          latest,
+          timeRange,
           searchQuery,
+          runtimeMappings,
           intervalMs
         ),
       ]);
@@ -221,7 +243,7 @@ export const LogCategorizationPage: FC = () => {
       setFieldValidationResult(validationResult);
       setData({
         categories: categorizationResult.categories,
-        sparkLines: categorizationResult.sparkLinesPerCategory,
+        displayExamples: categorizationResult.hasExamples,
       });
     } catch (error) {
       toasts.addError(error, {
@@ -243,6 +265,42 @@ export const LogCategorizationPage: FC = () => {
     runCategorizeRequest,
     intervalMs,
     toasts,
+    embeddingOrigin,
+  ]);
+
+  useEffect(() => {
+    const buckets = documentStats.documentCountStats?.buckets;
+    if (buckets === undefined) {
+      return;
+    }
+
+    const hash = createDocumentStatsHash(documentStats);
+    if (hash !== previousDocumentStatsHash) {
+      randomSampler.setDocCount(documentStats.totalCount);
+      setEventRate(
+        Object.entries(buckets).map(([key, docCount]) => ({
+          key: +key,
+          docCount,
+        }))
+      );
+      setTotalCount(documentStats.totalCount);
+      if (fieldValidationResult !== null) {
+        loadCategories();
+      }
+    }
+    setPreviousDocumentStatsHash(hash);
+  }, [
+    documentStats,
+    earliest,
+    latest,
+    searchQueryLanguage,
+    searchString,
+    searchQuery,
+    randomSampler,
+    totalCount,
+    previousDocumentStatsHash,
+    fieldValidationResult,
+    loadCategories,
   ]);
 
   useEffect(
@@ -274,6 +332,8 @@ export const LogCategorizationPage: FC = () => {
     setUrlState({ field });
   };
 
+  const actions = getActions(true);
+
   return (
     <EuiPageBody data-test-subj="aiopsLogPatternAnalysisPage" paddingSize="none" panelled={false}>
       <PageHeader />
@@ -281,7 +341,6 @@ export const LogCategorizationPage: FC = () => {
       <EuiFlexGroup gutterSize="none">
         <EuiFlexItem>
           <SearchPanel
-            dataView={dataView}
             searchString={searchString ?? ''}
             searchQuery={searchQuery}
             searchQueryLanguage={searchQueryLanguage}
@@ -322,7 +381,12 @@ export const LogCategorizationPage: FC = () => {
               />
             </EuiButton>
           ) : (
-            <EuiButton onClick={() => cancelRequest()}>Cancel</EuiButton>
+            <EuiButton
+              data-test-subj="aiopsLogCategorizationPageCancelButton"
+              onClick={() => cancelRequest()}
+            >
+              Cancel
+            </EuiButton>
           )}
         </EuiFlexItem>
         <EuiFlexItem />
@@ -337,8 +401,7 @@ export const LogCategorizationPage: FC = () => {
           <DocumentCountChart
             eventRate={eventRate}
             pinnedCategory={pinnedCategory}
-            selectedCategory={selectedCategory}
-            sparkLines={data?.sparkLines ?? {}}
+            selectedCategory={highlightedCategory}
             totalCount={totalCount}
             documentCountStats={documentStats.documentCountStats}
           />
@@ -354,23 +417,34 @@ export const LogCategorizationPage: FC = () => {
         loading={loading}
         categoriesLength={data?.categories?.length ?? null}
         eventRateLength={eventRate.length}
-        fieldSelected={selectedField !== null}
       />
 
       {selectedField !== undefined && data !== null && data.categories.length > 0 ? (
-        <CategoryTable
-          categories={data.categories}
-          aiopsListState={stateFromUrl}
-          dataViewId={dataView.id!}
-          eventRate={eventRate}
-          sparkLines={data.sparkLines}
-          selectedField={selectedField}
-          pinnedCategory={pinnedCategory}
-          setPinnedCategory={setPinnedCategory}
-          selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
-          timefilter={timefilter}
-        />
+        <>
+          <TableHeader
+            categoriesCount={data.categories.length}
+            selectedCategoriesCount={selectedCategories.length}
+            openInDiscover={openInDiscover}
+          />
+
+          <EuiSpacer size="xs" />
+          <EuiHorizontalRule margin="none" />
+
+          <CategoryTable
+            categories={data.categories}
+            eventRate={eventRate}
+            mouseOver={{
+              pinnedCategory,
+              setPinnedCategory,
+              highlightedCategory,
+              setHighlightedCategory,
+            }}
+            displayExamples={data.displayExamples}
+            setSelectedCategories={setSelectedCategories}
+            tableState={tableState}
+            actions={actions}
+          />
+        </>
       ) : null}
     </EuiPageBody>
   );

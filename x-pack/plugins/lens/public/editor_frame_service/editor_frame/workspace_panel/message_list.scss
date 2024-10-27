@@ -5,17 +5,19 @@
 }
 
 .lnsWorkspaceWarningList {
-  @include euiYScroll;
   max-height: $euiSize * 20;
   width: $euiSize * 16;
+  @include euiYScroll;
 }
 
 .lnsWorkspaceWarningList__item {
-  padding: $euiSize;
-
   & + & {
     border-top: $euiBorderThin;
   }
+}
+
+.lnsWorkspaceWarningList__textItem {
+  padding: $euiSize;
 }
 
 .lnsWorkspaceWarningList__description {

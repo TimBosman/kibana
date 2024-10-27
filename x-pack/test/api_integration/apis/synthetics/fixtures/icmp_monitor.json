@@ -1,6 +1,6 @@
 {
   "type": "icmp",
-  "locations": [],
+  "locations": ["dev"],
   "journey_id": "",
   "enabled": true,
   "alert": {
@@ -30,5 +30,6 @@
   "mode": "any",
   "ipv4": true,
   "ipv6": true,
-  "params": ""
+  "params": "",
+  "max_attempts": 2
 }

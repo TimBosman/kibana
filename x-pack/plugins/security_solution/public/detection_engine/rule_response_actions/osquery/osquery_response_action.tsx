@@ -5,11 +5,11 @@
  * 2.0.
  */
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { EuiCode, EuiEmptyPrompt } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { useIsMounted } from '@kbn/securitysolution-hook-utils';
-import { AppFeatureKey } from '@kbn/security-solution-features/keys';
+import { ProductFeatureKey } from '@kbn/security-solution-features/keys';
 import { useUpsellingComponent } from '../../../common/hooks/use_upselling';
 import { ResponseActionFormField } from './osquery_response_action_form_field';
 import type { ArrayItem } from '../../../shared_imports';
@@ -25,14 +25,12 @@ const GhostFormField = () => <></>;
 
 export const OsqueryResponseAction = React.memo((props: OsqueryResponseActionProps) => {
   const { osquery, application } = useKibana().services;
-  const OsqueryForm = useMemo(
-    () => osquery?.OsqueryResponseActionTypeForm,
-    [osquery?.OsqueryResponseActionTypeForm]
-  );
   const isMounted = useIsMounted();
 
   // serverless component that is returned when users do not have Endpoint.Complete tier
-  const UpsellingComponent = useUpsellingComponent(AppFeatureKey.osqueryAutomatedResponseActions);
+  const UpsellingComponent = useUpsellingComponent(
+    ProductFeatureKey.osqueryAutomatedResponseActions
+  );
 
   if (osquery) {
     const { disabled, permissionDenied } = osquery.fetchInstallationStatus();
@@ -85,8 +83,7 @@ export const OsqueryResponseAction = React.memo((props: OsqueryResponseActionPro
       );
     }
 
-    // @ts-expect-error ts upgrade v4.7.4
-    if (isMounted() && OsqueryForm) {
+    if (isMounted()) {
       return (
         <UseField
           path={`${props.item.path}.params`}

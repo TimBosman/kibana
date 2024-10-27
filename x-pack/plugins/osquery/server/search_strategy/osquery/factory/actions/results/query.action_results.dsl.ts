@@ -5,33 +5,58 @@
  * 2.0.
  */
 
-import type { ISearchRequestParams } from '@kbn/data-plugin/common';
+import type { ISearchRequestParams } from '@kbn/search-types';
 import { AGENT_ACTIONS_RESULTS_INDEX } from '@kbn/fleet-plugin/common';
 import { isEmpty } from 'lodash';
-import { ACTION_RESPONSES_INDEX } from '../../../../../../common/constants';
+import moment from 'moment';
+import {
+  ACTION_RESPONSES_DATA_STREAM_INDEX,
+  ACTION_RESPONSES_INDEX,
+} from '../../../../../../common/constants';
 import type { ActionResultsRequestOptions } from '../../../../../../common/search_strategy';
 import { getQueryFilter } from '../../../../../utils/build_query';
 
 export const buildActionResultsQuery = ({
   actionId,
   kuery,
-  // pagination: { activePage, querySize },
+  startDate,
   sort,
   componentTemplateExists,
+  useNewDataStream,
 }: ActionResultsRequestOptions): ISearchRequestParams => {
-  const actionIdQuery = `action_id: ${actionId}`;
-  let filter = actionIdQuery;
+  let filter = `action_id: ${actionId}`;
   if (!isEmpty(kuery)) {
     filter = filter + ` AND ${kuery}`;
   }
 
-  const filterQuery = getQueryFilter({ filter });
+  const timeRangeFilter =
+    startDate && !isEmpty(startDate)
+      ? [
+          {
+            range: {
+              started_at: {
+                gte: startDate,
+                lte: moment(startDate).clone().add(30, 'minutes').toISOString(),
+              },
+            },
+          },
+        ]
+      : [];
 
-  const dslQuery = {
+  const filterQuery = [...timeRangeFilter, getQueryFilter({ filter })];
+
+  let index: string;
+  if (useNewDataStream) {
+    index = `${ACTION_RESPONSES_DATA_STREAM_INDEX}*`;
+  } else if (componentTemplateExists) {
+    index = `${ACTION_RESPONSES_INDEX}*`;
+  } else {
+    index = `${AGENT_ACTIONS_RESULTS_INDEX}*`;
+  }
+
+  return {
     allow_no_indices: true,
-    index: componentTemplateExists
-      ? `${ACTION_RESPONSES_INDEX}-default*`
-      : `${AGENT_ACTIONS_RESULTS_INDEX}*`,
+    index,
     ignore_unavailable: true,
     body: {
       aggs: {
@@ -84,6 +109,4 @@ export const buildActionResultsQuery = ({
       ],
     },
   };
-
-  return dslQuery;
 };

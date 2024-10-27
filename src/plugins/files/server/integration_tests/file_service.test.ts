@@ -1,12 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { CoreStart, ElasticsearchClient } from '@kbn/core/server';
+import assert from 'assert';
+import { ElasticsearchClient } from '@kbn/core/server';
+import type { InternalCoreStart } from '@kbn/core-lifecycle-server-internal';
 import {
   createTestServers,
   createRootWithCorePlugins,
@@ -38,20 +41,19 @@ describe('FileService', () => {
   let fileService: FileServiceStart;
   let blobStorageService: BlobStorageService;
   let esClient: ElasticsearchClient;
-  let coreStart: CoreStart;
+  let coreStart: InternalCoreStart;
   let fileServiceFactory: FileServiceFactory;
   let security: ReturnType<typeof securityMock.createSetup>;
   let auditLogger: AuditLogger;
+  let fileKindsRegistry: ReturnType<typeof getFileKindsRegistry>;
 
   beforeAll(async () => {
-    const { startES } = createTestServers({ adjustTimeout: jest.setTimeout });
-    manageES = await startES();
-    kbnRoot = createRootWithCorePlugins();
-    await kbnRoot.preboot();
-    await kbnRoot.setup();
-    coreStart = await kbnRoot.start();
+    const { startES, startKibana } = createTestServers({ adjustTimeout: jest.setTimeout });
+    const testServers = await Promise.all([startES(), startKibana()]);
+    manageES = testServers[0];
+    ({ root: kbnRoot, coreStart } = testServers[1]);
     setFileKindsRegistry(new FileKindsRegistryImpl());
-    const fileKindsRegistry = getFileKindsRegistry();
+    fileKindsRegistry = getFileKindsRegistry();
     fileKindsRegistry.register({
       id: fileKind,
       http: {},
@@ -68,10 +70,16 @@ describe('FileService', () => {
       },
       http: {},
     });
+
     esClient = coreStart.elasticsearch.client.asInternalUser;
   });
 
   afterAll(async () => {
+    assert.strictEqual(
+      await esClient.ping(),
+      true,
+      'Unable to reach ES, Initial test setup failed!'
+    );
     await kbnRoot.shutdown();
     await manageES.stop();
   });
@@ -86,18 +94,20 @@ describe('FileService', () => {
       coreStart.savedObjects,
       blobStorageService,
       security,
-      getFileKindsRegistry(),
+      fileKindsRegistry,
       kbnRoot.logger.get('test-file-service')
     );
     fileService = fileServiceFactory.asInternal();
   });
 
   let disposables: File[] = [];
+
   async function createDisposableFile<M = unknown>(args: CreateFileArgs<M>) {
     const file = await fileService.create(args);
     disposables.push(file);
     return file;
   }
+
   afterEach(async () => {
     await fileService.bulkDelete({ ids: disposables.map((d) => d.id) });
     const { files } = await fileService.find({ kind: [fileKind] });
@@ -326,6 +336,7 @@ describe('FileService', () => {
   interface CustomMeta {
     some: string;
   }
+
   it('updates files', async () => {
     const file = await createDisposableFile<CustomMeta>({ fileKind, name: 'test' });
     const updatableFields = {

@@ -9,23 +9,23 @@ import React from 'react';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import type { DocLinksStart, ThemeServiceStart } from '@kbn/core/public';
+import { hasUnsupportedDownsampledAggregationFailure } from '@kbn/search-response-warnings';
 import type { DatatableUtilitiesService } from '@kbn/data-plugin/common';
 import { TimeRange } from '@kbn/es-query';
-import { EuiLink, EuiSpacer, EuiText } from '@elastic/eui';
+import { EuiLink, EuiSpacer } from '@elastic/eui';
 
 import type { DatatableColumn } from '@kbn/expressions-plugin/common';
 import { groupBy, escape, uniq, uniqBy } from 'lodash';
 import type { Query } from '@kbn/data-plugin/common';
-import { SearchRequest } from '@kbn/data-plugin/common';
 
 import {
-  SearchResponseWarning,
-  ShardFailureOpenModalButton,
-  ShardFailureRequest,
-} from '@kbn/data-plugin/public';
+  type SearchResponseWarning,
+  SearchResponseWarningsBadgePopoverContent,
+} from '@kbn/search-response-warnings';
 
 import { estypes } from '@elastic/elasticsearch';
 import { isQueryValid } from '@kbn/visualization-ui-components';
+import { getOriginalId } from '@kbn/transpose-utils';
 import type { DateRange } from '../../../common/types';
 import type {
   FramePublicAPI,
@@ -61,9 +61,18 @@ import { hasField } from './pure_utils';
 import { mergeLayer } from './state_helpers';
 import { supportsRarityRanking } from './operations/definitions/terms';
 import { DEFAULT_MAX_DOC_COUNT } from './operations/definitions/terms/constants';
-import { getOriginalId } from '../../../common/expressions/datatable/transpose_helpers';
 import { ReducedSamplingSectionEntries } from './info_badges';
 import { IgnoredGlobalFiltersEntries } from '../../shared_components/ignore_global_filter';
+import {
+  INCOMPLETE_ES_RESULTS,
+  LAYER_SETTINGS_IGNORE_GLOBAL_FILTERS,
+  LAYER_SETTINGS_RANDOM_SAMPLING_INFO,
+  PRECISION_ERROR_ACCURACY_MODE_DISABLED,
+  PRECISION_ERROR_ACCURACY_MODE_ENABLED,
+  PRECISION_ERROR_ASC_COUNT_PRECISION,
+  TSDB_UNSUPPORTED_COUNTER_OP,
+  UNSUPPORTED_DOWNSAMPLED_INDEX_AGG_PREFIX,
+} from '../../user_messages_ids';
 
 function isMinOrMaxColumn(
   column?: GenericIndexPatternColumn
@@ -103,62 +112,56 @@ export function getSamplingValue(layer: FormBasedLayer) {
 
 export function isColumnInvalid(
   layer: FormBasedLayer,
+  column: GenericIndexPatternColumn,
   columnId: string,
   indexPattern: IndexPattern,
-  dateRange: DateRange | undefined,
+  dateRange: DateRange,
   targetBars: number
-) {
-  const column: GenericIndexPatternColumn | undefined = layer.columns[columnId];
-  if (!column || !indexPattern) return;
-
-  const operationDefinition = column.operationType && operationDefinitionMap[column.operationType];
+): boolean {
   // check also references for errors
   const referencesHaveErrors =
-    true &&
     'references' in column &&
-    Boolean(
-      getReferencesErrors(layer, column, indexPattern, dateRange, targetBars).filter(Boolean).length
-    );
+    hasReferencesErrors(layer, column, indexPattern, dateRange, targetBars);
 
-  const operationErrorMessages =
-    operationDefinition &&
-    operationDefinition.getErrorMessage?.(
-      layer,
-      columnId,
-      indexPattern,
-      dateRange,
-      operationDefinitionMap,
-      targetBars
-    );
+  const operationHasErrorMessages =
+    (
+      operationDefinitionMap[column.operationType]?.getErrorMessage?.(
+        layer,
+        columnId,
+        indexPattern,
+        dateRange,
+        operationDefinitionMap,
+        targetBars
+      ) ?? []
+    ).length > 0;
 
   // it looks like this is just a back-stop since we prevent
   // invalid filters from being set at the UI level
   const filterHasError = column.filter ? !isQueryValid(column.filter, indexPattern) : false;
-
-  return (
-    (operationErrorMessages && operationErrorMessages.length > 0) ||
-    referencesHaveErrors ||
-    filterHasError
-  );
+  return operationHasErrorMessages || referencesHaveErrors || filterHasError;
 }
 
-function getReferencesErrors(
+function hasReferencesErrors(
   layer: FormBasedLayer,
   column: ReferenceBasedIndexPatternColumn,
   indexPattern: IndexPattern,
-  dateRange: DateRange | undefined,
+  dateRange: DateRange,
   targetBars: number
 ) {
-  return column.references?.map((referenceId: string) => {
+  return column.references?.some((referenceId: string) => {
     const referencedOperation = layer.columns[referenceId]?.operationType;
     const referencedDefinition = operationDefinitionMap[referencedOperation];
-    return referencedDefinition?.getErrorMessage?.(
-      layer,
-      referenceId,
-      indexPattern,
-      dateRange,
-      operationDefinitionMap,
-      targetBars
+    return (
+      (
+        referencedDefinition?.getErrorMessage?.(
+          layer,
+          referenceId,
+          indexPattern,
+          dateRange,
+          operationDefinitionMap,
+          targetBars
+        ) ?? []
+      ).length > 0
     );
   });
 }
@@ -173,7 +176,7 @@ export function fieldIsInvalid(
   if (!column || !hasField(column)) {
     return false;
   }
-  return !!getInvalidFieldMessage(layer, columnId, indexPattern)?.length;
+  return getInvalidFieldMessage(layer, columnId, indexPattern).length > 0;
 }
 
 const accuracyModeDisabledWarning = (
@@ -181,6 +184,7 @@ const accuracyModeDisabledWarning = (
   columnId: string,
   enableAccuracyMode: () => void
 ): UserMessage => ({
+  uniqueId: PRECISION_ERROR_ACCURACY_MODE_DISABLED,
   severity: 'warning',
   displayLocations: [{ id: 'toolbar' }, { id: 'dimensionButton', dimensionId: columnId }],
   fixableInEditor: true,
@@ -215,6 +219,7 @@ const accuracyModeEnabledWarning = (
   columnId: string,
   docLink: string
 ): UserMessage => ({
+  uniqueId: PRECISION_ERROR_ACCURACY_MODE_ENABLED,
   severity: 'warning',
   displayLocations: [{ id: 'toolbar' }, { id: 'dimensionButton', dimensionId: columnId }],
   fixableInEditor: true,
@@ -260,18 +265,17 @@ const accuracyModeEnabledWarning = (
   ),
 });
 
-export function getShardFailuresWarningMessages(
+export function getSearchWarningMessages(
   state: FormBasedPersistedState,
   warning: SearchResponseWarning,
-  request: SearchRequest,
+  request: estypes.SearchRequest,
   response: estypes.SearchResponse,
   theme: ThemeServiceStart
 ): UserMessage[] {
   if (state) {
-    if (warning.type === 'shard_failure') {
-      switch (warning.reason.type) {
-        case 'unsupported_aggregation_on_downsampled_index':
-          return Object.values(state.layers).flatMap((layer) =>
+    if (warning.type === 'incomplete') {
+      return hasUnsupportedDownsampledAggregationFailure(warning)
+        ? Object.values(state.layers).flatMap((layer) =>
             uniq(
               Object.values(layer.columns)
                 .filter((col) =>
@@ -285,57 +289,37 @@ export function getShardFailuresWarningMessages(
                   ].includes(col.operationType)
                 )
                 .map((col) => col.label)
-            ).map(
-              (label) =>
-                ({
-                  uniqueId: `unsupported_aggregation_on_downsampled_index--${label}`,
-                  severity: 'warning',
-                  fixableInEditor: true,
-                  displayLocations: [{ id: 'toolbar' }, { id: 'embeddableBadge' }],
-                  shortMessage: '',
-                  longMessage: i18n.translate('xpack.lens.indexPattern.tsdbRollupWarning', {
-                    defaultMessage:
-                      '{label} uses a function that is unsupported by rolled up data. Select a different function or change the time range.',
-                    values: {
-                      label,
-                    },
-                  }),
-                } as UserMessage)
-            )
-          );
-        default:
-          return [
-            {
-              uniqueId: `shard_failure`,
+            ).map((label) => ({
+              // TODO: we probably need to move label as part of the meta data
+              uniqueId: `${UNSUPPORTED_DOWNSAMPLED_INDEX_AGG_PREFIX}--${label}`,
               severity: 'warning',
               fixableInEditor: true,
               displayLocations: [{ id: 'toolbar' }, { id: 'embeddableBadge' }],
               shortMessage: '',
-              longMessage: (
-                <>
-                  <EuiText size="s">
-                    <strong>{warning.message}</strong>
-                    <p>{warning.text}</p>
-                  </EuiText>
-                  <EuiSpacer size="s" />
-                  {warning.text ? (
-                    <ShardFailureOpenModalButton
-                      theme={theme}
-                      title={warning.message}
-                      size="m"
-                      getRequestMeta={() => ({
-                        request: request as ShardFailureRequest,
-                        response,
-                      })}
-                      color="primary"
-                      isButtonEmpty={true}
-                    />
-                  ) : null}
-                </>
+              longMessage: i18n.translate('xpack.lens.indexPattern.tsdbRollupWarning', {
+                defaultMessage:
+                  '{label} uses a function that is unsupported by rolled up data. Select a different function or change the time range.',
+                values: {
+                  label,
+                },
+              }),
+            }))
+          )
+        : [
+            {
+              uniqueId: INCOMPLETE_ES_RESULTS,
+              severity: 'warning',
+              fixableInEditor: true,
+              displayLocations: [{ id: 'toolbar' }, { id: 'embeddableBadge' }],
+              shortMessage: '',
+              longMessage: (closePopover) => (
+                <SearchResponseWarningsBadgePopoverContent
+                  onViewDetailsClick={closePopover}
+                  warnings={[warning]}
+                />
               ),
-            } as UserMessage,
+            },
           ];
-      }
     }
   }
   return [];
@@ -357,20 +341,24 @@ export function getUnsupportedOperationsWarningMessage(
       const columnsEntries = Object.entries(layer.columns);
       return columnsEntries
         .filter(([_, column]) => {
-          if (!hasField(column)) {
+          const operation = operationDefinitionMap[column.operationType] as Extract<
+            GenericOperationDefinition,
+            { input: 'field' }
+          >;
+
+          // this check for getPossibleOperationForField is needed as long as
+          // https://github.com/elastic/kibana/issues/168561 is unresolved
+          if (!operation.getPossibleOperationForField || !hasField(column)) {
             return false;
           }
+
           const field = dataView.getFieldByName(column.sourceField);
           if (!field) {
             return false;
           }
           return (
-            !(
-              operationDefinitionMap[column.operationType] as Extract<
-                GenericOperationDefinition,
-                { input: 'field' }
-              >
-            ).getPossibleOperationForField(field) && field?.timeSeriesMetric === 'counter'
+            !operation.getPossibleOperationForField?.(field) &&
+            field?.timeSeriesMetric === 'counter'
           );
         })
         .map(
@@ -391,6 +379,7 @@ export function getUnsupportedOperationsWarningMessage(
     for (const columnsGrouped of columnsGroupedByField) {
       const sourceField = columnsGrouped[0][0].sourceField;
       warningMessages.push({
+        uniqueId: TSDB_UNSUPPORTED_COUNTER_OP,
         severity: 'warning',
         fixableInEditor: false,
         displayLocations: [{ id: 'toolbar' }, { id: 'embeddableBadge' }],
@@ -522,6 +511,7 @@ export function getPrecisionErrorWarningMessages(
             );
           } else {
             warningMessages.push({
+              uniqueId: PRECISION_ERROR_ASC_COUNT_PRECISION,
               severity: 'warning',
               displayLocations: [
                 { id: 'toolbar' },
@@ -626,7 +616,7 @@ export function getNotifiableFeatures(
   );
   if (layersWithCustomSamplingValues.length) {
     features.push({
-      uniqueId: 'random_sampling_info',
+      uniqueId: LAYER_SETTINGS_RANDOM_SAMPLING_INFO,
       severity: 'info',
       fixableInEditor: false,
       shortMessage: i18n.translate('xpack.lens.indexPattern.samplingPerLayer', {
@@ -645,7 +635,7 @@ export function getNotifiableFeatures(
   const layersWithIgnoreGlobalFilters = layers.filter(([, layer]) => layer.ignoreGlobalFilters);
   if (layersWithIgnoreGlobalFilters.length) {
     features.push({
-      uniqueId: 'ignoring-global-filters-layers',
+      uniqueId: LAYER_SETTINGS_IGNORE_GLOBAL_FILTERS,
       severity: 'info',
       fixableInEditor: false,
       shortMessage: i18n.translate('xpack.lens.xyChart.layerAnnotationsIgnoreTitle', {

@@ -33,6 +33,7 @@ export const PromptContextSelector: React.FC<Props> = React.memo(
             category: pc.category,
           },
           label: pc.description,
+          'data-test-subj': pc.description,
         })),
       [promptContexts]
     );
@@ -87,6 +88,7 @@ export const PromptContextSelector: React.FC<Props> = React.memo(
       <EuiComboBox
         aria-label={i18n.PROMPT_CONTEXT_SELECTOR}
         compressed
+        data-test-subj={'promptContextSelector'}
         fullWidth
         isDisabled={isDisabled}
         placeholder={i18n.PROMPT_CONTEXT_SELECTOR_PLACEHOLDER}

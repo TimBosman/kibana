@@ -9,13 +9,16 @@ import { kea, MakeLogicType } from 'kea';
 
 import { i18n } from '@kbn/i18n';
 
-import { Status } from '../../../../../common/types/api';
 import {
   Connector,
   FeatureName,
   IngestPipelineParams,
   SyncStatus,
-} from '../../../../../common/types/connectors';
+  IngestionStatus,
+  IngestionMethod,
+} from '@kbn/search-connectors';
+
+import { Status } from '../../../../../common/types/api';
 import { Actions } from '../../../shared/api_logic/create_api_logic';
 import { flashSuccessToast } from '../../../shared/flash_messages';
 import { KibanaLogic } from '../../../shared/kibana';
@@ -30,12 +33,20 @@ import {
 } from '../../api/connector/start_incremental_sync_api_logic';
 import { StartSyncApiLogic, StartSyncArgs } from '../../api/connector/start_sync_api_logic';
 import {
+  ConnectorConfigurationApiLogic,
+  PostConnectorConfigurationActions,
+} from '../../api/connector/update_connector_configuration_api_logic';
+import {
   CachedFetchIndexApiLogic,
   CachedFetchIndexApiLogicActions,
 } from '../../api/index/cached_fetch_index_api_logic';
 
 import { FetchIndexApiResponse } from '../../api/index/fetch_index_api_logic';
-import { ElasticsearchViewIndex, IngestionMethod, IngestionStatus } from '../../types';
+import { ElasticsearchViewIndex } from '../../types';
+import {
+  hasDocumentLevelSecurityFeature,
+  hasIncrementalSyncFeature,
+} from '../../utils/connector_helpers';
 import {
   getIngestionMethod,
   getIngestionStatus,
@@ -73,6 +84,7 @@ export interface IndexViewActions {
   startSync(): void;
   stopFetchIndexPoll(): CachedFetchIndexApiLogicActions['stopPolling'];
   stopFetchIndexPoll(): void;
+  updateConfigurationApiSuccess: PostConnectorConfigurationActions['apiSuccess'];
 }
 
 export interface IndexViewValues {
@@ -128,6 +140,8 @@ export const IndexViewLogic = kea<MakeLogicType<IndexViewValues, IndexViewAction
         'startPolling as startFetchIndexPoll',
         'stopPolling as stopFetchIndexPoll',
       ],
+      ConnectorConfigurationApiLogic,
+      ['apiSuccess as updateConfigurationApiSuccess'],
       StartSyncApiLogic,
       ['apiSuccess as startSyncApiSuccess', 'makeRequest as makeStartSyncRequest'],
       StartIncrementalSyncApiLogic,
@@ -208,6 +222,14 @@ export const IndexViewLogic = kea<MakeLogicType<IndexViewValues, IndexViewAction
         actions.makeStartSyncRequest({ connectorId: values.fetchIndexApiData.connector.id });
       }
     },
+    updateConfigurationApiSuccess: ({ configuration }) => {
+      if (isConnectorIndex(values.fetchIndexApiData)) {
+        actions.fetchIndexApiSuccess({
+          ...values.fetchIndexApiData,
+          connector: { ...values.fetchIndexApiData.connector, configuration },
+        });
+      }
+    },
   }),
   path: ['enterprise_search', 'content', 'index_view_logic'],
   reducers: {
@@ -222,6 +244,8 @@ export const IndexViewLogic = kea<MakeLogicType<IndexViewValues, IndexViewAction
       false,
       {
         fetchIndexApiSuccess: () => false,
+        startAccessControlSync: () => true,
+        startIncrementalSync: () => true,
         startSyncApiSuccess: () => true,
       },
     ],
@@ -244,7 +268,11 @@ export const IndexViewLogic = kea<MakeLogicType<IndexViewValues, IndexViewAction
     ],
     error: [
       () => [selectors.connector],
-      (connector: Connector | undefined) => connector?.error || connector?.last_sync_error || null,
+      (connector: Connector | undefined) =>
+        connector?.error ||
+        connector?.last_sync_error ||
+        connector?.last_access_control_sync_error ||
+        null,
     ],
     hasAdvancedFilteringFeature: [
       () => [selectors.connector],
@@ -264,8 +292,7 @@ export const IndexViewLogic = kea<MakeLogicType<IndexViewValues, IndexViewAction
     ],
     hasDocumentLevelSecurityFeature: [
       () => [selectors.connector],
-      (connector?: Connector) =>
-        connector?.features?.[FeatureName.DOCUMENT_LEVEL_SECURITY]?.enabled || false,
+      (connector?: Connector) => hasDocumentLevelSecurityFeature(connector),
     ],
     hasFilteringFeature: [
       () => [selectors.hasAdvancedFilteringFeature, selectors.hasBasicFilteringFeature],
@@ -273,8 +300,7 @@ export const IndexViewLogic = kea<MakeLogicType<IndexViewValues, IndexViewAction
     ],
     hasIncrementalSyncFeature: [
       () => [selectors.connector],
-      (connector?: Connector) =>
-        connector?.features?.[FeatureName.INCREMENTAL_SYNC]?.enabled || false,
+      (connector?: Connector) => hasIncrementalSyncFeature(connector),
     ],
     htmlExtraction: [
       () => [selectors.connector],

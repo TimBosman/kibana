@@ -188,15 +188,22 @@ describe('mappingFromFieldMap', () => {
       dynamic: 'strict',
       properties: {
         '@timestamp': {
+          ignore_malformed: false,
           type: 'date',
         },
         event: {
           properties: {
             action: {
               type: 'keyword',
+              ignore_above: 1024,
             },
             kind: {
               type: 'keyword',
+              ignore_above: 1024,
+            },
+            original: {
+              type: 'keyword',
+              ignore_above: 1024,
             },
           },
         },
@@ -209,6 +216,9 @@ describe('mappingFromFieldMap', () => {
                 },
                 case_ids: {
                   type: 'keyword',
+                },
+                consecutive_matches: {
+                  type: 'long',
                 },
                 duration: {
                   properties: {
@@ -239,8 +249,19 @@ describe('mappingFromFieldMap', () => {
                 last_detected: {
                   type: 'date',
                 },
+                previous_action_group: {
+                  type: 'keyword',
+                },
                 reason: {
                   type: 'keyword',
+                  fields: {
+                    text: {
+                      type: 'match_only_text',
+                    },
+                  },
+                },
+                intended_timestamp: {
+                  type: 'date',
                 },
                 rule: {
                   properties: {
@@ -252,6 +273,12 @@ describe('mappingFromFieldMap', () => {
                     },
                     execution: {
                       properties: {
+                        timestamp: {
+                          type: 'date',
+                        },
+                        type: {
+                          type: 'keyword',
+                        },
                         uuid: {
                           type: 'keyword',
                         },
@@ -281,6 +308,9 @@ describe('mappingFromFieldMap', () => {
                     },
                   },
                 },
+                severity_improving: {
+                  type: 'boolean',
+                },
                 start: {
                   type: 'date',
                 },
@@ -303,6 +333,9 @@ describe('mappingFromFieldMap', () => {
                   type: 'keyword',
                 },
                 workflow_tags: {
+                  type: 'keyword',
+                },
+                workflow_assignee_ids: {
                   type: 'keyword',
                 },
               },
@@ -362,6 +395,7 @@ describe('mappingFromFieldMap', () => {
                 },
                 system_status: { type: 'keyword' },
                 workflow_reason: { type: 'keyword' },
+                workflow_status_updated_at: { type: 'date' },
                 workflow_user: { type: 'keyword' },
               },
             },

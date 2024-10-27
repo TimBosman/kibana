@@ -34,6 +34,7 @@ describe('useFilesTableColumns', () => {
       Array [
         Object {
           "data-test-subj": "cases-files-table-filename",
+          "field": "name",
           "name": "Name",
           "render": [Function],
           "width": "60%",
@@ -52,15 +53,7 @@ describe('useFilesTableColumns', () => {
         Object {
           "actions": Array [
             Object {
-              "description": "Download file",
-              "isPrimary": true,
-              "name": "Download",
-              "render": [Function],
-            },
-            Object {
-              "description": "Delete file",
-              "isPrimary": true,
-              "name": "Delete",
+              "name": "Actions",
               "render": [Function],
             },
           ],

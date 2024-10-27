@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { i18n } from '@kbn/i18n';
 import {
   EuiButtonGroup,
@@ -107,46 +108,42 @@ function getSafeValue(value: number | '', prevValue: number, min: number, max: n
   return Math.max(minRange, Math.min(value, maxRange));
 }
 
-const LineThicknessSlider = ({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-}) => {
-  const [unsafeValue, setUnsafeValue] = useState<string>(String(value));
+const LineThicknessSlider = memo(
+  ({ value, onChange }: { value: number; onChange: (value: number) => void }) => {
+    const [unsafeValue, setUnsafeValue] = useState<string>(String(value));
 
-  return (
-    <EuiFieldNumber
-      data-test-subj="lnsXYThickness"
-      value={unsafeValue}
-      fullWidth
-      min={minRange}
-      max={maxRange}
-      step={1}
-      append="px"
-      compressed
-      onChange={({ currentTarget: { value: newValue } }) => {
-        setUnsafeValue(newValue);
-        const convertedValue = newValue === '' ? '' : Number(newValue);
-        const safeValue = getSafeValue(Number(newValue), Number(newValue), minRange, maxRange);
-        // only update onChange is the value is valid and in range
-        if (convertedValue === safeValue) {
-          onChange(safeValue);
-        }
-      }}
-      onBlur={() => {
-        if (unsafeValue !== String(value)) {
-          const safeValue = getSafeValue(
-            unsafeValue === '' ? unsafeValue : Number(unsafeValue),
-            value,
-            minRange,
-            maxRange
-          );
-          onChange(safeValue);
-          setUnsafeValue(String(safeValue));
-        }
-      }}
-    />
-  );
-};
+    return (
+      <EuiFieldNumber
+        data-test-subj="lnsXYThickness"
+        value={unsafeValue}
+        fullWidth
+        min={minRange}
+        max={maxRange}
+        step={1}
+        append="px"
+        compressed
+        onChange={({ currentTarget: { value: newValue } }) => {
+          setUnsafeValue(newValue);
+          const convertedValue = newValue === '' ? '' : Number(newValue);
+          const safeValue = getSafeValue(Number(newValue), Number(newValue), minRange, maxRange);
+          // only update onChange is the value is valid and in range
+          if (convertedValue === safeValue) {
+            onChange(safeValue);
+          }
+        }}
+        onBlur={() => {
+          if (unsafeValue !== String(value)) {
+            const safeValue = getSafeValue(
+              unsafeValue === '' ? unsafeValue : Number(unsafeValue),
+              value,
+              minRange,
+              maxRange
+            );
+            onChange(safeValue);
+            setUnsafeValue(String(safeValue));
+          }
+        }}
+      />
+    );
+  }
+);

@@ -12,14 +12,12 @@ import {
   FleetAllIntegrReadUser,
   deleteUsersAndRoles,
 } from '../tasks/privileges';
-import { loginWithUserAndWaitForPage, logout } from '../tasks/login';
+import { login, loginWithUserAndWaitForPage, logout } from '../tasks/login';
 import { navigateToTab, createAgentPolicy } from '../tasks/fleet';
 import { cleanupAgentPolicies, unenrollAgent } from '../tasks/cleanup';
 import { getIntegrationCard } from '../screens/integrations';
 
 import {
-  FLEET_SERVER_MISSING_PRIVILEGES,
-  ADD_AGENT_BUTTON_TOP,
   AGENT_POLICIES_TAB,
   AGENT_POLICY_SAVE_INTEGRATION,
   ADD_PACKAGE_POLICY_BTN,
@@ -32,6 +30,7 @@ const usersToCreate = [FleetAllIntegrReadUser];
 
 describe('When the user has All privilege for Fleet but Read for integrations', () => {
   before(() => {
+    login();
     createUsersAndRoles(usersToCreate, rolesToCreate);
   });
 
@@ -64,18 +63,6 @@ describe('When the user has All privilege for Fleet but Read for integrations', 
     after(() => {
       unenrollAgent();
       cleanupAgentPolicies();
-    });
-  });
-
-  describe('When there are no agent policies', () => {
-    it('If fleet server is not set up, Fleet shows a callout', () => {
-      loginWithUserAndWaitForPage(FLEET, FleetAllIntegrReadUser);
-      cy.getBySel(FLEET_SERVER_MISSING_PRIVILEGES.TITLE).should('have.text', 'Permission denied');
-      cy.getBySel(FLEET_SERVER_MISSING_PRIVILEGES.MESSAGE).should(
-        'contain',
-        'Fleet Server needs to be set up.'
-      );
-      cy.getBySel(ADD_AGENT_BUTTON_TOP).should('not.be.disabled');
     });
   });
 

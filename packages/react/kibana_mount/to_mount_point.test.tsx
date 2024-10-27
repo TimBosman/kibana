@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { FC, useEffect } from 'react';
@@ -13,11 +14,13 @@ import { useEuiTheme } from '@elastic/eui';
 import type { UseEuiTheme } from '@elastic/eui';
 import type { CoreTheme } from '@kbn/core/public';
 import { toMountPoint } from './to_mount_point';
+import { analyticsServiceMock } from '@kbn/core-analytics-browser-mocks';
 import { i18nServiceMock } from '@kbn/core-i18n-browser-mocks';
 
 describe('toMountPoint', () => {
   let euiTheme: UseEuiTheme;
   const i18n = i18nServiceMock.createStartContract();
+  const analytics = analyticsServiceMock.createAnalyticsServiceStart();
 
   const InnerComponent: FC = () => {
     const theme = useEuiTheme();
@@ -39,7 +42,7 @@ describe('toMountPoint', () => {
 
   it('exposes the euiTheme when `theme$` is provided', async () => {
     const theme = { theme$: of<CoreTheme>({ darkMode: true }) };
-    const mount = toMountPoint(<InnerComponent />, { theme, i18n });
+    const mount = toMountPoint(<InnerComponent />, { theme, i18n, analytics });
 
     const targetEl = document.createElement('div');
     mount(targetEl);
@@ -52,7 +55,7 @@ describe('toMountPoint', () => {
   it('propagates changes of the theme$ observable', async () => {
     const theme$ = new BehaviorSubject<CoreTheme>({ darkMode: true });
 
-    const mount = toMountPoint(<InnerComponent />, { theme: { theme$ }, i18n });
+    const mount = toMountPoint(<InnerComponent />, { theme: { theme$ }, i18n, analytics });
 
     const targetEl = document.createElement('div');
     mount(targetEl);

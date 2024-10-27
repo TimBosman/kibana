@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type {
@@ -27,7 +28,7 @@ export type DateHistogramColumnParams = DateHistogramIndexPatternColumn['params'
 
 export type TopValuesColumnParams = Pick<
   TermsIndexPatternColumn['params'],
-  'size' | 'orderDirection' | 'orderBy'
+  'size' | 'orderDirection' | 'orderBy' | 'secondaryFields' | 'accuracyMode'
 >;
 
 export const getHistogramColumn = ({
@@ -37,10 +38,11 @@ export const getHistogramColumn = ({
   columnName: string;
   options?: Partial<
     Pick<DateHistogramIndexPatternColumn, 'sourceField'> & {
-      params: DateHistogramColumnParams;
+      params: Partial<DateHistogramColumnParams>;
     }
   >;
 }) => {
+  const { interval = 'auto', ...rest } = options?.params ?? {};
   return {
     [columnName]: {
       dataType: 'date',
@@ -48,9 +50,8 @@ export const getHistogramColumn = ({
       label: '@timestamp',
       operationType: 'date_histogram',
       scale: 'interval',
-      sourceField: '@timestamp',
-      ...options,
-      params: { interval: 'auto', ...options?.params },
+      sourceField: options?.sourceField ?? '@timestamp',
+      params: { interval, ...rest },
     } as DateHistogramIndexPatternColumn,
   };
 };

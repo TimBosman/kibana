@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import type { IHttpFetchError } from '@kbn/core-http-browser';
 
-import type { GetTransformNodesResponseSchema } from '../../../common/api_schemas/transforms';
+import type { GetTransformNodesResponseSchema } from '../../../server/routes/api_schemas/transforms';
 import {
   addInternalBasePath,
   DEFAULT_REFRESH_INTERVAL_MS,
@@ -18,7 +18,7 @@ import {
 
 import { useAppDependencies } from '../app_dependencies';
 
-export const useGetTransformNodes = () => {
+export const useGetTransformNodes = ({ enabled } = { enabled: true }) => {
   const { http } = useAppDependencies();
 
   return useQuery<number, IHttpFetchError>(
@@ -36,6 +36,7 @@ export const useGetTransformNodes = () => {
     },
     {
       refetchInterval: DEFAULT_REFRESH_INTERVAL_MS,
+      enabled,
     }
   );
 };

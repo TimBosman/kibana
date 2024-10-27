@@ -5,9 +5,10 @@
  * 2.0.
  */
 
-import React, { type FC, type MouseEventHandler, useState } from 'react';
+import React, { type FC, type MouseEventHandler, useCallback, useMemo, useState } from 'react';
 
 import { i18n } from '@kbn/i18n';
+import type { EuiSearchBarProps } from '@elastic/eui';
 import {
   EuiButton,
   EuiButtonEmpty,
@@ -17,9 +18,10 @@ import {
   EuiInMemoryTable,
   EuiPageTemplate,
   EuiPopover,
-  EuiSearchBarProps,
+  EuiSearchBar,
   EuiTitle,
 } from '@elastic/eui';
+import type { ListingPageUrlState } from '@kbn/ml-url-state';
 import {
   isReauthorizeActionDisabled,
   ReauthorizeActionModal,
@@ -62,7 +64,7 @@ import { ExpandedRow } from './expanded_row';
 import { filterTransforms, transformFilters } from './transform_search_bar_filters';
 import { useTableSettings } from './use_table_settings';
 import { useAlertRuleFlyout } from '../../../../../alerting/transform_alerting_flyout';
-import { TransformHealthAlertRule } from '../../../../../../common/types/alerting';
+import type { TransformHealthAlertRule } from '../../../../../../common/types/alerting';
 import { StopActionModal } from '../action_stop/stop_action_modal';
 
 type ItemIdToExpandedRowMap = Record<string, JSX.Element>;
@@ -70,7 +72,8 @@ type ItemIdToExpandedRowMap = Record<string, JSX.Element>;
 function getItemIdToExpandedRowMap(
   itemIds: TransformId[],
   transforms: TransformListRow[],
-  onAlertEdit: (alertRule: TransformHealthAlertRule) => void
+  onAlertEdit: (alertRule: TransformHealthAlertRule) => void,
+  transformsStatsLoading: boolean
 ): ItemIdToExpandedRowMap {
   return itemIds.reduce((m: ItemIdToExpandedRowMap, transformId: TransformId) => {
     const item = transforms.find((transform) => transform.config.id === transformId);
@@ -84,23 +87,36 @@ function getItemIdToExpandedRowMap(
 interface TransformListProps {
   isLoading: boolean;
   onCreateTransform: MouseEventHandler<HTMLButtonElement>;
+  pageState: ListingPageUrlState;
   transformNodes: number;
   transforms: TransformListRow[];
   transformsLoading: boolean;
+  transformsStatsLoading: boolean;
+  updatePageState: (update: Partial<ListingPageUrlState>) => void;
 }
 
 export const TransformList: FC<TransformListProps> = ({
   isLoading,
   onCreateTransform,
+  pageState,
   transformNodes,
   transforms,
   transformsLoading,
+  transformsStatsLoading,
+  updatePageState,
 }) => {
   const refreshTransformList = useRefreshTransformList();
   const { setEditAlertRule } = useAlertRuleFlyout();
 
-  const [query, setQuery] = useState<Parameters<NonNullable<EuiSearchBarProps['onChange']>>[0]>();
+  const searchQueryText = pageState.queryText ?? '';
+  const setSearchQueryText = useCallback(
+    (value: string) => {
+      updatePageState({ queryText: value });
+    },
+    [updatePageState]
+  );
 
+  const [searchError, setSearchError] = useState<string | undefined>();
   const [expandedRowItemIds, setExpandedRowItemIds] = useState<TransformId[]>([]);
   const [transformSelection, setTransformSelection] = useState<TransformListRow[]>([]);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
@@ -119,20 +135,24 @@ export const TransformList: FC<TransformListProps> = ({
 
   const { sorting, pagination, onTableChange } = useTableSettings<TransformListRow>(
     TRANSFORM_LIST_COLUMN.ID,
-    transforms
+    transforms,
+    pageState,
+    updatePageState
   );
 
   const { columns, modals: singleActionModals } = useColumns(
     expandedRowItemIds,
     setExpandedRowItemIds,
     transformNodes,
-    transformSelection
+    transformSelection,
+    transformsStatsLoading
   );
 
-  const searchError = query?.error ? query?.error.message : undefined;
-  const clauses = query?.query?.ast?.clauses ?? [];
-  const filteredTransforms =
-    clauses.length > 0 ? filterTransforms(transforms, clauses) : transforms;
+  const filteredTransforms = useMemo(() => {
+    const query = searchQueryText !== '' ? EuiSearchBar.Query.parse(searchQueryText) : undefined;
+    const clauses = query?.ast?.clauses ?? [];
+    return clauses.length > 0 ? filterTransforms(transforms, clauses) : transforms;
+  }, [searchQueryText, transforms]);
 
   if (transforms.length === 0) {
     return (
@@ -166,7 +186,8 @@ export const TransformList: FC<TransformListProps> = ({
   const itemIdToExpandedRowMap = getItemIdToExpandedRowMap(
     expandedRowItemIds,
     transforms,
-    setEditAlertRule
+    setEditAlertRule,
+    transformsStatsLoading
   );
 
   const bulkActionMenuItems = [
@@ -235,6 +256,7 @@ export const TransformList: FC<TransformListProps> = ({
           canResetTransform={capabilities.canResetTransform}
           disabled={isResetActionDisabled(transformSelection, false)}
           isBulkAction={true}
+          items={transformSelection}
         />
       </EuiButtonEmpty>
     </div>,
@@ -247,6 +269,8 @@ export const TransformList: FC<TransformListProps> = ({
           canDeleteTransform={capabilities.canDeleteTransform}
           disabled={isDeleteActionDisabled(transformSelection, false)}
           isBulkAction={true}
+          items={transformSelection}
+          forceDisable={false}
         />
       </EuiButtonEmpty>
     </div>,
@@ -309,14 +333,25 @@ export const TransformList: FC<TransformListProps> = ({
     </EuiFlexGroup>
   );
 
+  const handleSearchOnChange: EuiSearchBarProps['onChange'] = (search) => {
+    if (search.error !== null) {
+      setSearchError(search.error.message);
+      return;
+    }
+
+    setSearchError(undefined);
+    setSearchQueryText(search.queryText);
+  };
+
   const search = {
     toolsLeft: transformSelection.length > 0 ? renderToolsLeft() : undefined,
     toolsRight,
-    onChange: setQuery,
+    onChange: handleSearchOnChange,
     box: {
       incremental: true,
     },
     filters: transformFilters,
+    query: searchQueryText,
   };
 
   const selection = {
@@ -342,9 +377,6 @@ export const TransformList: FC<TransformListProps> = ({
         className="transform__TransformTable"
         columns={columns}
         error={searchError}
-        hasActions={false}
-        isExpandable={true}
-        isSelectable={false}
         items={filteredTransforms}
         itemId={TRANSFORM_LIST_COLUMN.ID}
         itemIdToExpandedRowMap={itemIdToExpandedRowMap}

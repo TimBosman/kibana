@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -32,10 +33,15 @@ import type { CoreStart } from '@kbn/core-lifecycle-browser';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { i18n } from '@kbn/i18n';
 import { type DataViewField } from '@kbn/data-views-plugin/common';
-import type { FieldTypeKnown } from '@kbn/discover-utils/types';
-import { getFieldTypeName, isKnownFieldType, KNOWN_FIELD_TYPE_LIST } from '@kbn/discover-utils';
-import { FieldIcon } from '../field_icon';
-import { getFieldIconType, getFieldTypeDescription } from '../../utils/field_types';
+import {
+  type FieldTypeKnown,
+  getFieldIconType,
+  getFieldTypeDescription,
+  getFieldTypeName,
+  isKnownFieldType,
+  KNOWN_FIELD_TYPE_LIST,
+  FieldIcon,
+} from '@kbn/field-utils';
 import type { FieldListItem, GetCustomFieldType } from '../../types';
 
 const EQUAL_HEIGHT_OFFSET = 2; // to avoid changes in the header's height after "Clear all" button appears
@@ -44,7 +50,7 @@ const popoverTitleStyle = css`
 `;
 const filterButtonStyle = css`
   &,
-  & .euiFilterButton__textShift {
+  & .euiFilterButton__text {
     min-width: 0;
     line-height: 1;
   }
@@ -102,12 +108,7 @@ export function FieldTypeFilter<T extends FieldListItem = DataViewField>({
   const itemStyle = useMemo(
     () => css`
       font-size: ${euiTheme.size.m};
-
-      // Specificity needed to override Sass styles
-      // EUI TODO: Remove this selector once EuiContextMenu has been converted to Emotion
-      &.euiContextMenuItem {
-        padding: ${euiTheme.size.s} ${euiTheme.size.m};
-      }
+      padding: ${euiTheme.size.s} ${euiTheme.size.m};
 
       & + & {
         border-top: 1px solid ${euiTheme.colors.lightestShade};

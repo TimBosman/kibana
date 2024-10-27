@@ -5,30 +5,36 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
+import type { FC } from 'react';
+import React from 'react';
 import { i18n } from '@kbn/i18n';
+import { dynamic } from '@kbn/shared-ux-utility';
 import { DataSourceContextProvider } from '../../../contexts/ml';
-import { DataComparisonPage } from '../../../datavisualizer/data_comparison/data_comparison_page';
 import { ML_PAGES } from '../../../../locator';
-import { NavigateToPath } from '../../../contexts/kibana';
-import { createPath, MlRoute, PageLoader, PageProps } from '../../router';
+import type { NavigateToPath } from '../../../contexts/kibana';
+import type { MlRoute, PageProps } from '../../router';
+import { createPath, PageLoader } from '../../router';
 import { useRouteResolver } from '../../use_resolver';
 import {
   breadcrumbOnClickFactory,
-  DATA_COMPARISON_BREADCRUMB,
+  DATA_DRIFT_BREADCRUMB,
   DATA_VISUALIZER_BREADCRUMB,
   getBreadcrumbWithUrlForApp,
 } from '../../breadcrumbs';
 import { basicResolvers } from '../../resolvers';
 
-export const dataComparisonRouteFactory = (
+const DataDriftPage = dynamic(async () => ({
+  default: (await import('../../../datavisualizer/data_drift/data_drift_page')).DataDriftPage,
+}));
+
+export const dataDriftRouteFactory = (
   navigateToPath: NavigateToPath,
   basePath: string
 ): MlRoute => ({
-  id: 'data_comparison',
-  path: createPath(ML_PAGES.DATA_COMPARISON),
-  title: i18n.translate('xpack.ml.dataVisualizer.dataComparison.docTitle', {
-    defaultMessage: 'Data Comparison',
+  id: 'data_drift',
+  path: createPath(ML_PAGES.DATA_DRIFT),
+  title: i18n.translate('xpack.ml.dataVisualizer.dataDrift.docTitle', {
+    defaultMessage: 'Data Drift',
   }),
   render: (props, deps) => <PageWrapper {...props} deps={deps} />,
   breadcrumbs: [
@@ -37,18 +43,18 @@ export const dataComparisonRouteFactory = (
       text: DATA_VISUALIZER_BREADCRUMB.text,
       ...(navigateToPath
         ? {
-            href: `${basePath}/app/ml${DATA_COMPARISON_BREADCRUMB.href}`,
-            onClick: breadcrumbOnClickFactory(DATA_COMPARISON_BREADCRUMB.href, navigateToPath),
+            href: `${basePath}/app/ml${DATA_DRIFT_BREADCRUMB.href}`,
+            onClick: breadcrumbOnClickFactory(DATA_DRIFT_BREADCRUMB.href, navigateToPath),
           }
         : {}),
     },
     {
-      text: i18n.translate('xpack.ml.trainedModelsBreadcrumbs.dataComparisonLabel', {
-        defaultMessage: 'Data Comparison',
+      text: i18n.translate('xpack.ml.trainedModelsBreadcrumbs.dataDriftLabel', {
+        defaultMessage: 'Data Drift',
       }),
     },
   ],
-  'data-test-subj': 'mlPageDataComparison',
+  'data-test-subj': 'mlPageDataDrift',
 });
 
 const PageWrapper: FC<PageProps> = () => {
@@ -57,7 +63,7 @@ const PageWrapper: FC<PageProps> = () => {
   return (
     <PageLoader context={context}>
       <DataSourceContextProvider>
-        <DataComparisonPage />
+        <DataDriftPage />
       </DataSourceContextProvider>
     </PageLoader>
   );

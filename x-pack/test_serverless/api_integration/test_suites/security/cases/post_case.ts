@@ -7,56 +7,53 @@
 
 import expect from '@kbn/expect';
 import { ConnectorTypes } from '@kbn/cases-plugin/common/types/domain';
-
+import type { RoleCredentials } from '../../../../shared/services';
 import { FtrProviderContext } from '../../../ftr_provider_context';
-import { deleteCasesByESQuery, createCase, getPostCaseRequest, postCaseResp } from './helpers/api';
-import { removeServerGeneratedPropertiesFromCase } from './helpers/omit';
 
 export default ({ getService }: FtrProviderContext): void => {
-  const es = getService('es');
-  const supertest = getService('supertest');
+  const svlCases = getService('svlCases');
+  const svlUserManager = getService('svlUserManager');
 
   describe('post_case', () => {
+    let roleAuthc: RoleCredentials;
+    before(async () => {
+      roleAuthc = await svlUserManager.createM2mApiKeyWithRoleScope('admin');
+    });
+
     afterEach(async () => {
-      await deleteCasesByESQuery(es);
+      await svlCases.api.deleteCases();
     });
 
     it('should create a case', async () => {
-      const postedCase = await createCase(
-        supertest,
-        getPostCaseRequest({
-          connector: {
-            id: '123',
-            name: 'Jira',
-            type: ConnectorTypes.jira,
-            fields: { issueType: 'Task', priority: 'High', parent: null },
-          },
-        })
-      );
-      const data = removeServerGeneratedPropertiesFromCase(postedCase);
+      const payload = svlCases.api.getPostCaseRequest('securitySolution', {
+        connector: {
+          id: '123',
+          name: 'Jira',
+          type: ConnectorTypes.jira,
+          fields: { issueType: 'Task', priority: 'High', parent: null },
+        },
+      });
+      const postedCase = await svlCases.api.createCase(payload, roleAuthc);
 
-      expect(data).to.eql(
-        postCaseResp(
-          null,
-          getPostCaseRequest({
-            connector: {
-              id: '123',
-              name: 'Jira',
-              type: ConnectorTypes.jira,
-              fields: { issueType: 'Task', priority: 'High', parent: null },
-            },
-          })
-        )
+      const { created_by: createdBy, ...data } =
+        svlCases.omit.removeServerGeneratedPropertiesFromCase(postedCase);
+      const { created_by: _, ...expected } = svlCases.api.postCaseResp(
+        'securitySolution',
+        null,
+        payload
       );
+
+      expect(data).to.eql(expected);
+      expect(createdBy).to.have.keys('full_name', 'email', 'username');
     });
 
     it('should throw 403 when trying to create a case with observability as owner', async () => {
       expect(
-        await createCase(
-          supertest,
-          getPostCaseRequest({
+        await svlCases.api.createCase(
+          svlCases.api.getPostCaseRequest('securitySolution', {
             owner: 'observability',
           }),
+          roleAuthc,
           403
         )
       );
@@ -64,11 +61,11 @@ export default ({ getService }: FtrProviderContext): void => {
 
     it('should throw 403 when trying to create a case with cases as owner', async () => {
       expect(
-        await createCase(
-          supertest,
-          getPostCaseRequest({
+        await svlCases.api.createCase(
+          svlCases.api.getPostCaseRequest('securitySolution', {
             owner: 'cases',
           }),
+          roleAuthc,
           403
         )
       );

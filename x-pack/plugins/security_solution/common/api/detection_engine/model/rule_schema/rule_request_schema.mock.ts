@@ -11,12 +11,14 @@ import type {
   MachineLearningRuleUpdateProps,
   QueryRuleCreateProps,
   QueryRuleUpdateProps,
+  EsqlRuleCreateProps,
   SavedQueryRuleCreateProps,
   ThreatMatchRuleCreateProps,
   ThresholdRuleCreateProps,
   NewTermsRuleCreateProps,
   NewTermsRuleUpdateProps,
-} from './rule_schemas';
+  EqlRuleCreateProps,
+} from './rule_schemas.gen';
 
 export const getCreateRulesSchemaMock = (ruleId = 'rule-1'): QueryRuleCreateProps => ({
   description: 'Detecting root and admin users',
@@ -152,6 +154,23 @@ export const getCreateNewTermsRulesSchemaMock = (
   history_window_start: 'now-7d',
 });
 
+export const getCreateEsqlRulesSchemaMock = (
+  ruleId = 'rule-1',
+  enabled = false
+): EsqlRuleCreateProps => ({
+  description: 'Detecting root and admin users',
+  enabled,
+  name: 'Query with a rule id',
+  query: 'from auditbeat-* | where user.name=="root" or user.name=="admin"',
+  severity: 'high',
+  type: 'esql',
+  risk_score: 55,
+  language: 'esql',
+  rule_id: ruleId,
+  interval: '5m',
+  from: 'now-6m',
+});
+
 export const getUpdateRulesSchemaMock = (
   id = '04128c15-0d1b-4716-a4c5-46997ac7f3bd'
 ): QueryRuleUpdateProps => ({
@@ -194,4 +213,16 @@ export const getUpdateNewTermsSchemaMock = (
   from: 'now-6m',
   new_terms_fields: ['user.name'],
   history_window_start: 'now-7d',
+});
+
+export const getCreateEqlRuleSchemaMock = (ruleId = 'rule-1'): EqlRuleCreateProps => ({
+  description: 'Event correlation index pattern rule',
+  name: 'Event correlation index pattern rule',
+  index: ['auditbeat-*'],
+  severity: 'high',
+  risk_score: 55,
+  rule_id: ruleId,
+  type: 'eql',
+  language: 'eql',
+  query: 'process where process.name == "regsvr32.exe"',
 });

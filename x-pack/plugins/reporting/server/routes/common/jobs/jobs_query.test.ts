@@ -5,11 +5,13 @@
  * 2.0.
  */
 
+import { set } from '@kbn/safer-lodash-set';
+
 import { ElasticsearchClient } from '@kbn/core/server';
 import { elasticsearchServiceMock } from '@kbn/core/server/mocks';
-import { set } from '@kbn/safer-lodash-set';
-import { statuses } from '../../../lib';
-import { createMockConfigSchema, createMockReportingCore } from '../../../test_helpers';
+import { JOB_STATUS } from '@kbn/reporting-common';
+import { createMockConfigSchema } from '@kbn/reporting-mocks-server';
+import { createMockReportingCore } from '../../../test_helpers';
 import { jobsQueryFactory } from './jobs_query';
 
 describe('jobsQuery', () => {
@@ -21,7 +23,7 @@ describe('jobsQuery', () => {
     const core = await createMockReportingCore(schema);
 
     client = (await core.getEsClient()).asInternalUser as typeof client;
-    jobsQuery = jobsQueryFactory(core);
+    jobsQuery = jobsQueryFactory(core, { isInternal: false });
   });
 
   describe('list', () => {
@@ -35,8 +37,8 @@ describe('jobsQuery', () => {
     });
 
     it('should pass parameters in the request body', async () => {
-      await jobsQuery.list(['pdf'], { username: 'somebody' }, 1, 10, ['id1', 'id2']);
-      await jobsQuery.list(['pdf'], { username: 'somebody' }, 1, 10, null);
+      await jobsQuery.list({ username: 'somebody' }, 1, 10, ['id1', 'id2']);
+      await jobsQuery.list({ username: 'somebody' }, 1, 10, null);
 
       expect(client.search).toHaveBeenCalledTimes(2);
       expect(client.search).toHaveBeenNthCalledWith(
@@ -49,7 +51,6 @@ describe('jobsQuery', () => {
               {},
               'constant_score.filter.bool.must',
               expect.arrayContaining([
-                { terms: { jobtype: ['pdf'] } },
                 { term: { created_by: 'somebody' } },
                 { ids: { values: ['id1', 'id2'] } },
               ])
@@ -73,7 +74,7 @@ describe('jobsQuery', () => {
     });
 
     it('should return reports list', async () => {
-      await expect(jobsQuery.list(['pdf'], { username: 'somebody' }, 0, 10, [])).resolves.toEqual(
+      await expect(jobsQuery.list({ username: 'somebody' }, 0, 10, [])).resolves.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: 'id1', jobtype: 'pdf' }),
           expect.objectContaining({ id: 'id2', jobtype: 'csv' }),
@@ -84,9 +85,7 @@ describe('jobsQuery', () => {
     it('should return an empty array when there are no hits', async () => {
       client.search.mockResponse({} as Awaited<ReturnType<ElasticsearchClient['search']>>);
 
-      await expect(
-        jobsQuery.list(['pdf'], { username: 'somebody' }, 0, 10, [])
-      ).resolves.toHaveLength(0);
+      await expect(jobsQuery.list({ username: 'somebody' }, 0, 10, [])).resolves.toHaveLength(0);
     });
 
     it('should reject if the report source is missing', async () => {
@@ -94,9 +93,9 @@ describe('jobsQuery', () => {
         set<Awaited<ReturnType<ElasticsearchClient['search']>>>({}, 'hits.hits', [{}])
       );
 
-      await expect(
-        jobsQuery.list(['pdf'], { username: 'somebody' }, 0, 10, [])
-      ).rejects.toBeInstanceOf(Error);
+      await expect(jobsQuery.list({ username: 'somebody' }, 0, 10, [])).rejects.toBeInstanceOf(
+        Error
+      );
     });
   });
 
@@ -106,7 +105,7 @@ describe('jobsQuery', () => {
     });
 
     it('should pass parameters in the request body', async () => {
-      await jobsQuery.count(['pdf'], { username: 'somebody' });
+      await jobsQuery.count({ username: 'somebody' });
 
       expect(client.count).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -114,10 +113,7 @@ describe('jobsQuery', () => {
             query: set(
               {},
               'constant_score.filter.bool.must',
-              expect.arrayContaining([
-                { terms: { jobtype: ['pdf'] } },
-                { term: { created_by: 'somebody' } },
-              ])
+              expect.arrayContaining([{ term: { created_by: 'somebody' } }])
             ),
           }),
         })
@@ -125,7 +121,7 @@ describe('jobsQuery', () => {
     });
 
     it('should return reports number', async () => {
-      await expect(jobsQuery.count(['pdf'], { username: 'somebody' })).resolves.toBe(10);
+      await expect(jobsQuery.count({ username: 'somebody' })).resolves.toBe(10);
     });
   });
 
@@ -184,7 +180,7 @@ describe('jobsQuery', () => {
               _id: 'id1',
               jobtype: 'pdf',
               output: { content: 'Some error' },
-              status: statuses.JOB_STATUS_FAILED,
+              status: JOB_STATUS.FAILED,
             },
           },
         ])
@@ -218,7 +214,7 @@ describe('jobsQuery', () => {
             _source: {
               _id: 'id1',
               jobtype: 'pdf',
-              status: statuses.JOB_STATUS_PENDING,
+              status: JOB_STATUS.PENDING,
             },
           },
         ])

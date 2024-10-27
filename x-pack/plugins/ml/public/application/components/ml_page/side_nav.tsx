@@ -7,8 +7,9 @@
 
 import { i18n } from '@kbn/i18n';
 import type { EuiSideNavItemType } from '@elastic/eui';
-import React, { ReactNode, useCallback, useMemo } from 'react';
-import { CHANGE_POINT_DETECTION_ENABLED } from '@kbn/aiops-plugin/common';
+import type { ReactNode } from 'react';
+import React, { useCallback, useMemo } from 'react';
+import { CHANGE_POINT_DETECTION_ENABLED } from '@kbn/aiops-change-point-detection/constants';
 import { useUrlState } from '@kbn/ml-url-state';
 import { NotificationsIndicator } from './notifications_indicator';
 import type { MlLocatorParams } from '../../../../common/types/locator';
@@ -151,6 +152,18 @@ export function useSideNavItems(activeRoute: MlRoute | undefined) {
             testSubj: 'mlMainTab settings',
             highlightNestedRoutes: true,
           },
+          {
+            id: 'supplied_cofigurations',
+            name: i18n.translate(
+              'xpack.ml.navMenu.anomalyDetection.suppliedConfigurationsLinkText',
+              {
+                defaultMessage: 'Supplied Configurations',
+              }
+            ),
+            disabled: disableLinks,
+            pathId: ML_PAGES.SUPPLIED_CONFIGURATIONS,
+            testSubj: 'mlMainTab suppliedConfigurations',
+          },
         ],
       },
       {
@@ -235,13 +248,23 @@ export function useSideNavItems(activeRoute: MlRoute | undefined) {
             testSubj: 'mlMainTab indexDataVisualizer',
           },
           {
-            id: 'data_comparison',
-            pathId: ML_PAGES.DATA_COMPARISON_INDEX_SELECT,
+            id: 'esql_datavisualizer',
+            pathId: ML_PAGES.DATA_VISUALIZER_ESQL,
+            name: i18n.translate('xpack.ml.navMenu.esqlDataVisualizerLinkText', {
+              defaultMessage: 'ES|QL',
+            }),
+            disabled: false,
+            testSubj: 'mlMainTab esqlDataVisualizer',
+          },
+
+          {
+            id: 'data_drift',
+            pathId: ML_PAGES.DATA_DRIFT_INDEX_SELECT,
             name: i18n.translate('xpack.ml.navMenu.dataComparisonText', {
-              defaultMessage: 'Data Comparison',
+              defaultMessage: 'Data Drift',
             }),
             disabled: disableLinks,
-            testSubj: 'mlMainTab dataComparison',
+            testSubj: 'mlMainTab dataDrift',
           },
         ],
       },

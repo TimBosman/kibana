@@ -1,13 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { SavedObjectMetaData } from '@kbn/saved-objects-finder-plugin/public';
 import { PersistableState } from '@kbn/kibana-utils-plugin/common';
+import type { FinderAttributes } from '@kbn/saved-objects-finder-plugin/common';
 import { UiActionsPresentableGrouping } from '@kbn/ui-actions-plugin/public';
 import { EmbeddableInput, EmbeddableOutput, IEmbeddable } from './i_embeddable';
 import { ErrorEmbeddable } from './error_embeddable';
@@ -24,6 +26,17 @@ export interface OutputSpec {
   [key: string]: PropertySpec;
 }
 
+export interface ExplicitInputWithAttributes {
+  newInput: Partial<EmbeddableInput>;
+  attributes?: unknown;
+}
+
+export const isExplicitInputWithAttributes = (
+  value: ExplicitInputWithAttributes | Partial<EmbeddableInput>
+): value is ExplicitInputWithAttributes => {
+  return Boolean((value as ExplicitInputWithAttributes).newInput);
+};
+
 /**
  * EmbeddableFactories create and initialize an embeddable instance
  */
@@ -34,7 +47,7 @@ export interface EmbeddableFactory<
     TEmbeddableInput,
     TEmbeddableOutput
   >,
-  TSavedObjectAttributes = unknown
+  TSavedObjectAttributes extends FinderAttributes = FinderAttributes
 > extends PersistableState<EmbeddableStateWithType> {
   /**
    * The version of this Embeddable factory. This will be used in the client side migration system
@@ -106,8 +119,14 @@ export interface EmbeddableFactory<
    * input passed down from the parent container.
    *
    * Can be used to edit an embeddable by re-requesting explicit input. Initial input can be provided to allow the editor to show the current state.
+   *
+   * If saved object information is needed for creation use-cases, getExplicitInput can also return an unknown typed attributes object which will be passed
+   * into the container's addNewEmbeddable function.
    */
-  getExplicitInput(initialInput?: Partial<TEmbeddableInput>): Promise<Partial<TEmbeddableInput>>;
+  getExplicitInput(
+    initialInput?: Partial<TEmbeddableInput>,
+    parent?: IContainer
+  ): Promise<Partial<TEmbeddableInput> | ExplicitInputWithAttributes>;
 
   /**
    * Creates a new embeddable instance based off the saved object id.
@@ -130,4 +149,6 @@ export interface EmbeddableFactory<
     initialInput: TEmbeddableInput,
     parent?: IContainer
   ): Promise<TEmbeddable | ErrorEmbeddable | undefined>;
+
+  order?: number;
 }

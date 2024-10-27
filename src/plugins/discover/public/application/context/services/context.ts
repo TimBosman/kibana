@@ -1,18 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import type { Filter } from '@kbn/es-query';
 import { DataView } from '@kbn/data-views-plugin/public';
 import { DataPublicPluginStart, ISearchSource } from '@kbn/data-plugin/public';
 import type { DataTableRecord } from '@kbn/discover-utils/types';
-import {
-  removeInterceptedWarningDuplicates,
-  type SearchResponseInterceptedWarning,
-} from '@kbn/search-response-warnings';
+import type { SearchResponseWarning } from '@kbn/search-response-warnings';
 import { reverseSortDir, SortDirection } from '../utils/sorting';
 import { convertIsoToMillis, extractNanos } from '../utils/date_conversion';
 import { fetchHitsInInterval } from '../utils/fetch_hits_in_interval';
@@ -59,9 +58,9 @@ export async function fetchSurroundingDocs(
   services: DiscoverServices
 ): Promise<{
   rows: DataTableRecord[];
-  interceptedWarnings: SearchResponseInterceptedWarning[] | undefined;
+  interceptedWarnings: SearchResponseWarning[] | undefined;
 }> {
-  if (typeof anchor !== 'object' || anchor === null || !size) {
+  if (typeof anchor !== 'object' || anchor === null || !anchor.raw._id || !size) {
     return {
       rows: [],
       interceptedWarnings: undefined,
@@ -74,12 +73,13 @@ export async function fetchSurroundingDocs(
   const anchorRaw = anchor.raw!;
 
   const nanos = dataView.isTimeNanosBased() ? extractNanos(anchorRaw.fields?.[timeField][0]) : '';
-  const timeValueMillis =
-    nanos !== '' ? convertIsoToMillis(anchorRaw.fields?.[timeField][0]) : anchorRaw.sort?.[0];
+  const timeValueMillis = convertIsoToMillis(
+    nanos !== '' ? anchorRaw.fields?.[timeField][0] : anchorRaw.sort?.[0]
+  );
 
-  const intervals = generateIntervals(LOOKUP_OFFSETS, timeValueMillis as number, type, sortDir);
+  const intervals = generateIntervals(LOOKUP_OFFSETS, timeValueMillis, type, sortDir);
   let rows: DataTableRecord[] = [];
-  let interceptedWarnings: SearchResponseInterceptedWarning[] = [];
+  let interceptedWarnings: SearchResponseWarning[] = [];
 
   for (const interval of intervals) {
     const remainingSize = size - rows.length;
@@ -126,7 +126,7 @@ export async function fetchSurroundingDocs(
 
   return {
     rows,
-    interceptedWarnings: removeInterceptedWarningDuplicates(interceptedWarnings),
+    interceptedWarnings,
   };
 }
 
@@ -138,7 +138,7 @@ export function updateSearchSource(
 ) {
   if (useNewFieldsApi) {
     searchSource.removeField('fieldsFromSource');
-    searchSource.setField('fields', [{ field: '*', include_unmapped: 'true' }]);
+    searchSource.setField('fields', [{ field: '*', include_unmapped: true }]);
   }
   return searchSource
     .setParent(undefined)

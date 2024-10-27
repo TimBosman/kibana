@@ -25,7 +25,7 @@ export const dataQualityIndexCheckedEvent: DataQualityTelemetryIndexCheckedEvent
       type: 'keyword',
       _meta: {
         description: 'Index uuid',
-        optional: false,
+        optional: true,
       },
     },
     indexName: {
@@ -46,6 +46,13 @@ export const dataQualityIndexCheckedEvent: DataQualityTelemetryIndexCheckedEvent
       type: 'integer',
       _meta: {
         description: 'Number of indices checked',
+        optional: true,
+      },
+    },
+    numberOfSameFamily: {
+      type: 'integer',
+      _meta: {
+        description: 'Number of same family',
         optional: true,
       },
     },
@@ -70,10 +77,31 @@ export const dataQualityIndexCheckedEvent: DataQualityTelemetryIndexCheckedEvent
         optional: true,
       },
     },
+    numberOfFields: {
+      type: 'integer',
+      _meta: {
+        description: 'Total number of fields',
+        optional: true,
+      },
+    },
     numberOfIncompatibleFields: {
       type: 'integer',
       _meta: {
         description: 'Number of incompatible fields',
+        optional: true,
+      },
+    },
+    numberOfEcsFields: {
+      type: 'integer',
+      _meta: {
+        description: 'Number of ecs compatible fields',
+        optional: true,
+      },
+    },
+    numberOfCustomFields: {
+      type: 'integer',
+      _meta: {
+        description: 'Number of custom fields',
         optional: true,
       },
     },
@@ -96,6 +124,15 @@ export const dataQualityIndexCheckedEvent: DataQualityTelemetryIndexCheckedEvent
       _meta: {
         description: 'Is triggered by check all button',
         optional: true,
+      },
+    },
+    sameFamilyFields: {
+      type: 'array',
+      items: {
+        type: 'keyword',
+        _meta: {
+          description: 'Same Family fields',
+        },
       },
     },
     unallowedMappingFields: {
@@ -150,6 +187,13 @@ export const dataQualityCheckAllClickedEvent: DataQualityTelemetryCheckAllComple
         optional: true,
       },
     },
+    numberOfSameFamily: {
+      type: 'integer',
+      _meta: {
+        description: 'Number of same family',
+        optional: true,
+      },
+    },
     timeConsumedMs: {
       type: 'integer',
       _meta: {
@@ -164,10 +208,31 @@ export const dataQualityCheckAllClickedEvent: DataQualityTelemetryCheckAllComple
         optional: true,
       },
     },
+    numberOfFields: {
+      type: 'integer',
+      _meta: {
+        description: 'Total number of fields',
+        optional: true,
+      },
+    },
     numberOfIncompatibleFields: {
       type: 'integer',
       _meta: {
         description: 'Number of incompatible fields',
+        optional: true,
+      },
+    },
+    numberOfEcsFields: {
+      type: 'integer',
+      _meta: {
+        description: 'Number of ecs compatible fields',
+        optional: true,
+      },
+    },
+    numberOfCustomFields: {
+      type: 'integer',
+      _meta: {
+        description: 'Number of custom fields',
         optional: true,
       },
     },

@@ -11,7 +11,14 @@ import path from 'path';
 import yargs from 'yargs';
 import { execSync } from 'child_process';
 
-const CONFIG_PATH = '../../../test/functional/config.base.js';
+const requireMain = require.main;
+let appDir = process.cwd();
+if (requireMain) {
+  appDir = path.dirname(requireMain.filename);
+}
+
+const CONFIG_PATH = path.resolve(appDir, '../../../../../test/functional/config.base.js');
+const ES_ARCHIVER_PATH = path.resolve(appDir, '../../../../../scripts/es_archiver');
 
 const loadAllIndices = (esUrl: string, kibanaUrl: string, mappingsDir: string) => {
   const exec = (cmd: string) => execSync(cmd, { stdio: 'inherit' });
@@ -40,7 +47,7 @@ const loadAllIndices = (esUrl: string, kibanaUrl: string, mappingsDir: string) =
           return;
         }
         exec(
-          `node ../../../scripts/es_archiver load ${fullPath} --config "${CONFIG_PATH}" --es-url=${esUrl} --kibana-url=${kibanaUrl}`
+          `node ${ES_ARCHIVER_PATH} load ${fullPath} --config "${CONFIG_PATH}" --es-url=${esUrl} --kibana-url=${kibanaUrl}`
         );
       });
     });
@@ -58,7 +65,7 @@ const main = () => {
     .option('kibana-url', {
       demandOption: false,
       type: 'string',
-      default: 'http://elastic:changeme@localhost:5601/app',
+      default: 'http://elastic:changeme@localhost:5601/kbn/app',
       description: 'The url for Kibana',
     })
     .option('mappings-dir', {

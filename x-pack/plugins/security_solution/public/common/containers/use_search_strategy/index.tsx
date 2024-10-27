@@ -4,18 +4,18 @@
  * 2.0; you may not use this file except in compliance with the Elastic License
  * 2.0.
  */
-import { filter } from 'rxjs/operators';
+import { catchError, filter, tap } from 'rxjs';
 import { noop, omit } from 'lodash/fp';
 import { useCallback, useEffect, useRef, useMemo } from 'react';
 import type { Observable } from 'rxjs';
 import { useObservable } from '@kbn/securitysolution-hook-utils';
-import { isCompleteResponse, isErrorResponse } from '@kbn/data-plugin/public';
+import { isRunningResponse } from '@kbn/data-plugin/public';
 import { AbortError } from '@kbn/kibana-utils-plugin/common';
 import * as i18n from './translations';
 
 import type {
   FactoryQueryTypes,
-  StrategyRequestType,
+  StrategyRequestInputType,
   StrategyResponseType,
 } from '../../../../common/search_strategy/security_solution';
 import { getInspectResponse } from '../../../helpers';
@@ -26,7 +26,7 @@ import { useTrackHttpRequest } from '../../lib/apm/use_track_http_request';
 import { APP_UI_ID } from '../../../../common/constants';
 
 interface UseSearchFunctionParams<QueryType extends FactoryQueryTypes> {
-  request: StrategyRequestType<QueryType>;
+  request: Omit<StrategyRequestInputType<QueryType>, 'factoryQueryType'>;
   abortSignal: AbortSignal;
 }
 
@@ -35,7 +35,7 @@ type UseSearchFunction<QueryType extends FactoryQueryTypes> = (
 ) => Observable<StrategyResponseType<QueryType>>;
 
 type SearchFunction<QueryType extends FactoryQueryTypes> = (
-  params: StrategyRequestType<QueryType>
+  params: Omit<StrategyRequestInputType<QueryType>, 'factoryQueryType'>
 ) => void;
 
 const EMPTY_INSPECT = {
@@ -55,27 +55,22 @@ export const useSearch = <QueryType extends FactoryQueryTypes>(
         name: `${APP_UI_ID} searchStrategy ${factoryQueryType}`,
         spanName: 'batched search',
       });
-
-      const observable = data.search
-        .search<StrategyRequestType<QueryType>, StrategyResponseType<QueryType>>(
-          { ...request, factoryQueryType },
-          {
-            strategy: 'securitySolutionSearchStrategy',
-            abortSignal,
-          }
+      // return observable directly, any extra subscription causes duplicate requests
+      return data.search
+        .search<StrategyRequestInputType<QueryType>, StrategyResponseType<QueryType>>(
+          { ...request, factoryQueryType } as StrategyRequestInputType<QueryType>,
+          { strategy: 'securitySolutionSearchStrategy', abortSignal }
         )
-        .pipe(filter((response) => isCompleteResponse(response)));
-
-      observable.subscribe({
-        next: (response) => {
-          endTracking('success');
-        },
-        error: () => {
-          endTracking(abortSignal.aborted ? 'aborted' : 'error');
-        },
-      });
-
-      return observable;
+        .pipe(
+          filter((response) => !isRunningResponse(response)),
+          catchError((error) => {
+            endTracking(abortSignal.aborted ? 'aborted' : 'error');
+            throw error;
+          }),
+          tap(() => {
+            endTracking('success');
+          })
+        );
     },
     [data.search, factoryQueryType, startTracking]
   );
@@ -131,10 +126,7 @@ export const useSearchStrategy = <QueryType extends FactoryQueryTypes>({
     (request) => {
       const startSearch = () => {
         abortCtrl.current = new AbortController();
-        start({
-          request,
-          abortSignal: abortCtrl.current.signal,
-        });
+        start({ request, abortSignal: abortCtrl.current.signal });
       };
 
       abortCtrl.current.abort();
@@ -158,7 +150,7 @@ export const useSearchStrategy = <QueryType extends FactoryQueryTypes>({
   }, [abort]);
 
   const [formattedResult, inspect] = useMemo(() => {
-    if (isErrorResponse(result)) {
+    if (!result) {
       return [initialResult, EMPTY_INSPECT];
     }
     return [

@@ -6,10 +6,12 @@
  */
 
 import { i18n } from '@kbn/i18n';
+import { KibanaFeatureScope } from '@kbn/features-plugin/common';
 
 import { DEFAULT_APP_CATEGORIES } from '@kbn/core-application-common';
 import {
   EQL_RULE_TYPE_ID,
+  ESQL_RULE_TYPE_ID,
   INDICATOR_RULE_TYPE_ID,
   ML_RULE_TYPE_ID,
   NEW_TERMS_RULE_TYPE_ID,
@@ -18,11 +20,18 @@ import {
   THRESHOLD_RULE_TYPE_ID,
 } from '@kbn/securitysolution-rules';
 import type { BaseKibanaFeatureConfig } from '../types';
-import { APP_ID, SERVER_APP_ID, LEGACY_NOTIFICATIONS_ID, CLOUD_POSTURE_APP_ID } from '../constants';
+import {
+  APP_ID,
+  SERVER_APP_ID,
+  LEGACY_NOTIFICATIONS_ID,
+  CLOUD_POSTURE_APP_ID,
+  CLOUD_DEFEND_APP_ID,
+} from '../constants';
 import type { SecurityFeatureParams } from './types';
 
 const SECURITY_RULE_TYPES = [
   LEGACY_NOTIFICATIONS_ID,
+  ESQL_RULE_TYPE_ID,
   EQL_RULE_TYPE_ID,
   INDICATOR_RULE_TYPE_ID,
   ML_RULE_TYPE_ID,
@@ -44,15 +53,23 @@ export const getSecurityBaseKibanaFeature = ({
   ),
   order: 1100,
   category: DEFAULT_APP_CATEGORIES.security,
-  app: [APP_ID, CLOUD_POSTURE_APP_ID, 'kibana'],
+  scope: [KibanaFeatureScope.Spaces, KibanaFeatureScope.Security],
+  app: [APP_ID, CLOUD_POSTURE_APP_ID, CLOUD_DEFEND_APP_ID, 'kibana'],
   catalogue: [APP_ID],
   management: {
     insightsAndAlerting: ['triggersActions'],
   },
   alerting: SECURITY_RULE_TYPES,
+  description: i18n.translate(
+    'securitySolutionPackages.features.featureRegistry.securityGroupDescription',
+    {
+      defaultMessage:
+        "Each sub-feature privilege in this group must be assigned individually. Global assignment is only supported if your pricing plan doesn't allow individual feature privileges.",
+    }
+  ),
   privileges: {
     all: {
-      app: [APP_ID, CLOUD_POSTURE_APP_ID, 'kibana'],
+      app: [APP_ID, CLOUD_POSTURE_APP_ID, CLOUD_DEFEND_APP_ID, 'kibana'],
       catalogue: [APP_ID],
       api: [
         APP_ID,
@@ -62,6 +79,8 @@ export const getSecurityBaseKibanaFeature = ({
         'rac',
         'cloud-security-posture-all',
         'cloud-security-posture-read',
+        'cloud-defend-all',
+        'cloud-defend-read',
       ],
       savedObject: {
         all: ['alert', ...savedObjects],
@@ -81,9 +100,9 @@ export const getSecurityBaseKibanaFeature = ({
       ui: ['show', 'crud'],
     },
     read: {
-      app: [APP_ID, CLOUD_POSTURE_APP_ID, 'kibana'],
+      app: [APP_ID, CLOUD_POSTURE_APP_ID, CLOUD_DEFEND_APP_ID, 'kibana'],
       catalogue: [APP_ID],
-      api: [APP_ID, 'lists-read', 'rac', 'cloud-security-posture-read'],
+      api: [APP_ID, 'lists-read', 'rac', 'cloud-security-posture-read', 'cloud-defend-read'],
       savedObject: {
         all: [],
         read: [...savedObjects],

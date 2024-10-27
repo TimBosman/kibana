@@ -6,22 +6,18 @@
  */
 
 import { exportTimeline } from '../../../tasks/timelines';
-import { login, visitWithoutDateRange } from '../../../tasks/login';
-import {
-  expectedExportedTimelineTemplate,
-  getTimeline as getTimelineTemplate,
-} from '../../../objects/timeline';
+import { login } from '../../../tasks/login';
+import { visit } from '../../../tasks/navigation';
+import { expectedExportedTimelineTemplate } from '../../../objects/timeline';
 
 import { TIMELINE_TEMPLATES_URL } from '../../../urls/navigation';
-import { createTimelineTemplate } from '../../../tasks/api_calls/timelines';
-import { cleanKibana } from '../../../tasks/common';
+import { createTimelineTemplate, deleteTimelines } from '../../../tasks/api_calls/timelines';
 import { searchByTitle } from '../../../tasks/table_pagination';
 
 describe('Export timelines', { tags: ['@ess', '@serverless'] }, () => {
-  before(() => {
-    cleanKibana();
-
-    createTimelineTemplate(getTimelineTemplate()).then((response) => {
+  beforeEach(() => {
+    deleteTimelines();
+    createTimelineTemplate().then((response) => {
       cy.wrap(response).as('templateResponse');
       cy.wrap(response.body.data.persistTimeline.timeline.savedObjectId).as('templateId');
       cy.wrap(response.body.data.persistTimeline.timeline.title).as('templateTitle');
@@ -34,7 +30,7 @@ describe('Export timelines', { tags: ['@ess', '@serverless'] }, () => {
       path: '/api/timeline/_export?file_name=timelines_export.ndjson',
     }).as('export');
     login();
-    visitWithoutDateRange(TIMELINE_TEMPLATES_URL);
+    visit(TIMELINE_TEMPLATES_URL);
     searchByTitle(this.templateTitle);
     exportTimeline(this.templateId);
 

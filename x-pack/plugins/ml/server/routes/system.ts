@@ -6,13 +6,14 @@
  */
 
 import { schema } from '@kbn/config-schema';
+import type * as estypes from '@elastic/elasticsearch/lib/api/typesWithBodyKey';
 
 import { ML_INTERNAL_BASE_PATH } from '../../common/constants/app';
 import { wrapError } from '../client/error_wrapper';
 import { mlLog } from '../lib/log';
 import { capabilitiesProvider } from '../lib/capabilities';
 import { spacesUtilsProvider } from '../lib/spaces_utils';
-import { RouteInitialization, SystemRouteDeps } from '../types';
+import type { RouteInitialization, SystemRouteDeps } from '../types';
 import { getMlNodeCount } from '../lib/node_utils';
 
 /**
@@ -22,13 +23,6 @@ export function systemRoutes(
   { router, mlLicense, routeGuard }: RouteInitialization,
   { getSpaces, cloud, resolveMlCapabilities }: SystemRouteDeps
 ) {
-  /**
-   * @apiGroup SystemRoutes
-   *
-   * @api {post} /internal/ml/_has_privileges Check privileges
-   * @apiName HasPrivileges
-   * @apiDescription Checks if the user has required privileges
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/_has_privileges`,
@@ -36,6 +30,8 @@ export function systemRoutes(
       options: {
         tags: ['access:ml:canGetMlInfo'],
       },
+      summary: 'Check privileges',
+      description: 'Checks if the user has required privileges',
     })
     .addVersion(
       {
@@ -73,7 +69,6 @@ export function systemRoutes(
             // return that security is disabled and don't call the privilegeCheck endpoint
             return response.ok({
               body: {
-                securityDisabled: true,
                 upgradeInProgress,
               },
             });
@@ -81,7 +76,7 @@ export function systemRoutes(
             const body = await asCurrentUser.security.hasPrivileges({ body: request.body });
             return response.ok({
               body: {
-                ...body,
+                hasPrivileges: body,
                 upgradeInProgress,
               },
             });
@@ -92,17 +87,12 @@ export function systemRoutes(
       })
     );
 
-  /**
-   * @apiGroup SystemRoutes
-   *
-   * @api {get} /internal/ml/ml_capabilities Check ML capabilities
-   * @apiName MlCapabilitiesResponse
-   * @apiDescription Checks ML capabilities
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/ml_capabilities`,
       access: 'internal',
+      summary: 'Check ML capabilities',
+      description: 'Checks ML capabilities',
     })
     .addVersion(
       {
@@ -135,20 +125,15 @@ export function systemRoutes(
       })
     );
 
-  /**
-   * @apiGroup SystemRoutes
-   *
-   * @api {get} /internal/ml/ml_node_count Get the amount of ML nodes
-   * @apiName MlNodeCount
-   * @apiDescription Returns the amount of ML nodes.
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/ml_node_count`,
       access: 'internal',
       options: {
-        tags: ['access:ml:canGetJobs', 'access:ml:canGetDatafeeds'],
+        tags: ['access:ml:canGetMlInfo'],
       },
+      summary: 'Get the number of ML nodes',
+      description: 'Returns the number of ML nodes',
     })
     .addVersion(
       {
@@ -166,13 +151,6 @@ export function systemRoutes(
       })
     );
 
-  /**
-   * @apiGroup SystemRoutes
-   *
-   * @api {get} /internal/ml/info Get ML info
-   * @apiName MlInfo
-   * @apiDescription Returns defaults and limits used by machine learning.
-   */
   router.versioned
     .get({
       path: `${ML_INTERNAL_BASE_PATH}/info`,
@@ -180,20 +158,36 @@ export function systemRoutes(
       options: {
         tags: ['access:ml:canGetMlInfo'],
       },
+      summary: 'Get ML info',
+      description: 'Returns defaults and limits used by machine learning',
     })
     .addVersion(
       {
         version: '1',
         validate: false,
       },
-      routeGuard.basicLicenseAPIGuard(async ({ mlClient, response }) => {
+      routeGuard.basicLicenseAPIGuard(async ({ mlClient, response, client }) => {
         try {
           const body = await mlClient.info();
           const cloudId = cloud?.cloudId;
           const isCloudTrial = cloud?.trialEndDate && Date.now() < cloud.trialEndDate.getTime();
 
+          let isMlAutoscalingEnabled = false;
+          try {
+            await client.asInternalUser.autoscaling.getAutoscalingPolicy({ name: 'ml' });
+            isMlAutoscalingEnabled = true;
+          } catch (e) {
+            // If doesn't exist, then keep the false
+          }
+
           return response.ok({
-            body: { ...body, cloudId, isCloudTrial },
+            body: {
+              ...body,
+              cloudId,
+              isCloudTrial,
+              cloudUrl: cloud.baseUrl,
+              isMlAutoscalingEnabled,
+            },
           });
         } catch (error) {
           return response.customError(wrapError(error));
@@ -201,14 +195,6 @@ export function systemRoutes(
       })
     );
 
-  /**
-   * @apiGroup SystemRoutes
-   *
-   * @apiDeprecated
-   *
-   * @api {post} /internal/ml/es_search ES Search wrapper
-   * @apiName MlEsSearch
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/es_search`,
@@ -216,6 +202,9 @@ export function systemRoutes(
       options: {
         tags: ['access:ml:canGetJobs'],
       },
+      summary: 'ES Search wrapper',
+      // @ts-expect-error TODO(https://github.com/elastic/kibana/issues/196095): Replace {RouteDeprecationInfo}
+      deprecated: true,
     })
     .addVersion(
       {
@@ -238,12 +227,6 @@ export function systemRoutes(
       })
     );
 
-  /**
-   * @apiGroup SystemRoutes
-   *
-   * @api {post} /internal/ml/index_exists ES Field caps wrapper checks if index exists
-   * @apiName MlIndexExists
-   */
   router.versioned
     .post({
       path: `${ML_INTERNAL_BASE_PATH}/index_exists`,
@@ -251,6 +234,7 @@ export function systemRoutes(
       options: {
         tags: ['access:ml:canGetFieldInfo'],
       },
+      summary: 'ES Field caps wrapper checks if index exists',
     })
     .addVersion(
       {
@@ -276,6 +260,42 @@ export function systemRoutes(
             acc[cur] = { exists: results[i] };
             return acc;
           }, {} as Record<string, { exists: boolean }>);
+
+          return response.ok({
+            body: result,
+          });
+        } catch (error) {
+          return response.customError(wrapError(error));
+        }
+      })
+    );
+
+  router.versioned
+    .post({
+      path: `${ML_INTERNAL_BASE_PATH}/reindex_with_pipeline`,
+      access: 'internal',
+      options: {
+        tags: ['access:ml:canCreateTrainedModels'],
+      },
+      summary: 'ES reindex wrapper to reindex with pipeline',
+    })
+    .addVersion(
+      {
+        version: '1',
+        validate: {
+          request: {
+            body: schema.any(),
+          },
+        },
+      },
+      routeGuard.fullLicenseAPIGuard(async ({ client, request, response }) => {
+        const reindexRequest = {
+          body: request.body,
+          // Create a task and return task id instead of blocking until complete
+          wait_for_completion: false,
+        } as estypes.ReindexRequest;
+        try {
+          const result = await client.asCurrentUser.reindex(reindexRequest);
 
           return response.ok({
             body: result,

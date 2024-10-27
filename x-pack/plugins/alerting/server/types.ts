@@ -11,6 +11,7 @@ import type {
   SavedObjectReference,
   IUiSettingsClient,
 } from '@kbn/core/server';
+import { z } from '@kbn/zod';
 import { DataViewsContract } from '@kbn/data-views-plugin/common';
 import { ISearchStartSearchSource } from '@kbn/data-plugin/common';
 import { LicenseType } from '@kbn/licensing-plugin/server';
@@ -20,15 +21,22 @@ import {
   SavedObjectsClientContract,
   Logger,
 } from '@kbn/core/server';
+import type { ObjectType } from '@kbn/config-schema';
 import type { PublicMethodsOf } from '@kbn/utility-types';
 import { SharePluginStart } from '@kbn/share-plugin/server';
-import type { FieldMap } from '@kbn/alerts-as-data-utils';
+import type { DefaultAlert, FieldMap } from '@kbn/alerts-as-data-utils';
 import { Alert } from '@kbn/alerts-as-data-utils';
 import { Filter } from '@kbn/es-query';
+import { ActionsApiRequestHandlerContext } from '@kbn/actions-plugin/server';
+import { AlertsHealth } from '@kbn/alerting-types';
 import { RuleTypeRegistry as OrigruleTypeRegistry } from './rule_type_registry';
 import { PluginSetupContract, PluginStartContract } from './plugin';
 import { RulesClient } from './rules_client';
-import { RulesSettingsClient, RulesSettingsFlappingClient } from './rules_settings_client';
+import {
+  RulesSettingsClient,
+  RulesSettingsFlappingClient,
+  RulesSettingsQueryDelayClient,
+} from './rules_settings';
 import { MaintenanceWindowClient } from './maintenance_window_client';
 export * from '../common';
 import {
@@ -43,7 +51,6 @@ import {
   ActionGroup,
   AlertInstanceContext,
   AlertInstanceState,
-  AlertsHealth,
   WithoutReservedActionGroups,
   ActionVariable,
   SanitizedRuleConfig,
@@ -56,10 +63,13 @@ import {
   AlertsFilter,
   AlertsFilterTimeframe,
   RuleAlertData,
+  AlertDelay,
+  Flapping,
 } from '../common';
 import { PublicAlertFactory } from './alert/create_alert_factory';
 import { RulesSettingsFlappingProperties } from '../common/rules_settings';
 import { PublicAlertsClient } from './alerts_client/types';
+import { GetTimeRangeResult } from './lib/get_time_range';
 export type WithoutQueryAndParams<T> = Pick<T, Exclude<keyof T, 'query' | 'params'>>;
 export type SpaceIdToNamespaceFunction = (spaceId?: string) => string | undefined;
 export type { RuleTypeParams };
@@ -68,7 +78,7 @@ export type { RuleTypeParams };
  */
 export interface AlertingApiRequestHandlerContext {
   getRulesClient: () => RulesClient;
-  getRulesSettingsClient: () => RulesSettingsClient;
+  getRulesSettingsClient: (withoutAuth?: boolean) => RulesSettingsClient;
   getMaintenanceWindowClient: () => MaintenanceWindowClient;
   listTypes: RuleTypeRegistry['list'];
   getFrameworkHealth: () => Promise<AlertsHealth>;
@@ -80,6 +90,7 @@ export interface AlertingApiRequestHandlerContext {
  */
 export type AlertingRequestHandlerContext = CustomRequestHandlerContext<{
   alerting: AlertingApiRequestHandlerContext;
+  actions: ActionsApiRequestHandlerContext;
 }>;
 
 /**
@@ -92,27 +103,28 @@ export interface RuleExecutorServices<
   ActionGroupIds extends string = never,
   AlertData extends RuleAlertData = RuleAlertData
 > {
-  searchSourceClient: ISearchStartSearchSource;
-  savedObjectsClient: SavedObjectsClientContract;
-  uiSettingsClient: IUiSettingsClient;
-  scopedClusterClient: IScopedClusterClient;
+  /**
+   * Only available when framework alerts are enabled and rule
+   * type has registered alert context with the framework with shouldWrite set to true
+   */
+  alertsClient: PublicAlertsClient<AlertData, State, Context, ActionGroupIds> | null;
   /**
    * Deprecate alertFactory and remove when all rules are onboarded to
    * the alertsClient
    * @deprecated
    */
   alertFactory: PublicAlertFactory<State, Context, ActionGroupIds>;
-  /**
-   * Only available when framework alerts are enabled and rule
-   * type has registered alert context with the framework with shouldWrite set to true
-   */
-  alertsClient: PublicAlertsClient<AlertData, State, Context, ActionGroupIds> | null;
-  shouldWriteAlerts: () => boolean;
-  shouldStopExecution: () => boolean;
+  getDataViews: () => Promise<DataViewsContract>;
+  getMaintenanceWindowIds: () => Promise<string[]>;
+  getSearchSourceClient: () => Promise<ISearchStartSearchSource>;
   ruleMonitoringService?: PublicRuleMonitoringService;
-  share: SharePluginStart;
-  dataViews: DataViewsContract;
   ruleResultService?: PublicRuleResultService;
+  savedObjectsClient: SavedObjectsClientContract;
+  scopedClusterClient: IScopedClusterClient;
+  share: SharePluginStart;
+  shouldStopExecution: () => boolean;
+  shouldWriteAlerts: () => boolean;
+  uiSettingsClient: IUiSettingsClient;
 }
 
 export interface RuleExecutorOptions<
@@ -131,10 +143,11 @@ export interface RuleExecutorOptions<
   services: RuleExecutorServices<InstanceState, InstanceContext, ActionGroupIds, AlertData>;
   spaceId: string;
   startedAt: Date;
+  startedAtOverridden: boolean;
   state: State;
   namespace?: string;
   flappingSettings: RulesSettingsFlappingProperties;
-  maintenanceWindowIds?: string[];
+  getTimeRange: (timeWindow?: string) => GetTimeRangeResult;
 }
 
 export interface RuleParamsAndRefs<Params extends RuleTypeParams> {
@@ -174,6 +187,8 @@ export interface SummarizedAlertsChunk {
   data: AlertHit[];
 }
 
+export type ScopedQueryAlerts = Record<string, string[]>;
+
 export interface SummarizedAlerts {
   new: SummarizedAlertsChunk;
   ongoing: SummarizedAlertsChunk;
@@ -201,6 +216,12 @@ interface ComponentTemplateSpec {
 export type FormatAlert<AlertData extends RuleAlertData> = (
   alert: Partial<AlertData>
 ) => Partial<AlertData>;
+
+export const DEFAULT_AAD_CONFIG: IRuleTypeAlerts<DefaultAlert> = {
+  context: `default`,
+  mappings: { fieldMap: {} },
+  shouldWrite: true,
+};
 
 export interface IRuleTypeAlerts<AlertData extends RuleAlertData = never> {
   /**
@@ -273,6 +294,17 @@ export interface RuleType<
   validate: {
     params: RuleTypeParamsValidator<Params>;
   };
+  schemas?: {
+    params?:
+      | {
+          type: 'zod';
+          schema: z.ZodObject<z.ZodRawShape> | z.ZodIntersection<z.ZodTypeAny, z.ZodTypeAny>;
+        }
+      | {
+          type: 'config-schema';
+          schema: ObjectType;
+        };
+  };
   actionGroups: Array<ActionGroup<ActionGroupIds>>;
   defaultActionGroupId: ActionGroup<ActionGroupIds>['id'];
   recoveryActionGroup?: ActionGroup<RecoveryActionGroupId>;
@@ -288,6 +320,7 @@ export interface RuleType<
     WithoutReservedActionGroups<ActionGroupIds, RecoveryActionGroupId>,
     AlertData
   >;
+  category: string;
   producer: string;
   actionVariables?: {
     context?: ActionVariable[];
@@ -371,6 +404,7 @@ export type RulesClientApi = PublicMethodsOf<RulesClient>;
 
 export type RulesSettingsClientApi = PublicMethodsOf<RulesSettingsClient>;
 export type RulesSettingsFlappingClientApi = PublicMethodsOf<RulesSettingsFlappingClient>;
+export type RulesSettingsQueryDelayClientApi = PublicMethodsOf<RulesSettingsQueryDelayClient>;
 
 export type MaintenanceWindowClientApi = PublicMethodsOf<MaintenanceWindowClient>;
 
@@ -383,7 +417,7 @@ export interface PublicMetricsSetters {
 }
 
 export interface PublicLastRunSetters {
-  addLastRunError: (outcome: string) => void;
+  addLastRunError: (message: string, userError?: boolean) => void;
   addLastRunWarning: (outcomeMsg: string) => void;
   setLastRunOutcomeMessage: (warning: string) => void;
 }
@@ -406,7 +440,7 @@ export interface RawRuleAlertsFilter extends AlertsFilter {
 
 export interface RawRuleAction extends SavedObjectAttributes {
   uuid: string;
-  group: string;
+  group?: string;
   actionRef: string;
   actionTypeId: string;
   params: RuleActionParams;
@@ -416,6 +450,7 @@ export interface RawRuleAction extends SavedObjectAttributes {
     throttle: string | null;
   };
   alertsFilter?: RawRuleAlertsFilter;
+  useAlertDataAsTemplate?: boolean;
 }
 
 // note that the `error` property is "null-able", as we're doing a partial
@@ -435,6 +470,9 @@ export interface RawRuleExecutionStatus extends SavedObjectAttributes {
   };
 }
 
+/**
+ * @deprecated in favor of Rule
+ */
 export interface RawRule extends SavedObjectAttributes {
   enabled: boolean;
   name: string;
@@ -467,6 +505,8 @@ export interface RawRule extends SavedObjectAttributes {
   nextRun?: string | null;
   revision: number;
   running?: boolean | null;
+  alertDelay?: AlertDelay;
+  flapping?: Flapping | null;
 }
 
 export type { DataStreamAdapter } from './alerts_service/lib/data_stream_adapter';

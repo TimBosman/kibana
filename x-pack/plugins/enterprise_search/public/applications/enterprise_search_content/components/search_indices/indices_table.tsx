@@ -19,7 +19,7 @@ import {
 
 import { i18n } from '@kbn/i18n';
 
-import { NATIVE_CONNECTOR_DEFINITIONS } from '../../../../../common/connectors/native_connectors';
+import { NATIVE_CONNECTOR_DEFINITIONS } from '@kbn/search-connectors';
 
 import { Meta } from '../../../../../common/types/pagination';
 import { healthColorsMap } from '../../../shared/constants/health_colors';
@@ -120,7 +120,7 @@ export const IndicesTable: React.FC<IndicesTableProps> = ({
             ? i18n.translate(
                 'xpack.enterpriseSearch.content.searchIndices.ingestionmethod.nativeConnector',
                 {
-                  defaultMessage: 'Native connector',
+                  defaultMessage: 'Elastic managed connector',
                 }
               )
             : ingestionMethodToText(index.ingestionMethod)}
@@ -208,6 +208,7 @@ export const IndicesTable: React.FC<IndicesTableProps> = ({
   return (
     <EuiBasicTable
       items={indices}
+      rowHeader="name"
       columns={columns}
       onChange={onChange}
       pagination={{

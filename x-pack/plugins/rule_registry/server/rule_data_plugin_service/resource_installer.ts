@@ -5,7 +5,7 @@
  * 2.0.
  */
 
-import { type Observable } from 'rxjs';
+import { type Observable, firstValueFrom, filter } from 'rxjs';
 import type { ElasticsearchClient, Logger } from '@kbn/core/server';
 import type { PublicMethodsOf } from '@kbn/utility-types';
 import {
@@ -21,6 +21,7 @@ import {
   TOTAL_FIELDS_LIMIT,
   type PublicFrameworkAlertsService,
   type DataStreamAdapter,
+  VALID_ALERT_INDEX_PREFIXES,
 } from '@kbn/alerting-plugin/server';
 import { TECHNICAL_COMPONENT_TEMPLATE_NAME } from '../../common/assets';
 import { technicalComponentTemplate } from '../../common/assets/component_templates/technical_component_template';
@@ -36,6 +37,7 @@ interface ConstructorOptions {
   frameworkAlerts: PublicFrameworkAlertsService;
   pluginStop$: Observable<void>;
   dataStreamAdapter: DataStreamAdapter;
+  elasticsearchAndSOAvailability$: Observable<boolean>;
 }
 
 export type IResourceInstaller = PublicMethodsOf<ResourceInstaller>;
@@ -52,6 +54,11 @@ export class ResourceInstaller {
    *   - component template containing all standard ECS fields
    */
   public async installCommonResources(): Promise<void> {
+    await firstValueFrom(
+      this.options.elasticsearchAndSOAvailability$.pipe(
+        filter((areESAndSOAvailable) => areESAndSOAvailable)
+      )
+    );
     const resourceDescription = 'common resources shared between all indices';
     const { logger, isWriteEnabled } = this.options;
     if (!isWriteEnabled) {
@@ -220,6 +227,7 @@ export class ResourceInstaller {
       alias: indexInfo.getPrimaryAlias(namespace),
       name: indexInfo.getConcreteIndexInitialName(namespace),
       template: indexInfo.getIndexTemplateName(namespace),
+      validPrefixes: VALID_ALERT_INDEX_PREFIXES,
       ...(secondaryNamespacedAlias ? { secondaryAlias: secondaryNamespacedAlias } : {}),
     };
 

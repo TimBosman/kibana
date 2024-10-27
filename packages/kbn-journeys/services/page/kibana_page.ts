@@ -1,28 +1,35 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { subj } from '@kbn/test-subj-selector';
 import { ToolingLog } from '@kbn/tooling-log';
-import { Page } from 'playwright';
+import { ElementHandle, Page } from 'playwright';
+import { Retry } from '..';
 
 interface WaitForRenderArgs {
   expectedItemsCount: number;
+  parentLocator?: string;
   itemLocator: string;
   checkAttribute: string;
+  timeout: number;
 }
 
 export class KibanaPage {
   readonly page: Page;
   readonly log: ToolingLog;
+  readonly retry: Retry;
+  readonly defaultTimeout = 30_000;
 
-  constructor(page: Page, log: ToolingLog) {
+  constructor(page: Page, log: ToolingLog, retry: Retry) {
     this.page = page;
     this.log = log;
+    this.retry = retry;
   }
 
   async waitForHeader() {
@@ -31,45 +38,101 @@ export class KibanaPage {
     });
   }
 
+  async waitForListViewTable() {
+    await this.page.waitForSelector(subj('table-is-ready'), { state: 'visible' });
+  }
+
   async backToDashboardListing() {
     await this.page.click(subj('breadcrumb dashboardListingBreadcrumb first'));
   }
 
-  async waitForRender({ expectedItemsCount, itemLocator, checkAttribute }: WaitForRenderArgs) {
-    try {
-      await this.page.waitForFunction(
-        function renderCompleted(args: WaitForRenderArgs) {
-          const renderingItems = Array.from(document.querySelectorAll(args.itemLocator));
-          const allItemsLoaded = renderingItems.length === args.expectedItemsCount;
-          return allItemsLoaded
-            ? renderingItems.every((e) => e.getAttribute(args.checkAttribute) === 'true')
-            : false;
-        },
-        { expectedItemsCount, itemLocator, checkAttribute }
-      );
-    } catch (err) {
-      const loaded = await this.page.$$(itemLocator);
-      const rendered = await this.page.$$(`${itemLocator}[${checkAttribute}="true"]`);
-      this.log.error(
-        `'waitForRendering' failed: loaded - ${loaded.length}, rendered - ${rendered.length}, expected count - ${expectedItemsCount}`
-      );
-      throw err;
-    }
+  async waitForRender({
+    expectedItemsCount,
+    parentLocator,
+    itemLocator,
+    checkAttribute,
+    timeout,
+  }: WaitForRenderArgs) {
+    // we can't use `page.waitForFunction` because of CSP while testing on Cloud
+    await this.retry.waitForWithTimeout(
+      `rendering of ${expectedItemsCount} elements with selector ${itemLocator} ${
+        parentLocator ? `and ${parentLocator} parent selector` : ''
+      } is completed`,
+      timeout,
+      async () => {
+        const loadingItems: ElementHandle[] = [];
+        if (parentLocator) {
+          const parentElement = await this.page.$(parentLocator);
+          if (parentElement) {
+            loadingItems.push(...(await parentElement.$$(itemLocator)));
+          } else {
+            this.log.debug(`waitForRender: Can't locate ${parentLocator} element`);
+            return false;
+          }
+        } else {
+          loadingItems.push(...(await this.page.$$(itemLocator)));
+        }
+        // check if loading items count is matching the input
+        if (loadingItems.length === expectedItemsCount) {
+          // check if all loaded items are rendered
+          const renderStatuses = await Promise.all(
+            loadingItems.map(async (item) => {
+              return (await item.getAttribute(checkAttribute)) === 'true';
+            })
+          );
+          const rendered = renderStatuses.filter((isRendered) => isRendered === true);
+          this.log.debug(
+            `waitForRender: ${rendered.length} out of ${expectedItemsCount} are rendered...`
+          );
+          return rendered.length === expectedItemsCount;
+        } else {
+          // not all components are loaded yet
+          this.log.debug(
+            `waitForRender: ${loadingItems.length} out of ${expectedItemsCount} are loaded...`
+          );
+          return false;
+        }
+      }
+    );
   }
 
-  async waitForVisualizations(count: number) {
+  async waitForVisualizations({
+    count,
+    timeout = this.defaultTimeout,
+  }: {
+    count: number;
+    timeout?: number;
+  }) {
     await this.waitForRender({
       expectedItemsCount: count,
       itemLocator: '[data-rendering-count]',
       checkAttribute: 'data-render-complete',
+      timeout,
     });
   }
 
-  async waitForCharts(count: number) {
+  async waitForCharts({
+    parentLocator,
+    count,
+    timeout = this.defaultTimeout,
+  }: {
+    parentLocator?: string;
+    count: number;
+    timeout?: number;
+  }) {
     await this.waitForRender({
       expectedItemsCount: count,
-      itemLocator: '.echChartStatus',
+      parentLocator,
+      itemLocator: 'div.echChartStatus',
       checkAttribute: 'data-ech-render-complete',
+      timeout,
+    });
+  }
+
+  async waitForChartsSuggestions(count: number) {
+    await this.retry.waitFor(`rendering of ${count} suggestions is completed`, async () => {
+      const renderingItems = await this.page.$$('button[data-test-subj="lnsSuggestion"]');
+      return renderingItems.length === count;
     });
   }
 

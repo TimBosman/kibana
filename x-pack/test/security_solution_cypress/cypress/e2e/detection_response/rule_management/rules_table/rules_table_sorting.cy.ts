@@ -18,11 +18,11 @@ import {
   getRulesManagementTableRows,
   waitForRuleToUpdate,
 } from '../../../../tasks/alerts_detection_rules';
-import { login, visit } from '../../../../tasks/login';
+import { login } from '../../../../tasks/login';
+import { visit } from '../../../../tasks/navigation';
 
-import { DETECTIONS_RULE_MANAGEMENT_URL } from '../../../../urls/navigation';
+import { RULES_MANAGEMENT_URL } from '../../../../urls/rules_management';
 import { createRule } from '../../../../tasks/api_calls/rules';
-import { cleanKibana } from '../../../../tasks/common';
 import {
   getExistingRule,
   getNewOverrideRule,
@@ -35,23 +35,20 @@ import {
   sortByTableColumn,
 } from '../../../../tasks/table_pagination';
 import { TABLE_FIRST_PAGE, TABLE_SECOND_PAGE } from '../../../../screens/table_pagination';
+import { deleteAlertsAndRules } from '../../../../tasks/api_calls/common';
 
-describe('Rules table: sorting', { tags: ['@ess', '@serverless'] }, () => {
-  before(() => {
-    cleanKibana();
+describe('Rules table: sorting', { tags: ['@ess', '@serverless', '@serverlessQA'] }, () => {
+  beforeEach(() => {
     login();
+    deleteAlertsAndRules();
     createRule(getNewRule({ rule_id: '1', enabled: false }));
     createRule(getExistingRule({ rule_id: '2', enabled: false }));
     createRule(getNewOverrideRule({ rule_id: '3', enabled: false }));
     createRule(getNewThresholdRule({ rule_id: '4', enabled: false }));
   });
 
-  beforeEach(() => {
-    login();
-  });
-
   it('Sorts by enabled rules', () => {
-    visit(DETECTIONS_RULE_MANAGEMENT_URL);
+    visit(RULES_MANAGEMENT_URL);
 
     enableRule(SECOND_RULE);
     waitForRuleToUpdate();
@@ -71,7 +68,7 @@ describe('Rules table: sorting', { tags: ['@ess', '@serverless'] }, () => {
     createRule(getNewRule({ name: 'Test a rule', rule_id: '5', enabled: false }));
     createRule(getNewRule({ name: 'Not same as first rule', rule_id: '6', enabled: false }));
 
-    visit(DETECTIONS_RULE_MANAGEMENT_URL);
+    visit(RULES_MANAGEMENT_URL);
     setRowsPerPageTo(5);
 
     cy.get(RULES_MANAGEMENT_TABLE).find(TABLE_FIRST_PAGE).should('have.attr', 'aria-current');

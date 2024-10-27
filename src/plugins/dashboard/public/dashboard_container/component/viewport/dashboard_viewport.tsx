@@ -1,32 +1,42 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { debounce } from 'lodash';
 import classNames from 'classnames';
 import useResizeObserver from 'use-resize-observer/polyfilled';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { EuiPortal } from '@elastic/eui';
-import { ViewMode } from '@kbn/embeddable-plugin/public';
+import { ReactEmbeddableRenderer, ViewMode } from '@kbn/embeddable-plugin/public';
 import { ExitFullScreenButton } from '@kbn/shared-ux-button-exit-full-screen';
 
+import {
+  ControlGroupApi,
+  ControlGroupRuntimeState,
+  ControlGroupSerializedState,
+} from '@kbn/controls-plugin/public';
+import { CONTROL_GROUP_TYPE } from '@kbn/controls-plugin/common';
+import {
+  useBatchedPublishingSubjects,
+  useStateFromPublishingSubject,
+} from '@kbn/presentation-publishing';
 import { DashboardGrid } from '../grid';
-import { pluginServices } from '../../../services/plugin_services';
-import { useDashboardContainer } from '../../embeddable/dashboard_container';
+import { useDashboardApi } from '../../../dashboard_api/use_dashboard_api';
 import { DashboardEmptyScreen } from '../empty_screen/dashboard_empty_screen';
 
-export const useDebouncedWidthObserver = (wait = 250) => {
+export const useDebouncedWidthObserver = (skipDebounce = false, wait = 100) => {
   const [width, setWidth] = useState<number>(0);
   const onWidthChange = useMemo(() => debounce(setWidth, wait), [wait]);
   const { ref } = useResizeObserver<HTMLDivElement>({
     onResize: (dimensions) => {
       if (dimensions.width) {
-        if (width === 0) setWidth(dimensions.width);
+        if (width === 0 || skipDebounce) setWidth(dimensions.width);
         if (dimensions.width !== width) onWidthChange(dimensions.width);
       }
     },
@@ -35,46 +45,102 @@ export const useDebouncedWidthObserver = (wait = 250) => {
 };
 
 export const DashboardViewportComponent = () => {
-  const {
-    settings: { isProjectEnabledInLabs },
-  } = pluginServices.getServices();
-  const controlsRoot = useRef(null);
+  const dashboardApi = useDashboardApi();
+  const [hasControls, setHasControls] = useState(false);
+  const [
+    controlGroupApi,
+    dashboardTitle,
+    description,
+    expandedPanelId,
+    focusedPanelId,
+    panels,
+    viewMode,
+    useMargins,
+    uuid,
+    fullScreenMode,
+  ] = useBatchedPublishingSubjects(
+    dashboardApi.controlGroupApi$,
+    dashboardApi.panelTitle,
+    dashboardApi.panelDescription,
+    dashboardApi.expandedPanelId,
+    dashboardApi.focusedPanelId$,
+    dashboardApi.panels$,
+    dashboardApi.viewMode,
+    dashboardApi.useMargins$,
+    dashboardApi.uuid$,
+    dashboardApi.fullScreenMode$
+  );
 
-  const dashboard = useDashboardContainer();
+  const panelCount = useMemo(() => {
+    return Object.keys(panels).length;
+  }, [panels]);
 
-  /**
-   * Render Control group
-   */
-  const controlGroup = dashboard.controlGroup;
-  useEffect(() => {
-    if (controlGroup && controlsRoot.current) controlGroup.render(controlsRoot.current);
-  }, [controlGroup]);
-
-  const panelCount = Object.keys(dashboard.select((state) => state.explicitInput.panels)).length;
-  const controlCount = Object.keys(
-    dashboard.select((state) => state.explicitInput.controlGroupInput?.panels) ?? {}
-  ).length;
-
-  const viewMode = dashboard.select((state) => state.explicitInput.viewMode);
-  const dashboardTitle = dashboard.select((state) => state.explicitInput.title);
-  const description = dashboard.select((state) => state.explicitInput.description);
-  const expandedPanelId = dashboard.select((state) => state.componentState.expandedPanelId);
-  const controlsEnabled = isProjectEnabledInLabs('labs:dashboard:dashboardControls');
-
-  const { ref: resizeRef, width: viewportWidth } = useDebouncedWidthObserver();
+  const { ref: resizeRef, width: viewportWidth } = useDebouncedWidthObserver(!!focusedPanelId);
 
   const classes = classNames({
     dshDashboardViewport: true,
     'dshDashboardViewport--panelExpanded': Boolean(expandedPanelId),
   });
 
+  useEffect(() => {
+    if (!controlGroupApi) {
+      return;
+    }
+    const subscription = controlGroupApi.children$.subscribe((children) => {
+      setHasControls(Object.keys(children).length > 0);
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [controlGroupApi]);
+
+  // Bug in main where panels are loaded before control filters are ready
+  // Want to migrate to react embeddable controls with same behavior
+  // TODO - do not load panels until control filters are ready
+  /*
+  const [dashboardInitialized, setDashboardInitialized] = useState(false);
+  useEffect(() => {
+    let ignore = false;
+    dashboard.untilContainerInitialized().then(() => {
+      if (!ignore) {
+        setDashboardInitialized(true);
+      }
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [dashboard]);
+  */
+
   return (
-    <div className={'dshDashboardViewportWrapper'}>
-      {controlsEnabled && controlGroup && viewMode !== ViewMode.PRINT ? (
-        <div
-          className={controlCount > 0 ? 'dshDashboardViewport-controls' : ''}
-          ref={controlsRoot}
-        />
+    <div
+      className={classNames('dshDashboardViewportWrapper', {
+        'dshDashboardViewportWrapper--defaultBg': !useMargins,
+        'dshDashboardViewportWrapper--isFullscreen': fullScreenMode,
+      })}
+    >
+      {viewMode !== ViewMode.PRINT ? (
+        <div className={hasControls ? 'dshDashboardViewport-controls' : ''}>
+          <ReactEmbeddableRenderer<
+            ControlGroupSerializedState,
+            ControlGroupRuntimeState,
+            ControlGroupApi
+          >
+            key={uuid}
+            hidePanelChrome={true}
+            panelProps={{ hideLoader: true }}
+            type={CONTROL_GROUP_TYPE}
+            maybeId={'control_group'}
+            getParentApi={() => {
+              return {
+                ...dashboardApi,
+                getSerializedStateForChild: dashboardApi.getSerializedStateForControlGroup,
+                getRuntimeStateForChild: dashboardApi.getRuntimeStateForControlGroup,
+              };
+            }}
+            onApiAvailable={(api) => dashboardApi.setControlGroupApi(api)}
+          />
+        </div>
       ) : null}
       {panelCount === 0 && <DashboardEmptyScreen />}
       <div
@@ -85,7 +151,11 @@ export const DashboardViewportComponent = () => {
         data-description={description}
         data-shared-items-count={panelCount}
       >
-        <DashboardGrid viewportWidth={viewportWidth} />
+        {/* Wait for `viewportWidth` to actually be set before rendering the dashboard grid - 
+            otherwise, there is a race condition where the panels can end up being squashed 
+            TODO only render when dashboardInitialized
+        */}
+        {viewportWidth !== 0 && <DashboardGrid viewportWidth={viewportWidth} />}
       </div>
     </div>
   );
@@ -95,12 +165,9 @@ export const DashboardViewportComponent = () => {
 // because ExitFullScreenButton sets isFullscreenMode to false on unmount while rerendering.
 // This specifically fixed maximizing/minimizing panels without exiting fullscreen mode.
 const WithFullScreenButton = ({ children }: { children: JSX.Element }) => {
-  const dashboard = useDashboardContainer();
+  const dashboardApi = useDashboardApi();
 
-  const isFullScreenMode = dashboard.select((state) => state.componentState.fullScreenMode);
-  const isEmbeddedExternally = dashboard.select(
-    (state) => state.componentState.isEmbeddedExternally
-  );
+  const isFullScreenMode = useStateFromPublishingSubject(dashboardApi.fullScreenMode$);
 
   return (
     <>
@@ -108,8 +175,8 @@ const WithFullScreenButton = ({ children }: { children: JSX.Element }) => {
       {isFullScreenMode && (
         <EuiPortal>
           <ExitFullScreenButton
-            onExit={() => dashboard.dispatch.setFullScreenMode(false)}
-            toggleChrome={!isEmbeddedExternally}
+            onExit={() => dashboardApi.setFullScreenMode(false)}
+            toggleChrome={!dashboardApi.isEmbeddedExternally}
           />
         </EuiPortal>
       )}

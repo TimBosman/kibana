@@ -5,13 +5,8 @@
  * 2.0.
  */
 
-import {
-  EuiEmptyPrompt,
-  EuiPage,
-  EuiPageBody,
-  EuiPageContent_Deprecated as EuiPageContent,
-  EuiProvider,
-} from '@elastic/eui';
+import 'css.escape'; // Polyfill required to render `EuiPageTemplate` server-side
+import { EuiPageTemplate, EuiProvider, euiStylisPrefixer } from '@elastic/eui';
 // @ts-expect-error no definitions in component folder
 import { icon as EuiIconWarning } from '@elastic/eui/lib/components/icon/assets/warning';
 // @ts-expect-error no definitions in component folder
@@ -24,10 +19,10 @@ import { renderToString } from 'react-dom/server';
 
 import type { IBasePath } from '@kbn/core/server';
 import type { CustomBranding } from '@kbn/core-custom-branding-common';
+import type { IStaticAssets } from '@kbn/core-http-server';
 import { Fonts } from '@kbn/core-rendering-server-internal';
 import { i18n } from '@kbn/i18n';
 import { I18nProvider } from '@kbn/i18n-react';
-import UiSharedDepsNpm from '@kbn/ui-shared-deps-npm';
 import * as UiSharedDepsSrc from '@kbn/ui-shared-deps-src';
 
 // Preload the warning icon used by `EuiEmptyPrompt` to ensure that it's loaded
@@ -37,10 +32,10 @@ appendIconComponentCache({
   warning: EuiIconWarning,
 });
 
-const emotionCache = createCache({ key: 'eui' });
+const emotionCache = createCache({ key: 'eui', stylisPlugins: [euiStylisPrefixer] });
 
 interface Props {
-  buildNumber: number;
+  staticAssets: IStaticAssets;
   basePath: IBasePath;
   scriptPaths?: string[];
   title: ReactNode;
@@ -51,7 +46,7 @@ interface Props {
 
 export function PromptPage({
   basePath,
-  buildNumber,
+  staticAssets,
   scriptPaths = [],
   title,
   body,
@@ -61,19 +56,15 @@ export function PromptPage({
   const content = (
     <I18nProvider>
       <EuiProvider colorMode="light" cache={emotionCache}>
-        <EuiPage paddingSize="none" style={{ minHeight: '100vh' }} data-test-subj="promptPage">
-          <EuiPageBody>
-            <EuiPageContent verticalPosition="center" horizontalPosition="center">
-              <EuiEmptyPrompt
-                iconType="warning"
-                iconColor="danger"
-                title={<h2>{title}</h2>}
-                body={body}
-                actions={actions}
-              />
-            </EuiPageContent>
-          </EuiPageBody>
-        </EuiPage>
+        <EuiPageTemplate data-test-subj="promptPage">
+          <EuiPageTemplate.EmptyPrompt
+            iconType="warning"
+            iconColor="danger"
+            title={<h2>{title}</h2>}
+            body={body}
+            actions={actions}
+          />
+        </EuiPageTemplate>
       </EuiProvider>
     </I18nProvider>
   );
@@ -83,13 +74,10 @@ export function PromptPage({
   const chunks = extractCriticalToChunks(renderToString(content));
   const emotionStyles = constructStyleTagsFromChunks(chunks);
 
-  const uiPublicURL = `${basePath.serverBasePath}/ui`;
-  const regularBundlePath = `${basePath.serverBasePath}/${buildNumber}/bundles`;
+  const uiPublicURL = staticAssets.prependPublicUrl('/ui');
+  const regularBundlePath = staticAssets.prependPublicUrl('/bundles');
   const styleSheetPaths = [
     `${regularBundlePath}/kbn-ui-shared-deps-src/${UiSharedDepsSrc.cssDistFilename}`,
-    `${regularBundlePath}/kbn-ui-shared-deps-npm/${UiSharedDepsNpm.lightCssDistFilename('v8')}`,
-    `${basePath.serverBasePath}/node_modules/@kbn/ui-framework/dist/kui_light.css`,
-    `${basePath.serverBasePath}/ui/legacy_light_theme.css`,
   ];
 
   return (

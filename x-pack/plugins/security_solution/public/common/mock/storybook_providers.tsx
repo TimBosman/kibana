@@ -6,23 +6,19 @@
  */
 
 import { euiLightVars } from '@kbn/ui-theme';
+import type { FC, PropsWithChildren } from 'react';
 import React from 'react';
 import { Provider as ReduxStoreProvider } from 'react-redux';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 import { ThemeProvider } from 'styled-components';
 import type { CoreStart } from '@kbn/core/public';
 import { createKibanaReactContext } from '@kbn/kibana-react-plugin/public';
 import { I18nProvider } from '@kbn/i18n-react';
 import { CellActionsProvider } from '@kbn/cell-actions';
-import { createStore } from '../store';
-import { mockGlobalState } from './global_state';
-import { SUB_PLUGINS_REDUCER } from './utils';
-import { createSecuritySolutionStorageMock } from './mock_local_storage';
-import type { StartServices } from '../../types';
-
-export const kibanaObservable = new BehaviorSubject({} as unknown as StartServices);
-
-const { storage } = createSecuritySolutionStorageMock();
+import { NavigationProvider } from '@kbn/security-solution-navigation';
+import { CASES_FEATURE_ID } from '../../../common';
+import { ReactQueryClientProvider } from '../containers/query_client/query_client_provider';
+import { createMockStore } from './create_store';
 
 const uiSettings = {
   get: (setting: string) => {
@@ -39,10 +35,36 @@ const uiSettings = {
 const coreMock = {
   application: {
     getUrlForApp: () => {},
+    capabilities: { [CASES_FEATURE_ID]: {} },
+  },
+  lens: {
+    EmbeddableComponent: () => <span />,
+  },
+  cases: {
+    helpers: {
+      getUICapabilities: () => ({}),
+    },
+    hooks: {
+      useCasesAddToExistingCaseModal: () => {},
+      useCasesAddToNewCaseFlyout: () => {},
+    },
   },
   data: {
     query: {
       filterManager: {},
+    },
+    search: {
+      session: React.createRef(),
+    },
+    actions: {
+      createFiltersFromValueClickAction: () => {},
+    },
+  },
+  settings: {
+    client: {
+      get: () => {},
+      get$: () => new Subject(),
+      set: () => {},
     },
   },
   uiSettings,
@@ -72,19 +94,23 @@ const KibanaReactContext = createKibanaReactContext(coreMock);
  * It is a simplified version of TestProvidersComponent.
  * To reuse TestProvidersComponent here, we need to remove all references to jest from mocks.
  */
-export const StorybookProviders: React.FC = ({ children }) => {
-  const store = createStore(mockGlobalState, SUB_PLUGINS_REDUCER, kibanaObservable, storage);
+export const StorybookProviders: FC<PropsWithChildren<unknown>> = ({ children }) => {
+  const store = createMockStore();
 
   return (
     <I18nProvider>
       <KibanaReactContext.Provider>
-        <CellActionsProvider getTriggerCompatibleActions={() => Promise.resolve([])}>
-          <ReduxStoreProvider store={store}>
-            <ThemeProvider theme={() => ({ eui: euiLightVars, darkMode: false })}>
-              {children}
-            </ThemeProvider>
-          </ReduxStoreProvider>
-        </CellActionsProvider>
+        <NavigationProvider core={coreMock}>
+          <ReactQueryClientProvider>
+            <CellActionsProvider getTriggerCompatibleActions={() => Promise.resolve([])}>
+              <ReduxStoreProvider store={store}>
+                <ThemeProvider theme={() => ({ eui: euiLightVars, darkMode: false })}>
+                  {children}
+                </ThemeProvider>
+              </ReduxStoreProvider>
+            </CellActionsProvider>
+          </ReactQueryClientProvider>
+        </NavigationProvider>
       </KibanaReactContext.Provider>
     </I18nProvider>
   );

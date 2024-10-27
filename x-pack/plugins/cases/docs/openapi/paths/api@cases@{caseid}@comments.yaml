@@ -1,5 +1,5 @@
 post:
-  summary: Adds a comment or alert to a case in the default space.
+  summary: Add a case comment or alert
   operationId: addCaseCommentDefaultSpace
   description: >
     You must have `all` privileges for the **Cases** feature in the
@@ -36,13 +36,12 @@ post:
         application/json:
           schema:
             $ref: '../components/schemas/4xx_response.yaml'
-  servers:
-    - url: https://localhost:5601
 
 delete:
-  summary: Deletes all comments and alerts from a case in the default space.
+  summary: Delete all case comments and alerts
   operationId: deleteCaseCommentsDefaultSpace
   description: >
+    Deletes all comments and alerts from a case.
     You must have `all` privileges for the **Cases** feature in the
     **Management**, **Observability**, or **Security** section of the Kibana
     feature privileges, depending on the owner of the cases you're deleting.
@@ -60,11 +59,9 @@ delete:
         application/json:
           schema:
             $ref: '../components/schemas/4xx_response.yaml'
-  servers:
-    - url: https://localhost:5601
 
 patch:
-  summary: Updates a comment or alert in a case in the default space.
+  summary: Update a case comment or alert
   operationId: updateCaseCommentDefaultSpace
   description: >
     You must have `all` privileges for the **Cases** feature in the
@@ -101,11 +98,9 @@ patch:
         application/json:
           schema:
             $ref: '../components/schemas/4xx_response.yaml'
-  servers:
-    - url: https://localhost:5601
 
 get:
-  summary: Retrieves all the comments from a case in the default space.
+  summary: Get all case comments
   operationId: getAllCaseCommentsDefaultSpace
   description: >
     Deprecated in 8.1.0. This API is deprecated and will be removed in a future release;
@@ -131,8 +126,3 @@ get:
         application/json:
           schema:
             $ref: '../components/schemas/4xx_response.yaml'
-  servers:
-    - url: https://localhost:5601
-
-servers:
-  - url: https://localhost:5601

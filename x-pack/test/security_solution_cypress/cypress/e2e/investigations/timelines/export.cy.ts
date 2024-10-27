@@ -11,40 +11,41 @@ import {
   selectAllTimelines,
   exportSelectedTimelines,
 } from '../../../tasks/timelines';
-import { login, visitWithoutDateRange } from '../../../tasks/login';
+import { login } from '../../../tasks/login';
+import { visit } from '../../../tasks/navigation';
+import { deleteTimelines } from '../../../tasks/api_calls/timelines';
 
 import { TIMELINES_URL } from '../../../urls/navigation';
 import { TOASTER } from '../../../screens/alerts_detection_rules';
 import { TIMELINE_CHECKBOX } from '../../../screens/timelines';
 import { createTimeline } from '../../../tasks/api_calls/timelines';
-import { expectedExportedTimeline, getTimeline } from '../../../objects/timeline';
-import { cleanKibana } from '../../../tasks/common';
+import { expectedExportedTimeline } from '../../../objects/timeline';
+import { closeToast } from '../../../tasks/common/toast';
 
 describe('Export timelines', { tags: ['@ess', '@serverless'] }, () => {
-  before(() => {
-    cleanKibana();
+  beforeEach(() => {
     login();
+    deleteTimelines();
     cy.intercept({
       method: 'POST',
       path: '/api/timeline/_export?file_name=timelines_export.ndjson',
     }).as('export');
-    createTimeline(getTimeline()).then((response) => {
+    createTimeline().then((response) => {
       cy.wrap(response).as('timelineResponse1');
       cy.wrap(response.body.data.persistTimeline.timeline.savedObjectId).as('timelineId1');
     });
-    createTimeline(getTimeline()).then((response) => {
+    createTimeline().then((response) => {
       cy.wrap(response).as('timelineResponse2');
       cy.wrap(response.body.data.persistTimeline.timeline.savedObjectId).as('timelineId2');
     });
-    visitWithoutDateRange(TIMELINES_URL);
+    visit(TIMELINES_URL);
   });
 
-  beforeEach(() => {
-    login();
-    visitWithoutDateRange(TIMELINES_URL);
-  });
-
-  it('Exports custom timeline(s)', function () {
+  /**
+   *  TODO: Good candidate for converting to a jest Test
+   *  https://github.com/elastic/kibana/issues/195612
+   */
+  it('should export custom timeline(s)', function () {
     cy.log('Export a custom timeline via timeline actions');
 
     exportTimeline(this.timelineId1);
@@ -52,7 +53,7 @@ describe('Export timelines', { tags: ['@ess', '@serverless'] }, () => {
       cy.wrap(response?.statusCode).should('eql', 200);
       cy.wrap(response?.body).should('eql', expectedExportedTimeline(this.timelineResponse1));
     });
-    cy.get('[data-test-subj="toastCloseButton"]').click();
+    closeToast();
 
     cy.log('Export a custom timeline via bulk actions');
 
@@ -62,7 +63,8 @@ describe('Export timelines', { tags: ['@ess', '@serverless'] }, () => {
       cy.wrap(response?.statusCode).should('eql', 200);
       cy.wrap(response?.body).should('eql', expectedExportedTimeline(this.timelineResponse1));
     });
-    cy.get('[data-test-subj="toastCloseButton"]').click();
+
+    closeToast();
 
     cy.log('Export all custom timelines via bulk actions');
 

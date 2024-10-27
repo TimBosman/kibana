@@ -1,16 +1,20 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { dataViewMock } from '@kbn/discover-utils/src/__mocks__';
-import { getEuiGridColumns, getVisibleColumns } from './data_table_columns';
+import React from 'react';
+import { getVisibleColumns } from '@kbn/discover-utils';
+import { deserializeHeaderRowHeight, getEuiGridColumns } from './data_table_columns';
 import { dataViewWithTimefieldMock } from '../../__mocks__/data_view_with_timefield';
 import { dataTableContextMock } from '../../__mocks__/table_context';
 import { servicesMock } from '../../__mocks__/services';
+import { ROWS_HEIGHT_OPTIONS } from '../constants';
+import { UnifiedDataTableSettingsColumn } from '../types';
 
 const columns = ['extension', 'message'];
 const columnsWithTimeCol = getVisibleColumns(
@@ -31,6 +35,7 @@ describe('Data table columns', function () {
         isPlainRecord: false,
         valueToStringConverter: dataTableContextMock.valueToStringConverter,
         rowsCount: 100,
+        headerRowHeightLines: 5,
         services: {
           uiSettings: servicesMock.uiSettings,
           toastNotifications: servicesMock.toastNotifications,
@@ -38,103 +43,10 @@ describe('Data table columns', function () {
         hasEditDataViewPermission: () =>
           servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
         onFilter: () => {},
+        onResize: () => {},
+        cellActionsHandling: 'replace',
       });
-      expect(actual).toMatchInlineSnapshot(`
-              Array [
-                Object {
-                  "actions": Object {
-                    "additional": Array [
-                      Object {
-                        "data-test-subj": "gridCopyColumnNameToClipBoardButton",
-                        "iconProps": Object {
-                          "size": "m",
-                        },
-                        "iconType": "copyClipboard",
-                        "label": <FormattedMessage
-                          defaultMessage="Copy name"
-                          id="unifiedDataTable.grid.copyColumnNameToClipBoardButton"
-                          values={Object {}}
-                        />,
-                        "onClick": [Function],
-                        "size": "xs",
-                      },
-                      Object {
-                        "data-test-subj": "gridCopyColumnValuesToClipBoardButton",
-                        "iconProps": Object {
-                          "size": "m",
-                        },
-                        "iconType": "copyClipboard",
-                        "label": <FormattedMessage
-                          defaultMessage="Copy column"
-                          id="unifiedDataTable.grid.copyColumnValuesToClipBoardButton"
-                          values={Object {}}
-                        />,
-                        "onClick": [Function],
-                        "size": "xs",
-                      },
-                    ],
-                    "showHide": false,
-                    "showMoveLeft": false,
-                    "showMoveRight": false,
-                  },
-                  "cellActions": Array [
-                    [Function],
-                    [Function],
-                    [Function],
-                  ],
-                  "displayAsText": "extension",
-                  "id": "extension",
-                  "isSortable": false,
-                  "schema": "string",
-                  "visibleCellActions": undefined,
-                },
-                Object {
-                  "actions": Object {
-                    "additional": Array [
-                      Object {
-                        "data-test-subj": "gridCopyColumnNameToClipBoardButton",
-                        "iconProps": Object {
-                          "size": "m",
-                        },
-                        "iconType": "copyClipboard",
-                        "label": <FormattedMessage
-                          defaultMessage="Copy name"
-                          id="unifiedDataTable.grid.copyColumnNameToClipBoardButton"
-                          values={Object {}}
-                        />,
-                        "onClick": [Function],
-                        "size": "xs",
-                      },
-                      Object {
-                        "data-test-subj": "gridCopyColumnValuesToClipBoardButton",
-                        "iconProps": Object {
-                          "size": "m",
-                        },
-                        "iconType": "copyClipboard",
-                        "label": <FormattedMessage
-                          defaultMessage="Copy column"
-                          id="unifiedDataTable.grid.copyColumnValuesToClipBoardButton"
-                          values={Object {}}
-                        />,
-                        "onClick": [Function],
-                        "size": "xs",
-                      },
-                    ],
-                    "showHide": false,
-                    "showMoveLeft": false,
-                    "showMoveRight": false,
-                  },
-                  "cellActions": Array [
-                    [Function],
-                  ],
-                  "displayAsText": "message",
-                  "id": "message",
-                  "isSortable": false,
-                  "schema": "string",
-                  "visibleCellActions": undefined,
-                },
-              ]
-          `);
+      expect(actual).toMatchSnapshot();
     });
 
     it('returns eui grid columns with time column', async () => {
@@ -147,6 +59,7 @@ describe('Data table columns', function () {
         isPlainRecord: false,
         valueToStringConverter: dataTableContextMock.valueToStringConverter,
         rowsCount: 100,
+        headerRowHeightLines: 5,
         services: {
           uiSettings: servicesMock.uiSettings,
           toastNotifications: servicesMock.toastNotifications,
@@ -154,175 +67,10 @@ describe('Data table columns', function () {
         hasEditDataViewPermission: () =>
           servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
         onFilter: () => {},
+        onResize: () => {},
+        cellActionsHandling: 'replace',
       });
-      expect(actual).toMatchInlineSnapshot(`
-        Array [
-          Object {
-            "actions": Object {
-              "additional": Array [
-                Object {
-                  "data-test-subj": "gridCopyColumnNameToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy name"
-                    id="unifiedDataTable.grid.copyColumnNameToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-                Object {
-                  "data-test-subj": "gridCopyColumnValuesToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy column"
-                    id="unifiedDataTable.grid.copyColumnValuesToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-              ],
-              "showHide": false,
-              "showMoveLeft": true,
-              "showMoveRight": true,
-            },
-            "cellActions": Array [
-              [Function],
-              [Function],
-              [Function],
-            ],
-            "display": <div
-              aria-label="timestamp - this field represents the time that events occurred."
-            >
-              <EuiToolTip
-                content="This field represents the time that events occurred."
-                delay="regular"
-                display="inlineBlock"
-                position="top"
-              >
-                <React.Fragment>
-                  timestamp
-                   
-                  <EuiIcon
-                    type="clock"
-                  />
-                </React.Fragment>
-              </EuiToolTip>
-            </div>,
-            "displayAsText": "timestamp",
-            "id": "timestamp",
-            "initialWidth": 210,
-            "isSortable": true,
-            "schema": "datetime",
-            "visibleCellActions": undefined,
-          },
-          Object {
-            "actions": Object {
-              "additional": Array [
-                Object {
-                  "data-test-subj": "gridCopyColumnNameToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy name"
-                    id="unifiedDataTable.grid.copyColumnNameToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-                Object {
-                  "data-test-subj": "gridCopyColumnValuesToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy column"
-                    id="unifiedDataTable.grid.copyColumnValuesToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-              ],
-              "showHide": Object {
-                "iconType": "cross",
-                "label": "Remove column",
-              },
-              "showMoveLeft": true,
-              "showMoveRight": true,
-            },
-            "cellActions": Array [
-              [Function],
-              [Function],
-              [Function],
-            ],
-            "displayAsText": "extension",
-            "id": "extension",
-            "isSortable": false,
-            "schema": "string",
-            "visibleCellActions": undefined,
-          },
-          Object {
-            "actions": Object {
-              "additional": Array [
-                Object {
-                  "data-test-subj": "gridCopyColumnNameToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy name"
-                    id="unifiedDataTable.grid.copyColumnNameToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-                Object {
-                  "data-test-subj": "gridCopyColumnValuesToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy column"
-                    id="unifiedDataTable.grid.copyColumnValuesToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-              ],
-              "showHide": Object {
-                "iconType": "cross",
-                "label": "Remove column",
-              },
-              "showMoveLeft": true,
-              "showMoveRight": true,
-            },
-            "cellActions": Array [
-              [Function],
-            ],
-            "displayAsText": "message",
-            "id": "message",
-            "isSortable": false,
-            "schema": "string",
-            "visibleCellActions": undefined,
-          },
-        ]
-      `);
+      expect(actual).toMatchSnapshot();
     });
 
     it('returns eui grid with in memory sorting', async () => {
@@ -335,6 +83,7 @@ describe('Data table columns', function () {
         isPlainRecord: true,
         valueToStringConverter: dataTableContextMock.valueToStringConverter,
         rowsCount: 100,
+        headerRowHeightLines: 5,
         services: {
           uiSettings: servicesMock.uiSettings,
           toastNotifications: servicesMock.toastNotifications,
@@ -342,200 +91,314 @@ describe('Data table columns', function () {
         hasEditDataViewPermission: () =>
           servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
         onFilter: () => {},
+        columnsMeta: {
+          extension: { type: 'string' },
+          message: { type: 'string', esType: 'keyword' },
+          timestamp: { type: 'date', esType: 'dateTime' },
+        },
+        onResize: () => {},
+        cellActionsHandling: 'replace',
       });
-      expect(actual).toMatchInlineSnapshot(`
-        Array [
-          Object {
-            "actions": Object {
-              "additional": Array [
-                Object {
-                  "data-test-subj": "gridCopyColumnNameToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy name"
-                    id="unifiedDataTable.grid.copyColumnNameToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-                Object {
-                  "data-test-subj": "gridCopyColumnValuesToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy column"
-                    id="unifiedDataTable.grid.copyColumnValuesToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-              ],
-              "showHide": false,
-              "showMoveLeft": true,
-              "showMoveRight": true,
-            },
-            "cellActions": Array [
-              [Function],
-              [Function],
-              [Function],
-            ],
-            "display": <div
-              aria-label="timestamp - this field represents the time that events occurred."
-            >
-              <EuiToolTip
-                content="This field represents the time that events occurred."
-                delay="regular"
-                display="inlineBlock"
-                position="top"
-              >
-                <React.Fragment>
-                  timestamp
-                   
-                  <EuiIcon
-                    type="clock"
-                  />
-                </React.Fragment>
-              </EuiToolTip>
-            </div>,
-            "displayAsText": "timestamp",
-            "id": "timestamp",
-            "initialWidth": 210,
-            "isSortable": true,
-            "schema": "datetime",
-            "visibleCellActions": undefined,
+      expect(actual).toMatchSnapshot();
+    });
+
+    describe('cell actions', () => {
+      it('should replace cell actions', async () => {
+        const cellAction = jest.fn();
+        const actual = getEuiGridColumns({
+          columns: columnsWithTimeCol,
+          settings: {},
+          dataView: dataViewWithTimefieldMock,
+          defaultColumns: false,
+          isSortEnabled: true,
+          isPlainRecord: true,
+          valueToStringConverter: dataTableContextMock.valueToStringConverter,
+          rowsCount: 100,
+          headerRowHeightLines: 5,
+          services: {
+            uiSettings: servicesMock.uiSettings,
+            toastNotifications: servicesMock.toastNotifications,
           },
-          Object {
-            "actions": Object {
-              "additional": Array [
-                Object {
-                  "data-test-subj": "gridCopyColumnNameToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy name"
-                    id="unifiedDataTable.grid.copyColumnNameToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-                Object {
-                  "data-test-subj": "gridCopyColumnValuesToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy column"
-                    id="unifiedDataTable.grid.copyColumnValuesToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-              ],
-              "showHide": Object {
-                "iconType": "cross",
-                "label": "Remove column",
-              },
-              "showMoveLeft": true,
-              "showMoveRight": true,
-            },
-            "cellActions": Array [
-              [Function],
-              [Function],
-              [Function],
-            ],
-            "displayAsText": "extension",
-            "id": "extension",
-            "isSortable": true,
-            "schema": "string",
-            "visibleCellActions": undefined,
+          hasEditDataViewPermission: () =>
+            servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+          onFilter: () => {},
+          columnsMeta: {
+            extension: { type: 'string' },
+            message: { type: 'string', esType: 'keyword' },
+            timestamp: { type: 'date', esType: 'dateTime' },
           },
-          Object {
-            "actions": Object {
-              "additional": Array [
-                Object {
-                  "data-test-subj": "gridCopyColumnNameToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy name"
-                    id="unifiedDataTable.grid.copyColumnNameToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-                Object {
-                  "data-test-subj": "gridCopyColumnValuesToClipBoardButton",
-                  "iconProps": Object {
-                    "size": "m",
-                  },
-                  "iconType": "copyClipboard",
-                  "label": <FormattedMessage
-                    defaultMessage="Copy column"
-                    id="unifiedDataTable.grid.copyColumnValuesToClipBoardButton"
-                    values={Object {}}
-                  />,
-                  "onClick": [Function],
-                  "size": "xs",
-                },
-              ],
-              "showHide": Object {
-                "iconType": "cross",
-                "label": "Remove column",
-              },
-              "showMoveLeft": true,
-              "showMoveRight": true,
-            },
-            "cellActions": Array [
-              [Function],
-            ],
-            "displayAsText": "message",
-            "id": "message",
-            "isSortable": true,
-            "schema": "string",
-            "visibleCellActions": undefined,
+          onResize: () => {},
+          columnsCellActions: [[cellAction]],
+          cellActionsHandling: 'replace',
+        });
+        expect(actual[0].cellActions).toEqual([cellAction]);
+      });
+
+      it('should append cell actions', async () => {
+        const cellAction = jest.fn();
+        const actual = getEuiGridColumns({
+          columns: columnsWithTimeCol,
+          settings: {},
+          dataView: dataViewWithTimefieldMock,
+          defaultColumns: false,
+          isSortEnabled: true,
+          isPlainRecord: true,
+          valueToStringConverter: dataTableContextMock.valueToStringConverter,
+          rowsCount: 100,
+          headerRowHeightLines: 5,
+          services: {
+            uiSettings: servicesMock.uiSettings,
+            toastNotifications: servicesMock.toastNotifications,
           },
-        ]
-      `);
+          hasEditDataViewPermission: () =>
+            servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+          onFilter: () => {},
+          columnsMeta: {
+            extension: { type: 'string' },
+            message: { type: 'string', esType: 'keyword' },
+            timestamp: { type: 'date', esType: 'dateTime' },
+          },
+          onResize: () => {},
+          columnsCellActions: [[cellAction]],
+          cellActionsHandling: 'append',
+        });
+        expect(actual[0].cellActions).toEqual([
+          expect.any(Function),
+          expect.any(Function),
+          expect.any(Function),
+          cellAction,
+        ]);
+      });
     });
   });
 
-  describe('getVisibleColumns', () => {
-    it('returns grid columns without time column when data view has no timestamp field', () => {
-      const actual = getVisibleColumns(['extension', 'message'], dataViewMock, true) as string[];
-      expect(actual).toEqual(['extension', 'message']);
+  describe('column tokens', () => {
+    it('returns eui grid columns with tokens', async () => {
+      const actual = getEuiGridColumns({
+        showColumnTokens: true,
+        columns: columnsWithTimeCol,
+        settings: {},
+        dataView: dataViewWithTimefieldMock,
+        defaultColumns: false,
+        isSortEnabled: true,
+        isPlainRecord: false,
+        valueToStringConverter: dataTableContextMock.valueToStringConverter,
+        rowsCount: 100,
+        headerRowHeightLines: 5,
+        services: {
+          uiSettings: servicesMock.uiSettings,
+          toastNotifications: servicesMock.toastNotifications,
+        },
+        hasEditDataViewPermission: () =>
+          servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+        onFilter: () => {},
+        onResize: () => {},
+        cellActionsHandling: 'replace',
+      });
+      expect(actual).toMatchSnapshot();
     });
 
-    it('returns grid columns without time column when showTimeCol is falsy', () => {
-      const actual = getVisibleColumns(
-        ['extension', 'message'],
-        dataViewWithTimefieldMock,
-        false
-      ) as string[];
-      expect(actual).toEqual(['extension', 'message']);
+    it('returns eui grid columns with tokens for custom column types', async () => {
+      const actual = getEuiGridColumns({
+        showColumnTokens: true,
+        columnsMeta: {
+          extension: { type: 'string' },
+          message: { type: 'string', esType: 'keyword' },
+        },
+        columns,
+        settings: {},
+        dataView: dataViewWithTimefieldMock,
+        defaultColumns: false,
+        isSortEnabled: true,
+        isPlainRecord: false,
+        valueToStringConverter: dataTableContextMock.valueToStringConverter,
+        rowsCount: 100,
+        headerRowHeightLines: 5,
+        services: {
+          uiSettings: servicesMock.uiSettings,
+          toastNotifications: servicesMock.toastNotifications,
+        },
+        hasEditDataViewPermission: () =>
+          servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+        onFilter: () => {},
+        onResize: () => {},
+        cellActionsHandling: 'replace',
+      });
+      expect(actual).toMatchSnapshot();
     });
+  });
 
-    it('returns grid columns with time column when data view has timestamp field', () => {
-      const actual = getVisibleColumns(
-        ['extension', 'message'],
+  describe('Textbased languages grid columns', () => {
+    it('returns eui grid with in memory sorting for text based languages and columns on the dataview', async () => {
+      const columnsNotInDataview = getVisibleColumns(
+        ['extension'],
         dataViewWithTimefieldMock,
         true
       ) as string[];
-      expect(actual).toEqual(['timestamp', 'extension', 'message']);
+      const gridColumns = getEuiGridColumns({
+        columns: columnsNotInDataview,
+        settings: {},
+        dataView: dataViewWithTimefieldMock,
+        defaultColumns: false,
+        isSortEnabled: true,
+        isPlainRecord: true,
+        valueToStringConverter: dataTableContextMock.valueToStringConverter,
+        rowsCount: 100,
+        headerRowHeightLines: 5,
+        services: {
+          uiSettings: servicesMock.uiSettings,
+          toastNotifications: servicesMock.toastNotifications,
+        },
+        hasEditDataViewPermission: () =>
+          servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+        onFilter: () => {},
+        columnsMeta: {
+          extension: { type: 'string' },
+        },
+        onResize: () => {},
+        cellActionsHandling: 'replace',
+      });
+      expect(gridColumns[1].schema).toBe('string');
+    });
+
+    it('returns eui grid with in memory sorting for text based languages and columns not on the columnsMeta', async () => {
+      const columnsNotInDataview = getVisibleColumns(
+        ['var_test'],
+        dataViewWithTimefieldMock,
+        true
+      ) as string[];
+      const gridColumns = getEuiGridColumns({
+        columns: columnsNotInDataview,
+        settings: {},
+        dataView: dataViewWithTimefieldMock,
+        defaultColumns: false,
+        isSortEnabled: true,
+        isPlainRecord: true,
+        valueToStringConverter: dataTableContextMock.valueToStringConverter,
+        rowsCount: 100,
+        headerRowHeightLines: 5,
+        services: {
+          uiSettings: servicesMock.uiSettings,
+          toastNotifications: servicesMock.toastNotifications,
+        },
+        hasEditDataViewPermission: () =>
+          servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+        onFilter: () => {},
+        columnsMeta: {
+          var_test: { type: 'number' },
+        },
+        onResize: () => {},
+        cellActionsHandling: 'replace',
+      });
+      expect(gridColumns[1].schema).toBe('numeric');
+    });
+
+    it('returns columns in correct format when column customisation is provided', async () => {
+      const gridColumns = getEuiGridColumns({
+        columns,
+        settings: {},
+        dataView: dataViewWithTimefieldMock,
+        defaultColumns: false,
+        isSortEnabled: true,
+        isPlainRecord: true,
+        valueToStringConverter: dataTableContextMock.valueToStringConverter,
+        rowsCount: 100,
+        headerRowHeightLines: 5,
+        services: {
+          uiSettings: servicesMock.uiSettings,
+          toastNotifications: servicesMock.toastNotifications,
+        },
+        hasEditDataViewPermission: () =>
+          servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+        onFilter: () => {},
+        columnsMeta: {
+          extension: { type: 'string' },
+          message: { type: 'string', esType: 'keyword' },
+        },
+        onResize: () => {},
+        cellActionsHandling: 'replace',
+      });
+
+      const extensionGridColumn = gridColumns[0];
+      extensionGridColumn.display = <span>test</span>;
+      const customGridColumnsConfiguration = {
+        extension: () => extensionGridColumn,
+      };
+
+      const customizedGridColumns = getEuiGridColumns({
+        columns,
+        settings: {},
+        dataView: dataViewWithTimefieldMock,
+        defaultColumns: false,
+        isSortEnabled: true,
+        isPlainRecord: true,
+        valueToStringConverter: dataTableContextMock.valueToStringConverter,
+        rowsCount: 100,
+        headerRowHeightLines: 5,
+        services: {
+          uiSettings: servicesMock.uiSettings,
+          toastNotifications: servicesMock.toastNotifications,
+        },
+        hasEditDataViewPermission: () =>
+          servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+        onFilter: () => {},
+        customGridColumnsConfiguration,
+        columnsMeta: {
+          extension: { type: 'string' },
+          message: { type: 'string', esType: 'keyword' },
+        },
+        onResize: () => {},
+        cellActionsHandling: 'replace',
+      });
+
+      expect(customizedGridColumns).toMatchSnapshot();
+    });
+  });
+
+  describe('deserializeHeaderRowHeight', () => {
+    it('returns undefined for auto', () => {
+      expect(deserializeHeaderRowHeight(ROWS_HEIGHT_OPTIONS.auto)).toBe(undefined);
+    });
+
+    it('returns 1 for single', () => {
+      expect(deserializeHeaderRowHeight(ROWS_HEIGHT_OPTIONS.single)).toBe(1);
+    });
+
+    it('returns the value for other values', () => {
+      expect(deserializeHeaderRowHeight(2)).toBe(2);
+    });
+  });
+
+  describe('Column label display', () => {
+    it('Column Name should display provided label from display otherwise it defaults to columns name', () => {
+      const mockColumnHeaders: Record<string, UnifiedDataTableSettingsColumn> = {
+        test_column_1: { display: 'test_column_one' },
+        test_column_2: { display: 'test_column_two' },
+        test_column_3: { display: 'test_column_three' },
+      } as const;
+      const customizedGridColumns = getEuiGridColumns({
+        columns: ['test_column_1', 'test_column_2', 'test_column_4'],
+        settings: { columns: mockColumnHeaders },
+        dataView: dataViewWithTimefieldMock,
+        defaultColumns: false,
+        isSortEnabled: true,
+        valueToStringConverter: dataTableContextMock.valueToStringConverter,
+        rowsCount: 100,
+        headerRowHeightLines: 5,
+        services: {
+          uiSettings: servicesMock.uiSettings,
+          toastNotifications: servicesMock.toastNotifications,
+        },
+        hasEditDataViewPermission: () =>
+          servicesMock.dataViewFieldEditor.userPermissions.editIndexPattern(),
+        onResize: () => {},
+        cellActionsHandling: 'replace',
+      });
+      const columnDisplayNames = customizedGridColumns.map((column) => column.displayAsText);
+      expect(columnDisplayNames.includes('test_column_one')).toBeTruthy();
+      expect(columnDisplayNames.includes('test_column_two')).toBeTruthy();
+      expect(columnDisplayNames.includes('test_column_three')).toBeFalsy();
+      expect(columnDisplayNames.includes('test_column_4')).toBeTruthy();
     });
   });
 });

@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { Component, Fragment } from 'react';
@@ -67,6 +68,7 @@ const buildDefaultContentLinks = ({
       defaultMessage: 'Open an issue in GitHub',
     }),
     href: docLinks.links.kibana.createGithubIssue,
+    iconType: 'logoGithub',
   },
 ];
 
@@ -79,6 +81,7 @@ interface Props {
   kibanaVersion: string;
   kibanaDocLink: string;
   docLinks: DocLinksStart;
+  isServerless: boolean;
 }
 
 interface State {
@@ -172,13 +175,19 @@ export class HeaderHelpMenu extends Component<Props, State> {
                 />
               </h2>
             </EuiFlexItem>
-            <EuiFlexItem grow={false} className="chrHeaderHelpMenu__version">
-              <FormattedMessage
-                id="core.ui.chrome.headerGlobalNav.helpMenuVersion"
-                defaultMessage="v {version}"
-                values={{ version: kibanaVersion }}
-              />
-            </EuiFlexItem>
+            {!this.props.isServerless && (
+              <EuiFlexItem
+                grow={false}
+                className="chrHeaderHelpMenu__version"
+                data-test-subj="kbnVersionString"
+              >
+                <FormattedMessage
+                  id="core.ui.chrome.headerGlobalNav.helpMenuVersion"
+                  defaultMessage="v {version}"
+                  values={{ version: kibanaVersion }}
+                />
+              </EuiFlexItem>
+            )}
           </EuiFlexGroup>
         </EuiPopoverTitle>
 
@@ -201,17 +210,40 @@ export class HeaderHelpMenu extends Component<Props, State> {
 
     return (
       <Fragment>
-        {defaultContentLinks.map(({ href, title, iconType }, i) => {
-          const isLast = i === defaultContentLinks.length - 1;
-          return (
-            <Fragment key={i}>
-              <EuiButtonEmpty href={href} target="_blank" size="s" flush="left" iconType={iconType}>
-                {title}
-              </EuiButtonEmpty>
-              {!isLast && <EuiSpacer size="xs" />}
-            </Fragment>
-          );
-        })}
+        {defaultContentLinks.map(
+          ({ href, title, iconType, onClick: _onClick, dataTestSubj }, i) => {
+            const isLast = i === defaultContentLinks.length - 1;
+
+            if (href && _onClick) {
+              throw new Error(
+                'Only one of `href` and `onClick` should be provided for the help menu link.'
+              );
+            }
+
+            const hrefProps = href ? { href, target: '_blank' } : {};
+            const onClick = () => {
+              if (!_onClick) return;
+              _onClick();
+              this.closeMenu();
+            };
+
+            return (
+              <Fragment key={i}>
+                <EuiButtonEmpty
+                  {...hrefProps}
+                  onClick={onClick}
+                  size="s"
+                  flush="left"
+                  iconType={iconType}
+                  data-test-subj={dataTestSubj}
+                >
+                  {title}
+                </EuiButtonEmpty>
+                {!isLast && <EuiSpacer size="xs" />}
+              </Fragment>
+            );
+          }
+        )}
       </Fragment>
     );
   }

@@ -1,16 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import { DataView } from '@kbn/data-views-plugin/public';
 import { SortDirection } from '@kbn/data-plugin/public';
 import { createSearchSourceStub } from './_stubs';
 import { fetchAnchor, updateSearchSource } from './anchor';
 import { dataViewMock } from '@kbn/discover-utils/src/__mocks__';
-import { searchResponseTimeoutWarningMock } from '@kbn/search-response-warnings/src/__mocks__/search_response_warnings';
+import { searchResponseIncompleteWarningLocalCluster } from '@kbn/search-response-warnings/src/__mocks__/search_response_warnings';
 import { savedSearchMock } from '../../../__mocks__/saved_search';
 import { discoverServiceMock } from '../../../__mocks__/services';
 
@@ -206,7 +208,7 @@ describe('context app', function () {
       ).then(({ anchorRow, interceptedWarnings }) => {
         expect(anchorRow).toHaveProperty('raw._id', '1');
         expect(anchorRow).toHaveProperty('isAnchor', true);
-        expect(interceptedWarnings).toBeUndefined();
+        expect(interceptedWarnings).toEqual([]);
       });
     });
 
@@ -216,20 +218,10 @@ describe('context app', function () {
         { _id: '3', _index: 't' },
       ]);
 
-      const mockWarnings = [
-        {
-          originalWarning: searchResponseTimeoutWarningMock,
-        },
-      ];
-
       const services = discoverServiceMock;
       services.data.search.showWarnings = jest.fn((adapter, callback) => {
         // @ts-expect-error for empty meta
-        callback?.(mockWarnings[0].originalWarning, {});
-
-        // plus duplicates
-        // @ts-expect-error for empty meta
-        callback?.(mockWarnings[0].originalWarning, {});
+        callback?.(searchResponseIncompleteWarningLocalCluster, {});
       });
 
       return fetchAnchor(
@@ -242,7 +234,7 @@ describe('context app', function () {
       ).then(({ anchorRow, interceptedWarnings }) => {
         expect(anchorRow).toHaveProperty('raw._id', '1');
         expect(anchorRow).toHaveProperty('isAnchor', true);
-        expect(interceptedWarnings).toEqual(mockWarnings);
+        expect(interceptedWarnings?.length).toBe(1);
       });
     });
   });
@@ -267,7 +259,7 @@ describe('context app', function () {
         const removeFieldsSpy = searchSourceStub.removeField.withArgs('fieldsFromSource');
         expect(setFieldsSpy.calledOnce).toBe(true);
         expect(removeFieldsSpy.calledOnce).toBe(true);
-        expect(setFieldsSpy.firstCall.args[1]).toEqual([{ field: '*', include_unmapped: 'true' }]);
+        expect(setFieldsSpy.firstCall.args[1]).toEqual([{ field: '*', include_unmapped: true }]);
       });
     });
   });

@@ -8,8 +8,86 @@
 import * as rt from 'io-ts';
 import { CaseConnectorRt, ConnectorMappingsRt } from '../connector/v1';
 import { UserRt } from '../user/v1';
+import { CustomFieldTextTypeRt, CustomFieldToggleTypeRt } from '../custom_field/v1';
+import { CaseBaseOptionalFieldsRt } from '../case/v1';
 
-const ClosureTypeRt = rt.union([rt.literal('close-by-user'), rt.literal('close-by-pushing')]);
+export const ClosureTypeRt = rt.union([
+  rt.literal('close-by-user'),
+  rt.literal('close-by-pushing'),
+]);
+
+export const CustomFieldConfigurationWithoutTypeRt = rt.strict({
+  /**
+   * key of custom field
+   */
+  key: rt.string,
+  /**
+   * label of custom field
+   */
+  label: rt.string,
+  /**
+   * custom field options - required
+   */
+  required: rt.boolean,
+});
+
+export const TextCustomFieldConfigurationRt = rt.intersection([
+  rt.strict({ type: CustomFieldTextTypeRt }),
+  CustomFieldConfigurationWithoutTypeRt,
+  rt.exact(
+    rt.partial({
+      defaultValue: rt.union([rt.string, rt.null]),
+    })
+  ),
+]);
+
+export const ToggleCustomFieldConfigurationRt = rt.intersection([
+  rt.strict({ type: CustomFieldToggleTypeRt }),
+  CustomFieldConfigurationWithoutTypeRt,
+  rt.exact(
+    rt.partial({
+      defaultValue: rt.union([rt.boolean, rt.null]),
+    })
+  ),
+]);
+
+export const CustomFieldConfigurationRt = rt.union([
+  TextCustomFieldConfigurationRt,
+  ToggleCustomFieldConfigurationRt,
+]);
+
+export const CustomFieldsConfigurationRt = rt.array(CustomFieldConfigurationRt);
+
+export const TemplateConfigurationRt = rt.intersection([
+  rt.strict({
+    /**
+     * key of template
+     */
+    key: rt.string,
+    /**
+     * name of template
+     */
+    name: rt.string,
+    /**
+     * case fields of template
+     */
+    caseFields: rt.union([rt.null, CaseBaseOptionalFieldsRt]),
+  }),
+  rt.exact(
+    rt.partial({
+      /**
+       * description of template
+       */
+      description: rt.string,
+      /**
+       * tags of template
+       */
+      tags: rt.array(rt.string),
+    })
+  ),
+]);
+
+export const TemplatesConfigurationRt = rt.array(TemplateConfigurationRt);
 
 export const ConfigurationBasicWithoutOwnerRt = rt.strict({
   /**
@@ -20,6 +98,14 @@ export const ConfigurationBasicWithoutOwnerRt = rt.strict({
    * Whether to close the case after it has been synced with the external system
    */
   closure_type: ClosureTypeRt,
+  /**
+   * The custom fields configured for the case
+   */
+  customFields: CustomFieldsConfigurationRt,
+  /**
+   * Templates configured for the case
+   */
+  templates: TemplatesConfigurationRt,
 });
 
 export const CasesConfigureBasicRt = rt.intersection([
@@ -57,6 +143,10 @@ export const ConfigurationRt = rt.intersection([
 
 export const ConfigurationsRt = rt.array(ConfigurationRt);
 
+export type CustomFieldsConfiguration = rt.TypeOf<typeof CustomFieldsConfigurationRt>;
+export type CustomFieldConfiguration = rt.TypeOf<typeof CustomFieldConfigurationRt>;
+export type TemplatesConfiguration = rt.TypeOf<typeof TemplatesConfigurationRt>;
+export type TemplateConfiguration = rt.TypeOf<typeof TemplateConfigurationRt>;
 export type ClosureType = rt.TypeOf<typeof ClosureTypeRt>;
 export type ConfigurationAttributes = rt.TypeOf<typeof ConfigurationAttributesRt>;
 export type Configuration = rt.TypeOf<typeof ConfigurationRt>;

@@ -1,20 +1,22 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { DataViewField } from '@kbn/data-views-plugin/common';
 import type { EuiButtonIconProps, EuiButtonProps } from '@elastic/eui';
-import type { FieldTypeKnown } from '@kbn/discover-utils/types';
+import type { FieldTypeKnown, FieldBase } from '@kbn/field-utils/types';
 
 export interface BucketedAggregation<KeyType = string> {
   buckets: Array<{
     key: KeyType;
     count: number;
   }>;
+  areExamples?: boolean; // whether `topValues` holds examples in buckets rather than top values
 }
 
 export interface NumberSummary {
@@ -48,15 +50,7 @@ export enum ExistenceFetchStatus {
   unknown = 'unknown',
 }
 
-export interface FieldListItem {
-  name: DataViewField['name'];
-  type?: DataViewField['type'];
-  displayName?: DataViewField['displayName'];
-  count?: DataViewField['count'];
-  timeSeriesMetric?: DataViewField['timeSeriesMetric'];
-  esTypes?: DataViewField['esTypes'];
-  scripted?: DataViewField['scripted'];
-}
+export type FieldListItem = FieldBase;
 
 export enum FieldsGroupNames {
   SpecialFields = 'SpecialFields',
@@ -66,6 +60,7 @@ export enum FieldsGroupNames {
   EmptyFields = 'EmptyFields',
   MetaFields = 'MetaFields',
   UnmappedFields = 'UnmappedFields',
+  SmartFields = 'SmartFields',
 }
 
 export interface FieldsGroupDetails {
@@ -90,6 +85,11 @@ export type FieldListGroups<T extends FieldListItem> = {
   [key in FieldsGroupNames]?: FieldsGroup<T>;
 };
 
+export interface AdditionalFieldGroups<T extends FieldListItem = FieldListItem> {
+  smartFields?: FieldsGroup<T>['fields'];
+  fallbackFields?: Record<string, string[]>;
+}
+
 export type GetCustomFieldType<T extends FieldListItem> = (field: T) => FieldTypeKnown;
 
 export interface RenderFieldItemParams<T extends FieldListItem> {
@@ -107,6 +107,8 @@ export type OverrideFieldGroupDetails = (
 
 export type TimeRangeUpdatesType = 'search-session' | 'timefilter';
 
+export type ButtonAddFieldVariant = 'primary' | 'toolbar';
+
 export type SearchMode = 'documents' | 'text-based';
 
 export interface UnifiedFieldListSidebarContainerCreationOptions {
@@ -116,7 +118,12 @@ export interface UnifiedFieldListSidebarContainerCreationOptions {
   originatingApp: string;
 
   /**
-   * Your app name: "discover", "lens", etc. If not provided, sections state would not be persisted.
+   * Pass `true` to enable the compressed view
+   */
+  compressed?: boolean;
+
+  /**
+   * Your app name: "discover", "lens", etc. If not provided, sections and sidebar toggle states would not be persisted.
    */
   localStorageKeyPrefix?: string;
 
@@ -124,6 +131,16 @@ export interface UnifiedFieldListSidebarContainerCreationOptions {
    * Pass `timefilter` only if you are not using search sessions for the global search
    */
   timeRangeUpdatesType?: TimeRangeUpdatesType;
+
+  /**
+   * Choose how the bottom "Add a field" button should look like. Default `primary`.
+   */
+  buttonAddFieldVariant?: ButtonAddFieldVariant;
+
+  /**
+   * Pass `true` to make the sidebar collapsible. Additionally, define `localStorageKeyPrefix` to persist toggle state.
+   */
+  showSidebarToggleButton?: boolean;
 
   /**
    * Pass `true` to skip auto fetching of fields existence info

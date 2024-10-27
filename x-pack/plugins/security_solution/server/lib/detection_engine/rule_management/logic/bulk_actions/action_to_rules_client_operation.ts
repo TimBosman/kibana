@@ -6,12 +6,12 @@
  */
 
 import type { BulkEditOperation } from '@kbn/alerting-plugin/server';
-import { transformNormalizedRuleToAlertAction } from '../../../../../../common/detection_engine/transform_actions';
+import type { ActionsClient } from '@kbn/actions-plugin/server';
 
-import type { BulkActionEditForRuleAttributes } from '../../../../../../common/api/detection_engine/rule_management/bulk_actions/bulk_actions_route';
-import { BulkActionEditType } from '../../../../../../common/api/detection_engine/rule_management/bulk_actions/bulk_actions_route';
+import type { BulkActionEditForRuleAttributes } from '../../../../../../common/api/detection_engine/rule_management';
+import { BulkActionEditTypeEnum } from '../../../../../../common/api/detection_engine/rule_management';
 import { assertUnreachable } from '../../../../../../common/utility_types';
-import { transformToActionFrequency } from '../../normalization/rule_actions';
+import { parseAndTransformRuleActions } from './utils';
 
 /**
  * converts bulk edit action to format of rulesClient.bulkEdit operation
@@ -19,11 +19,12 @@ import { transformToActionFrequency } from '../../normalization/rule_actions';
  * @returns rulesClient BulkEditOperation
  */
 export const bulkEditActionToRulesClientOperation = (
+  actionsClient: ActionsClient,
   action: BulkActionEditForRuleAttributes
 ): BulkEditOperation[] => {
   switch (action.type) {
     // tags actions
-    case BulkActionEditType.add_tags:
+    case BulkActionEditTypeEnum.add_tags:
       return [
         {
           field: 'tags',
@@ -32,7 +33,7 @@ export const bulkEditActionToRulesClientOperation = (
         },
       ];
 
-    case BulkActionEditType.delete_tags:
+    case BulkActionEditTypeEnum.delete_tags:
       return [
         {
           field: 'tags',
@@ -41,7 +42,7 @@ export const bulkEditActionToRulesClientOperation = (
         },
       ];
 
-    case BulkActionEditType.set_tags:
+    case BulkActionEditTypeEnum.set_tags:
       return [
         {
           field: 'tags',
@@ -51,30 +52,34 @@ export const bulkEditActionToRulesClientOperation = (
       ];
 
     // rule actions
-    case BulkActionEditType.add_rule_actions:
+    case BulkActionEditTypeEnum.add_rule_actions:
       return [
         {
           field: 'actions',
           operation: 'add',
-          value: transformToActionFrequency(action.value.actions, action.value.throttle).map(
-            transformNormalizedRuleToAlertAction
+          value: parseAndTransformRuleActions(
+            actionsClient,
+            action.value.actions,
+            action.value.throttle
           ),
         },
       ];
 
-    case BulkActionEditType.set_rule_actions:
+    case BulkActionEditTypeEnum.set_rule_actions:
       return [
         {
           field: 'actions',
           operation: 'set',
-          value: transformToActionFrequency(action.value.actions, action.value.throttle).map(
-            transformNormalizedRuleToAlertAction
+          value: parseAndTransformRuleActions(
+            actionsClient,
+            action.value.actions,
+            action.value.throttle
           ),
         },
       ];
 
     // schedule actions
-    case BulkActionEditType.set_schedule:
+    case BulkActionEditTypeEnum.set_schedule:
       return [
         {
           field: 'schedule',

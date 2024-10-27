@@ -17,14 +17,15 @@ import {
   EuiModalHeaderTitle,
 } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
-import { toMountPoint } from '@kbn/kibana-react-plugin/public';
-import { CoreStart } from '@kbn/core-lifecycle-browser';
+import { toMountPoint } from '@kbn/react-kibana-mount';
+import { CoreStart } from '@kbn/core/public';
 import { cloneDeep } from 'lodash';
 import { OverlayRef } from '@kbn/core-mount-utils-browser';
 import { IToasts } from '@kbn/core-notifications-browser';
 import type { LayerAction, StateSetter } from '../../../../types';
 import type { XYState, XYByReferenceAnnotationLayerConfig } from '../../types';
 import { annotationLayerHasUnsavedChanges } from '../../state_helpers';
+import { getAnnotationLayerTitle } from '../../visualization_helpers';
 
 export const getRevertChangesAction = ({
   state,
@@ -35,7 +36,7 @@ export const getRevertChangesAction = ({
   state: XYState;
   layer: XYByReferenceAnnotationLayerConfig;
   setState: StateSetter<XYState, unknown>;
-  core: Pick<CoreStart, 'overlays' | 'theme' | 'notifications'>;
+  core: Pick<CoreStart, 'overlays' | 'analytics' | 'i18n' | 'theme' | 'notifications'>;
 }): LayerAction => {
   return {
     displayName: i18n.translate('xpack.lens.xyChart.annotations.revertChanges', {
@@ -50,16 +51,14 @@ export const getRevertChangesAction = ({
           <RevertChangesConfirmModal
             modalTitle={i18n.translate('xpack.lens.modalTitle.revertAnnotationGroupTitle', {
               defaultMessage: 'Revert "{title}" changes?',
-              values: { title: layer.__lastSaved.title },
+              values: { title: getAnnotationLayerTitle(layer) },
             })}
             onCancel={() => modal.close()}
             onConfirm={() => {
               revert({ setState, layer, state, modal, toasts: core.notifications.toasts });
             }}
           />,
-          {
-            theme$: core.theme.theme$,
-          }
+          core
         ),
         {
           'data-test-subj': 'lnsAnnotationLayerRevertModal',
@@ -111,7 +110,7 @@ export const revert = ({
   toasts.addSuccess({
     title: i18n.translate('xpack.lens.xyChart.annotations.notificationReverted', {
       defaultMessage: `Reverted "{title}"`,
-      values: { title: layer.__lastSaved.title },
+      values: { title: getAnnotationLayerTitle(layer) },
     }),
     text: i18n.translate('xpack.lens.xyChart.annotations.notificationRevertedExplanation', {
       defaultMessage: 'The most recently saved version of this annotation group has been restored.',

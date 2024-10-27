@@ -6,6 +6,7 @@
  */
 
 import { schema } from '@kbn/config-schema';
+import { ruleParamsSchema } from '@kbn/response-ops-rule-params';
 import {
   ruleLastRunOutcomeValues,
   ruleExecutionStatusValues,
@@ -15,9 +16,9 @@ import {
 import { rRuleSchema } from '../../r_rule/schemas';
 import { dateSchema } from './date_schema';
 import { notifyWhenSchema } from './notify_when_schema';
-import { actionDomainSchema, actionSchema } from './action_schemas';
+import { actionSchema, systemActionSchema } from './action_schemas';
+import { flappingSchema } from './flapping_schema';
 
-export const ruleParamsSchema = schema.recordOf(schema.string(), schema.maybe(schema.any()));
 export const mappedParamsSchema = schema.recordOf(schema.string(), schema.maybe(schema.any()));
 
 export const intervalScheduleSchema = schema.object({
@@ -55,6 +56,8 @@ export const ruleExecutionStatusSchema = schema.object({
       reason: schema.oneOf([
         schema.literal(ruleExecutionStatusWarningReason.MAX_EXECUTABLE_ACTIONS),
         schema.literal(ruleExecutionStatusWarningReason.MAX_ALERTS),
+        schema.literal(ruleExecutionStatusWarningReason.MAX_QUEUED_ACTIONS),
+        schema.literal(ruleExecutionStatusWarningReason.EXECUTION),
       ]),
       message: schema.string(),
     })
@@ -81,6 +84,8 @@ export const ruleLastRunSchema = schema.object({
         schema.literal(ruleExecutionStatusErrorReason.VALIDATE),
         schema.literal(ruleExecutionStatusWarningReason.MAX_EXECUTABLE_ACTIONS),
         schema.literal(ruleExecutionStatusWarningReason.MAX_ALERTS),
+        schema.literal(ruleExecutionStatusWarningReason.MAX_QUEUED_ACTIONS),
+        schema.literal(ruleExecutionStatusWarningReason.EXECUTION),
       ])
     )
   ),
@@ -130,6 +135,10 @@ export const snoozeScheduleSchema = schema.object({
   skipRecurrences: schema.maybe(schema.arrayOf(schema.string())),
 });
 
+export const alertDelaySchema = schema.object({
+  active: schema.number(),
+});
+
 /**
  * Unsanitized (domain) rule schema, used by internal rules clients
  */
@@ -141,7 +150,8 @@ export const ruleDomainSchema = schema.object({
   alertTypeId: schema.string(),
   consumer: schema.string(),
   schedule: intervalScheduleSchema,
-  actions: schema.arrayOf(actionDomainSchema),
+  actions: schema.arrayOf(actionSchema),
+  systemActions: schema.maybe(schema.arrayOf(systemActionSchema)),
   params: ruleParamsSchema,
   mapped_params: schema.maybe(mappedParamsSchema),
   scheduledTaskId: schema.maybe(schema.string()),
@@ -166,6 +176,9 @@ export const ruleDomainSchema = schema.object({
   revision: schema.number(),
   running: schema.maybe(schema.nullable(schema.boolean())),
   viewInAppRelativeUrl: schema.maybe(schema.nullable(schema.string())),
+  alertDelay: schema.maybe(alertDelaySchema),
+  legacyId: schema.maybe(schema.nullable(schema.string())),
+  flapping: schema.maybe(schema.nullable(flappingSchema)),
 });
 
 /**
@@ -180,6 +193,7 @@ export const ruleSchema = schema.object({
   consumer: schema.string(),
   schedule: intervalScheduleSchema,
   actions: schema.arrayOf(actionSchema),
+  systemActions: schema.maybe(schema.arrayOf(systemActionSchema)),
   params: ruleParamsSchema,
   mapped_params: schema.maybe(mappedParamsSchema),
   scheduledTaskId: schema.maybe(schema.string()),
@@ -203,4 +217,7 @@ export const ruleSchema = schema.object({
   revision: schema.number(),
   running: schema.maybe(schema.nullable(schema.boolean())),
   viewInAppRelativeUrl: schema.maybe(schema.nullable(schema.string())),
+  alertDelay: schema.maybe(alertDelaySchema),
+  legacyId: schema.maybe(schema.nullable(schema.string())),
+  flapping: schema.maybe(schema.nullable(flappingSchema)),
 });

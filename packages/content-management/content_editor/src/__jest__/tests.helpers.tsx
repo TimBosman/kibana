@@ -1,19 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import React from 'react';
 import type { ComponentType } from 'react';
-import { of } from 'rxjs';
 
 import { TagSelector, TagList } from '../mocks';
 import { ContentEditorProvider } from '../services';
 import type { Services } from '../services';
-
-const theme$ = of({ darkMode: false });
 
 export const getMockServices = (overrides?: Partial<Services>) => {
   const services = {
@@ -24,7 +23,6 @@ export const getMockServices = (overrides?: Partial<Services>) => {
     TagList,
     TagSelector,
     notifyError: () => undefined,
-    theme$,
     ...overrides,
   };
 
@@ -36,6 +34,7 @@ export function WithServices<P>(Comp: ComponentType<P>, overrides: Partial<Servi
     const services = getMockServices(overrides);
     return (
       <ContentEditorProvider {...services}>
+        {/* @ts-expect-error upgrade typescript v4.9.5*/}
         <Comp {...props} />
       </ContentEditorProvider>
     );

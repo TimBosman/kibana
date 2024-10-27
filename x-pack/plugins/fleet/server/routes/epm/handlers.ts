@@ -5,14 +5,13 @@
  * 2.0.
  */
 
-import path from 'path';
-
 import type { TypeOf } from '@kbn/config-schema';
-import mime from 'mime-types';
 import semverValid from 'semver/functions/valid';
-import type { ResponseHeaders, KnownHeaders, HttpResponseOptions } from '@kbn/core/server';
+import type { HttpResponseOptions } from '@kbn/core/server';
 
 import { pick } from 'lodash';
+
+import { PACKAGE_POLICY_SAVED_OBJECT_TYPE } from '../../../common';
 
 import { HTTPAuthorizationHeader } from '../../../common/http_authorization_header';
 import { generateTransformSecondaryAuthHeaders } from '../../services/api_keys/transform_api_keys';
@@ -41,7 +40,6 @@ import type {
   GetPackagesRequestSchema,
   GetInstalledPackagesRequestSchema,
   GetDataStreamsRequestSchema,
-  GetFileRequestSchema,
   GetInfoRequestSchema,
   InstallPackageFromRegistryRequestSchema,
   InstallPackageByUploadRequestSchema,
@@ -53,26 +51,29 @@ import type {
   GetLimitedPackagesRequestSchema,
   GetBulkAssetsRequestSchema,
   CreateCustomIntegrationRequestSchema,
+  GetInputsRequestSchema,
 } from '../../types';
 import {
   bulkInstallPackages,
   getCategories,
   getPackages,
   getInstalledPackages,
-  getFile,
   getPackageInfo,
   isBulkInstallError,
   installPackage,
   removeInstallation,
   getLimitedPackages,
-  getInstallation,
   getBulkAssets,
+  getTemplateInputs,
 } from '../../services/epm/packages';
 import type { BulkInstallResponse } from '../../services/epm/packages';
-import { defaultFleetErrorHandler, fleetErrorToResponseOptions, FleetError } from '../../errors';
-import { appContextService, checkAllowedPackages } from '../../services';
-import { getArchiveEntry } from '../../services/epm/archive/cache';
-import { getAsset } from '../../services/epm/archive/storage';
+import {
+  defaultFleetErrorHandler,
+  fleetErrorToResponseOptions,
+  FleetError,
+  FleetTooManyRequestsError,
+} from '../../errors';
+import { appContextService, checkAllowedPackages, packagePolicyService } from '../../services';
 import { getPackageUsageStats } from '../../services/epm/packages/get';
 import { updatePackage } from '../../services/epm/packages/update';
 import { getGpgKeyIdOrUndefined } from '../../services/epm/packages/package_verification';
@@ -85,6 +86,8 @@ import type {
 } from '../../types';
 import { getDataStreams } from '../../services/epm/data_streams';
 import { NamingCollisionError } from '../../services/epm/packages/custom_integrations/validation/check_naming_collision';
+import { DatasetNamePrefixError } from '../../services/epm/packages/custom_integrations/validation/check_dataset_name_format';
+import { UPLOAD_RETRY_AFTER_MS } from '../../services/epm/packages/install';
 
 const CACHE_CONTROL_10_MINUTES_HEADER: HttpResponseOptions['headers'] = {
   'cache-control': 'max-age=600',
@@ -139,9 +142,12 @@ export const getInstalledListHandler: FleetRequestHandler<
   TypeOf<typeof GetInstalledPackagesRequestSchema.query>
 > = async (context, request, response) => {
   try {
-    const savedObjectsClient = (await context.fleet).internalSoClient;
+    const [fleetContext, coreContext] = await Promise.all([context.fleet, context.core]);
+    const savedObjectsClient = fleetContext.internalSoClient;
+    const esClient = coreContext.elasticsearch.client.asCurrentUser;
     const res = await getInstalledPackages({
       savedObjectsClient,
+      esClient,
       ...request.query,
     });
 
@@ -203,80 +209,6 @@ export const getLimitedListHandler: FleetRequestHandler<
   }
 };
 
-export const getFileHandler: FleetRequestHandler<
-  TypeOf<typeof GetFileRequestSchema.params>
-> = async (context, request, response) => {
-  try {
-    const { pkgName, pkgVersion, filePath } = request.params;
-    const savedObjectsClient = (await context.fleet).internalSoClient;
-    const installation = await getInstallation({ savedObjectsClient, pkgName });
-    const useLocalFile = pkgVersion === installation?.version;
-
-    if (useLocalFile) {
-      const assetPath = `${pkgName}-${pkgVersion}/${filePath}`;
-      const fileBuffer = getArchiveEntry(assetPath);
-      // only pull local installation if we don't have it cached
-      const storedAsset = !fileBuffer && (await getAsset({ savedObjectsClient, path: assetPath }));
-
-      // error, if neither is available
-      if (!fileBuffer && !storedAsset) {
-        return response.custom({
-          body: `installed package file not found: ${filePath}`,
-          statusCode: 404,
-        });
-      }
-
-      // if storedAsset is not available, fileBuffer *must* be
-      // b/c we error if we don't have at least one, and storedAsset is the least likely
-      const { buffer, contentType } = storedAsset
-        ? {
-            contentType: storedAsset.media_type,
-            buffer: storedAsset.data_utf8
-              ? Buffer.from(storedAsset.data_utf8, 'utf8')
-              : Buffer.from(storedAsset.data_base64, 'base64'),
-          }
-        : {
-            contentType: mime.contentType(path.extname(assetPath)),
-            buffer: fileBuffer,
-          };
-
-      if (!contentType) {
-        return response.custom({
-          body: `unknown content type for file: ${filePath}`,
-          statusCode: 400,
-        });
-      }
-
-      return response.custom({
-        body: buffer,
-        statusCode: 200,
-        headers: {
-          ...CACHE_CONTROL_10_MINUTES_HEADER,
-          'content-type': contentType,
-        },
-      });
-    } else {
-      const registryResponse = await getFile(pkgName, pkgVersion, filePath);
-      const headersToProxy: KnownHeaders[] = ['content-type'];
-      const proxiedHeaders = headersToProxy.reduce((headers, knownHeader) => {
-        const value = registryResponse.headers.get(knownHeader);
-        if (value !== null) {
-          headers[knownHeader] = value;
-        }
-        return headers;
-      }, {} as ResponseHeaders);
-
-      return response.custom({
-        body: registryResponse.body,
-        statusCode: registryResponse.status,
-        headers: { ...CACHE_CONTROL_10_MINUTES_HEADER, ...proxiedHeaders },
-      });
-    }
-  } catch (error) {
-    return defaultFleetErrorHandler({ error, response });
-  }
-};
-
 export const getInfoHandler: FleetRequestHandler<
   TypeOf<typeof GetInfoRequestSchema.params>,
   TypeOf<typeof GetInfoRequestSchema.query>
@@ -301,9 +233,23 @@ export const getInfoHandler: FleetRequestHandler<
       prerelease,
     });
     const flattenedRes = soToInstallationInfo(res) as PackageInfo;
+    let metadata: any;
+    if (request.query.withMetadata) {
+      const allSpaceSoClient = appContextService.getInternalUserSOClientWithoutSpaceExtension();
+      const { total } = await packagePolicyService.list(allSpaceSoClient, {
+        kuery: `${PACKAGE_POLICY_SAVED_OBJECT_TYPE}.package.name:${pkgName}`,
+        page: 1,
+        perPage: 0,
+        spaceId: '*',
+      });
+      metadata = {
+        has_policies: total > 0,
+      };
+    }
 
     const body: GetInfoResponse = {
       item: flattenedRes,
+      metadata,
     };
     return response.ok({ body });
   } catch (error) {
@@ -316,10 +262,16 @@ export const getBulkAssetsHandler: FleetRequestHandler<
   undefined,
   TypeOf<typeof GetBulkAssetsRequestSchema.body>
 > = async (context, request, response) => {
+  const coreContext = await context.core;
   try {
     const { assetIds } = request.body;
-    const savedObjectsClient = (await context.fleet).internalSoClient;
-    const assets = await getBulkAssets(savedObjectsClient, assetIds as AssetSOObject[]);
+    const savedObjectsClient = coreContext.savedObjects.client;
+    const savedObjectsTypeRegistry = coreContext.savedObjects.typeRegistry;
+    const assets = await getBulkAssets(
+      savedObjectsClient,
+      savedObjectsTypeRegistry,
+      assetIds as AssetSOObject[]
+    );
 
     const body: GetBulkAssetsResponse = {
       items: assets,
@@ -374,15 +326,16 @@ export const installPackageFromRegistryHandler: FleetRequestHandler<
   const fleetContext = await context.fleet;
   const savedObjectsClient = fleetContext.internalSoClient;
   const esClient = coreContext.elasticsearch.client.asInternalUser;
-  const user = (await appContextService.getSecurity()?.authc.getCurrentUser(request)) || undefined;
+  const user = appContextService.getSecurityCore().authc.getCurrentUser(request) || undefined;
 
   const { pkgName, pkgVersion } = request.params;
 
   const authorizationHeader = HTTPAuthorizationHeader.parseFromRequest(request, user?.username);
 
   const spaceId = fleetContext.spaceId;
+  const installSource = 'registry';
   const res = await installPackage({
-    installSource: 'registry',
+    installSource,
     savedObjectsClient,
     pkgkey: pkgVersion ? `${pkgName}-${pkgVersion}` : pkgName,
     esClient,
@@ -391,13 +344,15 @@ export const installPackageFromRegistryHandler: FleetRequestHandler<
     ignoreConstraints: request.body?.ignore_constraints,
     prerelease: request.query?.prerelease,
     authorizationHeader,
+    ignoreMappingUpdateErrors: request.query?.ignoreMappingUpdateErrors,
+    skipDataStreamRollover: request.query?.skipDataStreamRollover,
   });
 
   if (!res.error) {
     const body: InstallPackageResponse = {
       items: res.assets || [],
       _meta: {
-        install_source: res.installSource,
+        install_source: res.installSource ?? installSource,
       },
     };
     return response.ok({ body });
@@ -405,6 +360,7 @@ export const installPackageFromRegistryHandler: FleetRequestHandler<
     return await defaultFleetErrorHandler({ error: res.error, response });
   }
 };
+
 export const createCustomIntegrationHandler: FleetRequestHandler<
   undefined,
   undefined,
@@ -414,15 +370,15 @@ export const createCustomIntegrationHandler: FleetRequestHandler<
   const fleetContext = await context.fleet;
   const savedObjectsClient = fleetContext.internalSoClient;
   const esClient = coreContext.elasticsearch.client.asInternalUser;
-  const user = (await appContextService.getSecurity()?.authc.getCurrentUser(request)) || undefined;
+  const user = appContextService.getSecurityCore().authc.getCurrentUser(request) || undefined;
   const kibanaVersion = appContextService.getKibanaVersion();
   const authorizationHeader = HTTPAuthorizationHeader.parseFromRequest(request, user?.username);
   const spaceId = fleetContext.spaceId;
   const { integrationName, force, datasets } = request.body;
-
+  const installSource = 'custom';
   try {
     const res = await installPackage({
-      installSource: 'custom',
+      installSource,
       savedObjectsClient,
       pkgName: integrationName,
       datasets,
@@ -437,7 +393,7 @@ export const createCustomIntegrationHandler: FleetRequestHandler<
       const body: InstallPackageResponse = {
         items: res.assets || [],
         _meta: {
-          install_source: res.installSource,
+          install_source: res.installSource ?? installSource,
         },
       };
       return response.ok({ body });
@@ -448,6 +404,13 @@ export const createCustomIntegrationHandler: FleetRequestHandler<
     if (error instanceof NamingCollisionError) {
       return response.customError({
         statusCode: 409,
+        body: {
+          message: error.message,
+        },
+      });
+    } else if (error instanceof DatasetNamePrefixError) {
+      return response.customError({
+        statusCode: 422,
         body: {
           message: error.message,
         },
@@ -482,6 +445,8 @@ export const bulkInstallPackagesFromRegistryHandler: FleetRequestHandler<
   const savedObjectsClient = fleetContext.internalSoClient;
   const esClient = coreContext.elasticsearch.client.asInternalUser;
   const spaceId = fleetContext.spaceId;
+  const user = appContextService.getSecurityCore().authc.getCurrentUser(request) || undefined;
+  const authorizationHeader = HTTPAuthorizationHeader.parseFromRequest(request, user?.username);
 
   const bulkInstalledResponses = await bulkInstallPackages({
     savedObjectsClient,
@@ -490,6 +455,7 @@ export const bulkInstallPackagesFromRegistryHandler: FleetRequestHandler<
     spaceId,
     prerelease: request.query.prerelease,
     force: request.body.force,
+    authorizationHeader,
   });
   const payload = bulkInstalledResponses.map(bulkInstallServiceResponseToHttpEntry);
   const body: BulkInstallPackagesResponse = {
@@ -501,7 +467,7 @@ export const bulkInstallPackagesFromRegistryHandler: FleetRequestHandler<
 
 export const installPackageByUploadHandler: FleetRequestHandler<
   undefined,
-  undefined,
+  TypeOf<typeof InstallPackageByUploadRequestSchema.query>,
   TypeOf<typeof InstallPackageByUploadRequestSchema.body>
 > = async (context, request, response) => {
   const coreContext = await context.core;
@@ -511,36 +477,49 @@ export const installPackageByUploadHandler: FleetRequestHandler<
   const contentType = request.headers['content-type'] as string; // from types it could also be string[] or undefined but this is checked later
   const archiveBuffer = Buffer.from(request.body);
   const spaceId = fleetContext.spaceId;
-  const user = (await appContextService.getSecurity()?.authc.getCurrentUser(request)) || undefined;
-
+  const user = appContextService.getSecurityCore().authc.getCurrentUser(request) || undefined;
   const authorizationHeader = HTTPAuthorizationHeader.parseFromRequest(request, user?.username);
-
+  const installSource = 'upload';
   const res = await installPackage({
-    installSource: 'upload',
+    installSource,
     savedObjectsClient,
     esClient,
     archiveBuffer,
     spaceId,
     contentType,
     authorizationHeader,
+    ignoreMappingUpdateErrors: request.query?.ignoreMappingUpdateErrors,
+    skipDataStreamRollover: request.query?.skipDataStreamRollover,
   });
   if (!res.error) {
     const body: InstallPackageResponse = {
       items: res.assets || [],
       response: res.assets || [],
       _meta: {
-        install_source: res.installSource,
+        install_source: res.installSource ?? installSource,
       },
     };
     return response.ok({ body });
   } else {
+    if (res.error instanceof FleetTooManyRequestsError) {
+      return response.customError({
+        statusCode: 429,
+        body: {
+          message: res.error.message,
+        },
+        headers: {
+          // retry-after expects seconds
+          'retry-after': Math.ceil(UPLOAD_RETRY_AFTER_MS / 1000).toString(),
+        },
+      });
+    }
     return defaultFleetErrorHandler({ error: res.error, response });
   }
 };
 
 export const deletePackageHandler: FleetRequestHandler<
   TypeOf<typeof DeletePackageRequestSchema.params>,
-  undefined,
+  TypeOf<typeof DeletePackageRequestSchema.query>,
   TypeOf<typeof DeletePackageRequestSchema.body>
 > = async (context, request, response) => {
   try {
@@ -554,7 +533,7 @@ export const deletePackageHandler: FleetRequestHandler<
       pkgName,
       pkgVersion,
       esClient,
-      force: request.body?.force,
+      force: request.query?.force,
     });
     const body: DeletePackageResponse = {
       items: res,
@@ -602,7 +581,7 @@ export const reauthorizeTransformsHandler: FleetRequestHandler<
 
   let username;
   try {
-    const user = await appContextService.getSecurity()?.authc.getCurrentUser(request);
+    const user = appContextService.getSecurityCore().authc.getCurrentUser(request);
     if (user) {
       username = user.username;
     }
@@ -621,18 +600,55 @@ export const reauthorizeTransformsHandler: FleetRequestHandler<
       pkgVersion,
     });
 
-    const resp = await handleTransformReauthorizeAndStart({
-      esClient,
-      savedObjectsClient,
-      logger,
-      pkgName,
-      pkgVersion,
-      transforms,
-      secondaryAuth,
-      username,
-    });
+    const resp: Array<{ transformId: string; success: boolean; error: null | any }> =
+      await handleTransformReauthorizeAndStart({
+        esClient,
+        savedObjectsClient,
+        logger,
+        pkgName,
+        pkgVersion,
+        transforms,
+        secondaryAuth,
+        username,
+      });
 
     return response.ok({ body: resp });
+  } catch (error) {
+    return defaultFleetErrorHandler({ error, response });
+  }
+};
+
+export const getInputsHandler: FleetRequestHandler<
+  TypeOf<typeof GetInputsRequestSchema.params>,
+  TypeOf<typeof GetInputsRequestSchema.query>,
+  undefined
+> = async (context, request, response) => {
+  const soClient = (await context.fleet).internalSoClient;
+
+  try {
+    const { pkgName, pkgVersion } = request.params;
+    const { format, prerelease, ignoreUnverified } = request.query;
+    let body;
+    if (format === 'json') {
+      body = await getTemplateInputs(
+        soClient,
+        pkgName,
+        pkgVersion,
+        'json',
+        prerelease,
+        ignoreUnverified
+      );
+    } else if (format === 'yml' || format === 'yaml') {
+      body = await getTemplateInputs(
+        soClient,
+        pkgName,
+        pkgVersion,
+        'yml',
+        prerelease,
+        ignoreUnverified
+      );
+    }
+    return response.ok({ body });
   } catch (error) {
     return defaultFleetErrorHandler({ error, response });
   }
@@ -646,6 +662,7 @@ const soToInstallationInfo = (pkg: PackageListItem | PackageInfo) => {
       ...pick(pkg.savedObject, ['created_at', 'updated_at', 'namespaces', 'type']),
       installed_kibana: attributes.installed_kibana,
       installed_kibana_space_id: attributes.installed_kibana_space_id,
+      additional_spaces_installed_kibana: attributes.additional_spaces_installed_kibana,
       installed_es: attributes.installed_es,
       install_status: attributes.install_status,
       install_source: attributes.install_source,
@@ -654,7 +671,10 @@ const soToInstallationInfo = (pkg: PackageListItem | PackageInfo) => {
       verification_status: attributes.verification_status,
       verification_key_id: attributes.verification_key_id,
       experimental_data_stream_features: attributes.experimental_data_stream_features,
+      latest_install_failed_attempts: attributes.latest_install_failed_attempts,
+      latest_executed_state: attributes.latest_executed_state,
     };
+
     return {
       // When savedObject gets removed, replace `pkg` with `...omit(pkg, 'savedObject')`
       ...pkg,

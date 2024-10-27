@@ -32,6 +32,7 @@ export default function loadTests({ loadTestFile, getService }) {
     loadTestFile(require.resolve('./install_tsds_disable'));
     loadTestFile(require.resolve('./install_tag_assets'));
     loadTestFile(require.resolve('./bulk_upgrade'));
+    loadTestFile(require.resolve('./bulk_install'));
     loadTestFile(require.resolve('./update_assets'));
     loadTestFile(require.resolve('./data_stream'));
     loadTestFile(require.resolve('./package_install_complete'));
@@ -46,5 +47,7 @@ export default function loadTests({ loadTestFile, getService }) {
     loadTestFile(require.resolve('./install_dynamic_template_metric'));
     loadTestFile(require.resolve('./routing_rules'));
     loadTestFile(require.resolve('./install_runtime_field'));
+    loadTestFile(require.resolve('./get_templates_inputs'));
+    loadTestFile(require.resolve('./data_views'));
   });
 }

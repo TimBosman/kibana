@@ -7,10 +7,11 @@
 
 import React, { useMemo } from 'react';
 
+import { isTransformListRowWithStats } from '../../../../common/transform_list';
 import { TRANSFORM_STATE } from '../../../../../../common/constants';
 
 import { useTransformCapabilities } from '../../../../hooks';
-import { TransformListAction, TransformListRow } from '../../../../common';
+import type { TransformListAction, TransformListRow } from '../../../../common';
 import { useScheduleNowTransforms } from '../../../../hooks';
 
 import {
@@ -33,8 +34,10 @@ export const useScheduleNowAction = (forceDisable: boolean, transformNodes: numb
           transformNodes={transformNodes}
         />
       ),
-      available: (item: TransformListRow) => item.stats.state === TRANSFORM_STATE.STARTED,
+      available: (item: TransformListRow) =>
+        isTransformListRowWithStats(item) ? item.stats.state === TRANSFORM_STATE.STARTED : true,
       enabled: (item: TransformListRow) =>
+        isTransformListRowWithStats(item) &&
         !isScheduleNowActionDisabled([item], canScheduleNowTransform, transformNodes),
       description: scheduleNowActionNameText,
       icon: 'play',

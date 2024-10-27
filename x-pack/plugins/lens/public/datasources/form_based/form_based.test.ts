@@ -26,7 +26,6 @@ import {
   Datasource,
   FramePublicAPI,
   OperationDescriptor,
-  FrameDatasourceAPI,
   UserMessage,
 } from '../../types';
 import { getFieldByNameFactory } from './pure_helpers';
@@ -49,8 +48,9 @@ import {
 import { createMockedFullReference } from './operations/mocks';
 import { cloneDeep } from 'lodash';
 import { Datatable, DatatableColumn } from '@kbn/expressions-plugin/common';
-import { createMockFramePublicAPI } from '../../mocks';
 import { filterAndSortUserMessages } from '../../app_plugin/get_application_user_messages';
+import { createMockFramePublicAPI } from '../../mocks';
+import { createMockDataViewsState } from '../../data_views_service/mocks';
 
 jest.mock('./loader');
 jest.mock('../../id_generator');
@@ -3062,22 +3062,6 @@ describe('IndexPattern Data Source', () => {
   });
 
   describe('#getUserMessages', () => {
-    function createMockFrameDatasourceAPI({
-      activeData,
-      dataViews,
-    }: Partial<Omit<FramePublicAPI, 'dataViews'>> & {
-      dataViews?: Partial<FramePublicAPI['dataViews']>;
-    }): FrameDatasourceAPI {
-      return {
-        ...createMockFramePublicAPI({
-          activeData,
-          dataViews,
-        }),
-        query: { query: '', language: 'kuery' },
-        filters: [],
-      };
-    }
-
     describe('error messages', () => {
       it('should generate error messages for a single layer', () => {
         (getErrorMessages as jest.Mock).mockClear();
@@ -3094,7 +3078,9 @@ describe('IndexPattern Data Source', () => {
         };
         expect(
           FormBasedDatasource.getUserMessages(state, {
-            frame: createMockFrameDatasourceAPI({ dataViews: { indexPatterns } }),
+            frame: createMockFramePublicAPI({
+              dataViews: createMockDataViewsState({ indexPatterns }),
+            }),
             setState: () => {},
           })
         ).toMatchInlineSnapshot(`
@@ -3109,6 +3095,7 @@ describe('IndexPattern Data Source', () => {
               "longMessage": "error 1",
               "severity": "error",
               "shortMessage": "",
+              "uniqueId": "error 1",
             },
             Object {
               "displayLocations": Array [
@@ -3120,6 +3107,7 @@ describe('IndexPattern Data Source', () => {
               "longMessage": "error 2",
               "severity": "error",
               "shortMessage": "",
+              "uniqueId": "error 2",
             },
           ]
         `);
@@ -3146,7 +3134,9 @@ describe('IndexPattern Data Source', () => {
         };
         expect(
           FormBasedDatasource.getUserMessages(state, {
-            frame: createMockFrameDatasourceAPI({ dataViews: { indexPatterns } }),
+            frame: createMockFramePublicAPI({
+              dataViews: createMockDataViewsState({ indexPatterns }),
+            }),
             setState: () => {},
           })
         ).toMatchInlineSnapshot(`
@@ -3158,20 +3148,19 @@ describe('IndexPattern Data Source', () => {
                 },
               ],
               "fixableInEditor": true,
-              "longMessage": <FormattedMessage
+              "longMessage": <Memo(MemoizedFormattedMessage)
                 defaultMessage="Layer {position} error: {wrappedMessage}"
                 id="xpack.lens.indexPattern.layerErrorWrapper"
                 values={
                   Object {
                     "position": 1,
-                    "wrappedMessage": <React.Fragment>
-                      error 1
-                    </React.Fragment>,
+                    "wrappedMessage": "error 1",
                   }
                 }
               />,
               "severity": "error",
               "shortMessage": "Layer 1 error: ",
+              "uniqueId": "error 1",
             },
             Object {
               "displayLocations": Array [
@@ -3180,20 +3169,19 @@ describe('IndexPattern Data Source', () => {
                 },
               ],
               "fixableInEditor": true,
-              "longMessage": <FormattedMessage
+              "longMessage": <Memo(MemoizedFormattedMessage)
                 defaultMessage="Layer {position} error: {wrappedMessage}"
                 id="xpack.lens.indexPattern.layerErrorWrapper"
                 values={
                   Object {
                     "position": 1,
-                    "wrappedMessage": <React.Fragment>
-                      error 2
-                    </React.Fragment>,
+                    "wrappedMessage": "error 2",
                   }
                 }
               />,
               "severity": "error",
               "shortMessage": "Layer 1 error: ",
+              "uniqueId": "error 2",
             },
           ]
         `);
@@ -3235,7 +3223,9 @@ describe('IndexPattern Data Source', () => {
           (getErrorMessages as jest.Mock).mockReturnValueOnce([]);
 
           const messages = FormBasedDatasource.getUserMessages(state, {
-            frame: createMockFrameDatasourceAPI({ dataViews: { indexPatterns } }),
+            frame: createMockFramePublicAPI({
+              dataViews: createMockDataViewsState({ indexPatterns }),
+            }),
             setState: () => {},
           });
 
@@ -3258,6 +3248,7 @@ describe('IndexPattern Data Source', () => {
                 </p>,
                 "severity": "error",
                 "shortMessage": "",
+                "uniqueId": "editor_invalid_dimension",
               },
             ]
           `);
@@ -3273,7 +3264,9 @@ describe('IndexPattern Data Source', () => {
           ] as ReturnType<typeof getErrorMessages>);
 
           const messages = FormBasedDatasource.getUserMessages(state, {
-            frame: createMockFrameDatasourceAPI({ dataViews: { indexPatterns } }),
+            frame: createMockFramePublicAPI({
+              dataViews: createMockDataViewsState({ indexPatterns }),
+            }),
             setState: () => {},
           });
 
@@ -3294,6 +3287,7 @@ describe('IndexPattern Data Source', () => {
                 </React.Fragment>,
                 "severity": "error",
                 "shortMessage": "",
+                "uniqueId": undefined,
               },
             ]
           `);
@@ -3303,7 +3297,7 @@ describe('IndexPattern Data Source', () => {
 
     describe('warning messages', () => {
       let state: FormBasedPrivateState;
-      let framePublicAPI: FrameDatasourceAPI;
+      let framePublicAPI: FramePublicAPI;
 
       beforeEach(() => {
         (getErrorMessages as jest.Mock).mockReturnValueOnce([]);
@@ -3385,7 +3379,7 @@ describe('IndexPattern Data Source', () => {
           currentIndexPatternId: '1',
         };
 
-        framePublicAPI = createMockFrameDatasourceAPI({
+        framePublicAPI = createMockFramePublicAPI({
           activeData: {
             first: {
               type: 'datatable',
@@ -3419,9 +3413,9 @@ describe('IndexPattern Data Source', () => {
               ],
             },
           },
-          dataViews: {
+          dataViews: createMockDataViewsState({
             indexPatterns: expectedIndexPatterns,
-          },
+          }),
         });
       });
 
@@ -3432,7 +3426,7 @@ describe('IndexPattern Data Source', () => {
         return onlyWarnings.map(({ longMessage }) =>
           isFragment(longMessage)
             ? (longMessage as ReactElement).props.children[0].props.id
-            : (longMessage as ReactElement).props.id
+            : (longMessage as unknown as ReactElement).props.id
         );
       };
 
@@ -3549,13 +3543,13 @@ describe('IndexPattern Data Source', () => {
               currentIndexPatternId: '1',
             },
             {
-              frame: createMockFrameDatasourceAPI({
+              frame: createMockFramePublicAPI({
                 activeData: {
                   first: createDatatableForLayer(0),
                 },
-                dataViews: {
+                dataViews: createMockDataViewsState({
                   indexPatterns: expectedIndexPatterns,
-                },
+                }),
               }),
               setState: () => {},
               visualizationInfo: { layers: [] },
@@ -3574,14 +3568,14 @@ describe('IndexPattern Data Source', () => {
           currentIndexPatternId: '1',
         };
         const messages = FormBasedDatasource.getUserMessages!(state, {
-          frame: createMockFrameDatasourceAPI({
+          frame: createMockFramePublicAPI({
             activeData: {
               first: createDatatableForLayer(0),
               second: createDatatableForLayer(1),
             },
-            dataViews: {
+            dataViews: createMockDataViewsState({
               indexPatterns: expectedIndexPatterns,
-            },
+            }),
           }),
           setState: () => {},
           visualizationInfo: { layers: [] },

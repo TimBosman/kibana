@@ -7,7 +7,6 @@
 
 import { get } from 'lodash';
 import type { KueryNode } from '@kbn/es-query';
-import type { ISavedObjectsRepository } from '@kbn/core/server';
 import {
   CASE_COMMENT_SAVED_OBJECT,
   CASE_SAVED_OBJECT,
@@ -27,9 +26,12 @@ import type {
   FileAttachmentAggregationResults,
   FileAttachmentAggsResult,
   AttachmentFrameworkAggsResult,
+  CustomFieldsTelemetry,
 } from '../types';
 import { buildFilter } from '../../client/utils';
 import type { Owner } from '../../../common/constants/types';
+import type { ConfigurationPersistedAttributes } from '../../common/types/configure';
+import type { TelemetrySavedObjectsClient } from '../telemetry_saved_objects_client';
 
 export const getCountsAggregationQuery = (savedObjectType: string) => ({
   counts: {
@@ -124,7 +126,7 @@ export const getCountsAndMaxData = async ({
   savedObjectType,
   filter,
 }: {
-  savedObjectsClient: ISavedObjectsRepository;
+  savedObjectsClient: TelemetrySavedObjectsClient;
   savedObjectType: string;
   filter?: KueryNode;
 }) => {
@@ -136,6 +138,7 @@ export const getCountsAndMaxData = async ({
     perPage: 0,
     filter,
     type: savedObjectType,
+    namespaces: ['*'],
     aggs: {
       ...getCountsAggregationQuery(savedObjectType),
       ...getMaxBucketOnCaseAggregationQuery(savedObjectType),
@@ -196,6 +199,28 @@ export const getSolutionValues = ({
       totalWithAtLeastOne:
         caseAggregations?.[owner].assigneeFilters.buckets.atLeastOne.doc_count ?? 0,
     },
+  };
+};
+
+export const getCustomFieldsTelemetry = (
+  customFields?: ConfigurationPersistedAttributes['customFields']
+): CustomFieldsTelemetry => {
+  const customFiledTypes: Record<string, number> = {};
+
+  const totalsByType = customFields?.reduce((a, c) => {
+    if (c?.type) {
+      Object.assign(customFiledTypes, { [c.type]: (customFiledTypes[c.type] ?? 0) + 1 });
+    }
+
+    return customFiledTypes;
+  }, {});
+
+  const allRequiredCustomFields = customFields?.filter((field) => field?.required).length;
+
+  return {
+    totalsByType: totalsByType ?? {},
+    totals: customFields?.length ?? 0,
+    required: allRequiredCustomFields ?? 0,
   };
 };
 

@@ -20,18 +20,16 @@ import type {
   HttpStart,
   IUiSettingsClient,
   NotificationsStart,
-  OverlayStart,
 } from '@kbn/core/public';
 import type { DataPublicPluginStart } from '@kbn/data-plugin/public';
 import type { DataViewsPublicPluginStart } from '@kbn/data-views-plugin/public';
 import type { UsageCollectionStart } from '@kbn/usage-collection-plugin/public';
-import type { DashboardStart } from '@kbn/dashboard-plugin/public';
 import type { NavigationPublicPluginStart } from '@kbn/navigation-plugin/public';
 import type { IStorageWrapper } from '@kbn/kibana-utils-plugin/public';
-import type { DashboardFeatureFlagConfig } from '@kbn/dashboard-plugin/public';
 import type { SavedObjectTaggingPluginStart } from '@kbn/saved-objects-tagging-plugin/public';
 import type { IndexPatternFieldEditorStart } from '@kbn/data-view-field-editor-plugin/public';
 import type { DataViewEditorStart } from '@kbn/data-view-editor-plugin/public';
+import { ContentManagementPublicStart } from '@kbn/content-management-plugin/public';
 import {
   VisualizeFieldContext,
   ACTION_VISUALIZE_LENS_FIELD,
@@ -55,6 +53,7 @@ import type {
   LensTopNavMenuEntryGenerator,
   VisualizationMap,
   UserMessagesGetter,
+  StartServices,
 } from '../types';
 import type { LensAttributeService } from '../lens_attribute_service';
 import type { LensEmbeddableInput } from '../embeddable/embeddable';
@@ -126,12 +125,11 @@ export interface LensTopNavMenuProps {
   topNavMenuEntryGenerators: LensTopNavMenuEntryGenerator[];
   initialContext?: VisualizeFieldContext | VisualizeEditorContext;
   currentDoc: Document | undefined;
-  theme$: Observable<CoreTheme>;
   indexPatternService: IndexPatternServiceAPI;
-  onTextBasedSavedAndExit: ({ onSave }: { onSave: () => void }) => Promise<void>;
   getUserMessages: UserMessagesGetter;
   shortUrlService: (params: LensAppLocatorParams) => Promise<string>;
   isCurrentStateDirty: boolean;
+  startServices: StartServices;
 }
 
 export interface HistoryLocationState {
@@ -140,13 +138,11 @@ export interface HistoryLocationState {
   originatingApp?: string;
 }
 
-export interface LensAppServices {
+export interface LensAppServices extends StartServices {
   http: HttpStart;
   executionContext: ExecutionContextStart;
   chrome: ChromeStart;
-  overlays: OverlayStart;
   storage: IStorageWrapper;
-  dashboard: DashboardStart;
   dataViews: DataViewsPublicPluginStart;
   fieldFormats: FieldFormatsStart;
   data: DataPublicPluginStart;
@@ -161,6 +157,7 @@ export interface LensAppServices {
   stateTransfer: EmbeddableStateTransfer;
   navigation: NavigationPublicPluginStart;
   attributeService: LensAttributeService;
+  contentManagement: ContentManagementPublicStart;
   savedObjectsTagging?: SavedObjectTaggingPluginStart;
   getOriginatingAppName: () => string | undefined;
   presentationUtil: PresentationUtilPluginStart;
@@ -169,8 +166,6 @@ export interface LensAppServices {
   share?: SharePluginStart;
   unifiedSearch: UnifiedSearchPublicPluginStart;
   docLinks: DocLinksStart;
-  // Temporarily required until the 'by value' paradigm is default.
-  dashboardFeatureFlag: DashboardFeatureFlagConfig;
   dataViewEditor: DataViewEditorStart;
   dataViewFieldEditor: IndexPatternFieldEditorStart;
   locator?: LensAppLocator;

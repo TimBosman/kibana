@@ -1,14 +1,15 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { Observable } from 'rxjs';
 import { Type } from '@kbn/config-schema';
-import type { RecursiveReadonly } from '@kbn/utility-types';
+import type { RecursiveReadonly, MaybePromise } from '@kbn/utility-types';
 import type { PathConfigType } from '@kbn/utils';
 import type { LoggerFactory } from '@kbn/logging';
 import type {
@@ -106,7 +107,7 @@ export interface PluginConfigDescriptor<T = any> {
    */
   exposeToBrowser?: ExposedToBrowserDescriptor<T>;
   /**
-   * List of configuration properties that can be dynamically changed via the PUT /_settings API.
+   * List of configuration properties that can be dynamically changed via the PUT /internal/core/_settings API.
    */
   dynamicConfig?: DynamicConfigDescriptor<T>;
   /**
@@ -216,6 +217,12 @@ export interface PluginManifest {
   readonly optionalPlugins: readonly PluginName[];
 
   /**
+   * An optional list of plugin dependencies that can be resolved dynamically at runtime
+   * using the dynamic contract resolving capabilities from the plugin service.
+   */
+  readonly runtimePluginDependencies: readonly string[];
+
+  /**
    * Specifies whether plugin includes some client/browser specific functionality
    * that should be included into client bundle via `public/ui_plugin.js` file.
    */
@@ -291,36 +298,19 @@ export interface Plugin<
 
   start(core: CoreStart, plugins: TPluginsStart): TStart;
 
-  stop?(): void;
-}
-
-/**
- * A plugin with asynchronous lifecycle methods.
- *
- * @deprecated Asynchronous lifecycles are deprecated, and should be migrated to sync {@link Plugin | plugin}
- * @removeBy 8.8.0
- * @public
- */
-export interface AsyncPlugin<
-  TSetup = void,
-  TStart = void,
-  TPluginsSetup extends object = object,
-  TPluginsStart extends object = object
-> {
-  setup(core: CoreSetup, plugins: TPluginsSetup): TSetup | Promise<TSetup>;
-
-  start(core: CoreStart, plugins: TPluginsStart): TStart | Promise<TStart>;
-
-  stop?(): void;
+  stop?(): MaybePromise<void>;
 }
 
 /**
  * @public
  */
 export type SharedGlobalConfig = RecursiveReadonly<{
-  elasticsearch: Pick<ElasticsearchConfigType, typeof SharedGlobalConfigKeys.elasticsearch[number]>;
-  path: Pick<PathConfigType, typeof SharedGlobalConfigKeys.path[number]>;
-  savedObjects: Pick<SavedObjectsConfigType, typeof SharedGlobalConfigKeys.savedObjects[number]>;
+  elasticsearch: Pick<
+    ElasticsearchConfigType,
+    (typeof SharedGlobalConfigKeys.elasticsearch)[number]
+  >;
+  path: Pick<PathConfigType, (typeof SharedGlobalConfigKeys.path)[number]>;
+  savedObjects: Pick<SavedObjectsConfigType, (typeof SharedGlobalConfigKeys.savedObjects)[number]>;
 }>;
 
 /**
@@ -467,7 +457,6 @@ export type PluginInitializer<
   TPluginsStart extends object = object
 > = (
   core: PluginInitializerContext
-) =>
-  | Plugin<TSetup, TStart, TPluginsSetup, TPluginsStart>
-  | PrebootPlugin<TSetup, TPluginsSetup>
-  | AsyncPlugin<TSetup, TStart, TPluginsSetup, TPluginsStart>;
+) => Promise<
+  Plugin<TSetup, TStart, TPluginsSetup, TPluginsStart> | PrebootPlugin<TSetup, TPluginsSetup>
+>;

@@ -5,31 +5,26 @@
  * 2.0.
  */
 
-jest.mock(
-  'puid',
-  () =>
-    class MockPuid {
-      generate() {
-        return 'mock-report-id';
-      }
-    }
-);
+jest.mock('uuid', () => ({ v4: () => 'mock-report-id' }));
+
+import rison from '@kbn/rison';
 
 import { KibanaRequest, KibanaResponseFactory } from '@kbn/core/server';
-import rison from '@kbn/rison';
 import { coreMock, httpServerMock, loggingSystemMock } from '@kbn/core/server/mocks';
+import { JobParamsPDFV2, TaskPayloadPDFV2 } from '@kbn/reporting-export-types-pdf-common';
+import { createMockConfigSchema } from '@kbn/reporting-mocks-server';
+
 import { ReportingCore } from '../../..';
-import { TaskPayloadPDFV2 } from '../../../../common/types/export_types/printable_pdf_v2';
-import { JobParamsPDFDeprecated } from '../../../export_types/printable_pdf/types';
 import { Report, ReportingStore } from '../../../lib/store';
-import { createMockConfigSchema, createMockReportingCore } from '../../../test_helpers';
+import { createMockReportingCore } from '../../../test_helpers';
 import {
   ReportingJobResponse,
   ReportingRequestHandlerContext,
   ReportingSetup,
 } from '../../../types';
 import { RequestHandler } from './request_handler';
-jest.mock('../../../lib/crypto', () => ({
+
+jest.mock('@kbn/reporting-server/crypto', () => ({
   cryptoFactory: () => ({
     encrypt: () => `hello mock cypher text`,
   }),
@@ -59,13 +54,13 @@ const getMockResponseFactory = () =>
   } as unknown as KibanaResponseFactory);
 
 const mockLogger = loggingSystemMock.createLogger();
-const mockJobParams: JobParamsPDFDeprecated = {
+const mockJobParams: JobParamsPDFV2 = {
   browserTimezone: 'UTC',
   objectType: 'cool_object_type',
   title: 'cool_title',
   version: 'unknown',
   layout: { id: 'preserve_layout' },
-  relativeUrls: [],
+  locatorParams: [],
 };
 
 describe('Handle request to generate', () => {
@@ -120,6 +115,7 @@ describe('Handle request to generate', () => {
           "attempts": 0,
           "completed_at": undefined,
           "created_by": "testymcgee",
+          "error": undefined,
           "execution_time_ms": undefined,
           "jobtype": "printable_pdf_v2",
           "kibana_id": undefined,
@@ -149,9 +145,8 @@ describe('Handle request to generate', () => {
           "layout": Object {
             "id": "preserve_layout",
           },
-          "locatorParams": undefined,
+          "locatorParams": Array [],
           "objectType": "cool_object_type",
-          "relativeUrls": Array [],
           "spaceId": undefined,
           "title": "cool_title",
           "version": "unknown",
@@ -162,7 +157,7 @@ describe('Handle request to generate', () => {
     test('provides a default kibana version field for older POST URLs', async () => {
       // how do we handle the printable_pdf endpoint that isn't migrating to the class instance of export types?
       (mockJobParams as unknown as { version?: string }).version = undefined;
-      const report = await requestHandler.enqueueJob('printablePdf', mockJobParams);
+      const report = await requestHandler.enqueueJob('printablePdfV2', mockJobParams);
 
       const { _id, created_at: _created_at, ...snapObj } = report;
       expect(snapObj.payload.version).toBe('7.14.0');
@@ -215,10 +210,10 @@ describe('Handle request to generate', () => {
     test('disallows invalid export type', async () => {
       expect(await requestHandler.handleGenerateRequest('neanderthals', mockJobParams))
         .toMatchInlineSnapshot(`
-      Object {
-        "body": "Invalid export-type of neanderthals",
-      }
-    `);
+              Object {
+                "body": "Invalid export-type of neanderthals",
+              }
+          `);
     });
 
     test('disallows unsupporting license', async () => {
@@ -231,10 +226,10 @@ describe('Handle request to generate', () => {
 
       expect(await requestHandler.handleGenerateRequest('csv_searchsource', mockJobParams))
         .toMatchInlineSnapshot(`
-      Object {
-        "body": "seeing this means the license isn't supported",
-      }
-    `);
+              Object {
+                "body": "seeing this means the license isn't supported",
+              }
+          `);
     });
 
     test('disallows invalid browser timezone', async () => {

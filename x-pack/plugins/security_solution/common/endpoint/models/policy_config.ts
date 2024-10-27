@@ -6,7 +6,9 @@
  */
 
 import type { PolicyConfig } from '../types';
-import { ProtectionModes } from '../types';
+import { AntivirusRegistrationModes, ProtectionModes } from '../types';
+
+import { isBillablePolicy } from './policy_config_helpers';
 
 /**
  * Return a new default `PolicyConfig` for platinum and above licenses
@@ -19,10 +21,10 @@ export const policyFactory = (
   clusterName = '',
   serverless = false
 ): PolicyConfig => {
-  return {
+  const policy: PolicyConfig = {
     meta: {
       license,
-      license_uid: licenseUid,
+      license_uuid: licenseUid,
       cluster_uuid: clusterUuid,
       cluster_name: clusterName,
       cloud,
@@ -43,6 +45,7 @@ export const policyFactory = (
       malware: {
         mode: ProtectionModes.prevent,
         blocklist: true,
+        on_write_scan: true,
       },
       ransomware: {
         mode: ProtectionModes.prevent,
@@ -79,7 +82,8 @@ export const policyFactory = (
         file: 'info',
       },
       antivirus_registration: {
-        enabled: false,
+        mode: AntivirusRegistrationModes.sync,
+        enabled: true, // Defaults to true since Malware protection is set to prevent and mode is set to sync
       },
       attack_surface_reduction: {
         credential_hardening: {
@@ -96,6 +100,7 @@ export const policyFactory = (
       malware: {
         mode: ProtectionModes.prevent,
         blocklist: true,
+        on_write_scan: true,
       },
       behavior_protection: {
         mode: ProtectionModes.prevent,
@@ -138,6 +143,7 @@ export const policyFactory = (
       malware: {
         mode: ProtectionModes.prevent,
         blocklist: true,
+        on_write_scan: true,
       },
       behavior_protection: {
         mode: ProtectionModes.prevent,
@@ -170,6 +176,22 @@ export const policyFactory = (
       },
     },
   };
+  policy.meta.billable = isBillablePolicy(policy);
+
+  return policy;
+};
+
+/**
+ * Strips paid features from an existing or new `PolicyConfig` for license below enterprise
+ */
+
+export const policyFactoryWithoutPaidEnterpriseFeatures = (
+  policy: PolicyConfig = policyFactory()
+): PolicyConfig => {
+  return {
+    ...policy,
+    global_manifest_version: 'latest',
+  };
 };
 
 /**
@@ -188,6 +210,7 @@ export const policyFactoryWithoutPaidFeatures = (
 
   return {
     ...policy,
+    global_manifest_version: 'latest',
     windows: {
       ...policy.windows,
       advanced:

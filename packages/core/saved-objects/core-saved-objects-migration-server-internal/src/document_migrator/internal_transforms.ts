@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { isFunction } from 'lodash';
@@ -104,6 +105,13 @@ export function getReferenceTransforms(typeRegistry: ISavedObjectTypeRegistry): 
 function convertNamespaceType(doc: SavedObjectUnsanitizedDoc) {
   const { namespace, ...otherAttrs } = doc;
   const additionalDocs: SavedObjectUnsanitizedDoc[] = [];
+
+  if (namespace == null && otherAttrs.namespaces) {
+    return {
+      additionalDocs,
+      transformedDoc: otherAttrs,
+    };
+  }
 
   // If this object exists in the default namespace, return it with the appropriate `namespaces` field without changing its ID.
   if (namespace === undefined) {

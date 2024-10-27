@@ -5,7 +5,11 @@
  * 2.0.
  */
 
+import * as Rx from 'rxjs';
+import { map, take } from 'rxjs';
+
 import type {
+  AnalyticsServiceStart,
   CoreSetup,
   DocLinksServiceSetup,
   IBasePath,
@@ -15,21 +19,27 @@ import type {
   PackageInfo,
   PluginInitializerContext,
   SavedObjectsServiceStart,
+  SecurityServiceStart,
   StatusServiceSetup,
   UiSettingsServiceStart,
 } from '@kbn/core/server';
 import type { PluginStart as DataPluginStart } from '@kbn/data-plugin/server';
 import type { DiscoverServerPluginStart } from '@kbn/discover-plugin/server';
-import type { PluginSetupContract as FeaturesPluginSetup } from '@kbn/features-plugin/server';
+import type { FeaturesPluginSetup } from '@kbn/features-plugin/server';
 import type { FieldFormatsStart } from '@kbn/field-formats-plugin/server';
 import type { LicensingPluginStart } from '@kbn/licensing-plugin/server';
+import type { ReportingServerInfo } from '@kbn/reporting-common/types';
 import {
-  PdfScreenshotResult,
-  PngScreenshotResult,
-  ScreenshotOptions,
-  ScreenshottingStart,
-} from '@kbn/screenshotting-plugin/server';
-import type { SecurityPluginSetup, SecurityPluginStart } from '@kbn/security-plugin/server';
+  CsvSearchSourceExportType,
+  CsvSearchSourceImmediateExportType,
+  CsvV2ExportType,
+} from '@kbn/reporting-export-types-csv';
+import { PdfExportType, PdfV1ExportType } from '@kbn/reporting-export-types-pdf';
+import { PngExportType } from '@kbn/reporting-export-types-png';
+import type { ReportingConfigType } from '@kbn/reporting-server';
+import { ExportType } from '@kbn/reporting-server';
+import { ScreenshottingStart } from '@kbn/screenshotting-plugin/server';
+import type { SecurityPluginSetup } from '@kbn/security-plugin/server';
 import { DEFAULT_SPACE_ID } from '@kbn/spaces-plugin/common';
 import type { SpacesPluginSetup } from '@kbn/spaces-plugin/server';
 import type {
@@ -37,23 +47,16 @@ import type {
   TaskManagerStartContract,
 } from '@kbn/task-manager-plugin/server';
 import type { UsageCounter } from '@kbn/usage-collection-plugin/server';
-import * as Rx from 'rxjs';
-import { map, switchMap, take } from 'rxjs/operators';
+
+import { checkLicense } from '@kbn/reporting-server/check_license';
+import { ExportTypesRegistry } from '@kbn/reporting-server/export_types_registry';
 import type { ReportingSetup } from '.';
-import { REPORTING_REDIRECT_LOCATOR_STORE_KEY } from '../common/constants';
-import { createConfig, ReportingConfigType } from './config';
-import { CsvSearchSourceExportType } from './export_types/csv_searchsource';
-import { CsvV2ExportType } from './export_types/csv_v2';
-import { PdfV1ExportType } from './export_types/printable_pdf';
-import { PdfExportType } from './export_types/printable_pdf_v2';
-import { PngExportType } from './export_types/png_v2';
-import { checkLicense, ExportTypesRegistry } from './lib';
+import { createConfig } from './config';
 import { reportingEventLoggerFactory } from './lib/event_logger/logger';
 import type { IReport, ReportingStore } from './lib/store';
-import { ExecuteReportTask, MonitorReportsTask, ReportTaskParams } from './lib/tasks';
-import type { PdfScreenshotOptions, PngScreenshotOptions, ReportingPluginRouter } from './types';
-import { CsvSearchSourceImmediateExportType } from './export_types/csv_searchsource_immediate';
-import { ExportType } from './export_types/common';
+import { ExecuteReportTask, ReportTaskParams } from './lib/tasks';
+import type { ReportingPluginRouter } from './types';
+import { EventTracker } from './usage';
 
 export interface ReportingInternalSetup {
   basePath: Pick<IBasePath, 'set'>;
@@ -70,6 +73,7 @@ export interface ReportingInternalSetup {
 
 export interface ReportingInternalStart {
   store: ReportingStore;
+  analytics: AnalyticsServiceStart;
   savedObjects: SavedObjectsServiceStart;
   uiSettings: UiSettingsServiceStart;
   esClient: IClusterClient;
@@ -78,21 +82,9 @@ export interface ReportingInternalStart {
   fieldFormats: FieldFormatsStart;
   licensing: LicensingPluginStart;
   logger: Logger;
-  screenshotting: ScreenshottingStart;
-  security?: SecurityPluginStart;
+  screenshotting?: ScreenshottingStart;
+  securityService: SecurityServiceStart;
   taskManager: TaskManagerStartContract;
-}
-
-/**
- * @internal
- */
-export interface ReportingServerInfo {
-  port: number;
-  name: string;
-  uuid: string;
-  basePath: string;
-  protocol: string;
-  hostname: string;
 }
 
 /**
@@ -106,7 +98,6 @@ export class ReportingCore {
   private readonly pluginStart$ = new Rx.ReplaySubject<ReportingInternalStart>(); // observe async background startDeps
   private deprecatedAllowedRoles: string[] | false = false; // DEPRECATED. If `false`, the deprecated features have been disableed
   private executeTask: ExecuteReportTask;
-  private monitorTask: MonitorReportsTask;
   private config: ReportingConfigType;
   private executing: Set<string>;
   private exportTypesRegistry = new ExportTypesRegistry();
@@ -129,12 +120,10 @@ export class ReportingCore {
     });
     this.deprecatedAllowedRoles = config.roles.enabled ? config.roles.allow : false;
     this.executeTask = new ExecuteReportTask(this, config, this.logger);
-    this.monitorTask = new MonitorReportsTask(this, config, this.logger);
 
     this.getContract = () => ({
       usesUiCapabilities: () => config.roles.enabled === false,
       registerExportTypes: (id) => id,
-      getScreenshots: this.getScreenshots.bind(this),
       getSpaceId: this.getSpaceId.bind(this),
     });
 
@@ -156,10 +145,9 @@ export class ReportingCore {
       et.setup(setupDeps);
     });
 
-    const { executeTask, monitorTask } = this;
+    const { executeTask } = this;
     setupDeps.taskManager.registerTaskDefinitions({
       [executeTask.TYPE]: executeTask.getTaskDefinition(),
-      [monitorTask.TYPE]: monitorTask.getTaskDefinition(),
     });
   }
 
@@ -171,13 +159,13 @@ export class ReportingCore {
     this.pluginStartDeps = startDeps; // cache
 
     this.exportTypesRegistry.getAll().forEach((et) => {
-      et.start({ ...startDeps, reporting: this.getContract() });
+      et.start({ ...startDeps });
     });
 
     const { taskManager } = startDeps;
-    const { executeTask, monitorTask } = this;
-    // enable this instance to generate reports and to monitor for pending reports
-    await Promise.all([executeTask.init(taskManager), monitorTask.init(taskManager)]);
+    const { executeTask } = this;
+    // enable this instance to generate reports
+    await Promise.all([executeTask.init(taskManager)]);
   }
 
   public pluginStop() {
@@ -227,7 +215,7 @@ export class ReportingCore {
    */
   private getExportTypes(): ExportType[] {
     const { csv, pdf, png } = this.config.export_types;
-    const exportTypes = [];
+    const exportTypes: ExportType[] = [];
 
     if (csv.enabled) {
       // NOTE: CsvSearchSourceExportType should be deprecated and replaced with V2 in the UI: https://github.com/elastic/kibana/issues/151190
@@ -248,41 +236,6 @@ export class ReportingCore {
     }
 
     return exportTypes;
-  }
-
-  /**
-   * If xpack.reporting.roles.enabled === true, register Reporting as a feature
-   * that is controlled by user role names
-   */
-  public registerFeature() {
-    const { features } = this.getPluginSetupDeps();
-    const deprecatedRoles = this.getDeprecatedAllowedRoles();
-
-    if (deprecatedRoles !== false) {
-      // refer to roles.allow configuration (deprecated path)
-      const allowedRoles = ['superuser', ...(deprecatedRoles ?? [])];
-      const privileges = allowedRoles.map((role) => ({
-        requiredClusterPrivileges: [],
-        requiredRoles: [role],
-        ui: [],
-      }));
-
-      // self-register as an elasticsearch feature (deprecated)
-      features.registerElasticsearchFeature({
-        id: 'reporting',
-        catalogue: ['reporting'],
-        management: {
-          insightsAndAlerting: ['reporting'],
-        },
-        privileges,
-      });
-    } else {
-      this.logger.debug(
-        `Reporting roles configuration is disabled. Please assign access to Reporting use Kibana feature controls for applications.`
-      );
-      // trigger application to register Reporting as a subfeature
-      features.enableReportingUiCapabilities();
-    }
   }
 
   /*
@@ -318,11 +271,24 @@ export class ReportingCore {
   }
 
   /*
-   *
-   * Track usage of code paths for telemetry
+   * Track usage of API endpoints
    */
   public getUsageCounter(): UsageCounter | undefined {
     return this.pluginSetupDeps?.usageCounter;
+  }
+
+  /*
+   * Track metrics of internal events
+   */
+  public getEventTracker(
+    reportId: string,
+    exportType: string,
+    objectType: string
+  ): EventTracker | undefined {
+    const { analytics } = this.pluginStartDeps ?? {};
+    if (analytics) {
+      return new EventTracker(analytics, reportId, exportType, objectType);
+    }
   }
 
   /*
@@ -401,25 +367,6 @@ export class ReportingCore {
     }
   }
 
-  public getScreenshots(options: PdfScreenshotOptions): Rx.Observable<PdfScreenshotResult>;
-  public getScreenshots(options: PngScreenshotOptions): Rx.Observable<PngScreenshotResult>;
-  public getScreenshots(
-    options: PngScreenshotOptions | PdfScreenshotOptions
-  ): Rx.Observable<PngScreenshotResult | PdfScreenshotResult> {
-    return Rx.defer(() => this.getPluginStartDeps()).pipe(
-      switchMap(({ screenshotting }) => {
-        return screenshotting.getScreenshots({
-          ...options,
-          urls: options.urls.map((url) =>
-            typeof url === 'string'
-              ? url
-              : [url[0], { [REPORTING_REDIRECT_LOCATOR_STORE_KEY]: url[1] }]
-          ),
-        } as ScreenshotOptions);
-      })
-    );
-  }
-
   public trackReport(reportId: string) {
     this.executing.add(reportId);
   }
@@ -437,6 +384,10 @@ export class ReportingCore {
     return new ReportingEventLogger(report, task);
   }
 
+  /**
+   * @deprecated
+   * Requires `xpack.reporting.csv.enablePanelActionDownload` set to `true` (default is false)
+   */
   public async getCsvSearchSourceImmediate() {
     const startDeps = await this.getPluginStartDeps();
 
@@ -447,7 +398,7 @@ export class ReportingCore {
       this.context
     );
     csvImmediateExport.setup(this.getPluginSetupDeps());
-    csvImmediateExport.start({ ...startDeps, reporting: this.getContract() });
+    csvImmediateExport.start({ ...startDeps });
     return csvImmediateExport;
   }
 }

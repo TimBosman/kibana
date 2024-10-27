@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { ApmBase } from '@elastic/apm-rum';
@@ -22,9 +23,11 @@ import type {
   ScreenshotModePluginStart,
 } from '@kbn/screenshot-mode-plugin/public';
 import type { HomePublicPluginSetup } from '@kbn/home-plugin/public';
-import { ElasticV3BrowserShipper } from '@kbn/analytics-shippers-elastic-v3-browser';
+import { ElasticV3BrowserShipper } from '@elastic/ebt/shippers/elastic_v3/browser';
+import { isSyntheticsMonitor } from '@kbn/analytics-collection-utils';
+import { BehaviorSubject, map, switchMap, tap } from 'rxjs';
+import { buildShipperHeaders, createBuildShipperUrl } from '../common/ebt_v3_endpoint';
 
-import { BehaviorSubject, map, tap } from 'rxjs';
 import type { TelemetryConfigLabels } from '../server/config';
 import { FetchTelemetryConfigRoute, INTERNAL_VERSION } from '../common/routes';
 import type { v2 } from '../common/types';
@@ -159,7 +162,7 @@ export class TelemetryPlugin
     const currentKibanaVersion = this.currentKibanaVersion;
     this.telemetryService = new TelemetryService({
       config,
-      isScreenshotMode: screenshotMode.isScreenshotMode(),
+      isScreenshotMode: this.shouldSkipTelemetry(screenshotMode),
       http,
       notifications,
       currentKibanaVersion,
@@ -191,16 +194,20 @@ export class TelemetryPlugin
       },
     });
 
+    const sendTo = this.getSendToEnv(config.sendUsageTo);
     analytics.registerShipper(ElasticV3BrowserShipper, {
       channelName: 'kibana-browser',
       version: currentKibanaVersion,
-      sendTo: config.sendUsageTo === 'prod' ? 'production' : 'staging',
+      buildShipperHeaders,
+      buildShipperUrl: createBuildShipperUrl(sendTo),
     });
 
     this.telemetrySender = new TelemetrySender(this.telemetryService, async () => {
       await this.refreshConfig(http);
       analytics.optIn({
-        global: { enabled: this.telemetryService!.isOptedIn && !screenshotMode.isScreenshotMode() },
+        global: {
+          enabled: this.telemetryService!.isOptedIn && !this.shouldSkipTelemetry(screenshotMode),
+        },
       });
     });
 
@@ -226,7 +233,7 @@ export class TelemetryPlugin
   }
 
   public start(
-    { analytics, http, overlays, theme, application, docLinks }: CoreStart,
+    { analytics, http, overlays, application, docLinks, ...startServices }: CoreStart,
     { screenshotMode }: TelemetryPluginStartDependencies
   ): TelemetryPluginStart {
     if (!this.telemetryService) {
@@ -240,32 +247,45 @@ export class TelemetryPlugin
     const telemetryNotifications = new TelemetryNotifications({
       http,
       overlays,
-      theme,
       telemetryService: this.telemetryService,
       telemetryConstants,
+      analytics,
+      ...startServices,
     });
     this.telemetryNotifications = telemetryNotifications;
 
-    application.currentAppId$.subscribe(async () => {
-      // Refresh and get telemetry config
-      const updatedConfig = await this.refreshConfig(http);
+    application.currentAppId$
+      .pipe(
+        switchMap(async () => {
+          // Disable telemetry and terminate early if Kibana is running in a special "skip" mode
+          if (this.shouldSkipTelemetry(screenshotMode)) {
+            analytics.optIn({ global: { enabled: false } });
+            return;
+          }
 
-      analytics.optIn({
-        global: { enabled: this.telemetryService!.isOptedIn && !screenshotMode.isScreenshotMode() },
-      });
+          // Refresh and get telemetry config
+          const updatedConfig = await this.refreshConfig(http);
 
-      const isUnauthenticated = this.getIsUnauthenticated(http);
-      if (isUnauthenticated) {
-        return;
-      }
+          analytics.optIn({
+            global: {
+              enabled: this.telemetryService!.isOptedIn,
+            },
+          });
 
-      const telemetryBanner = updatedConfig?.banner;
+          const isUnauthenticated = this.getIsUnauthenticated(http);
+          if (isUnauthenticated) {
+            return;
+          }
 
-      this.maybeStartTelemetryPoller();
-      if (telemetryBanner) {
-        this.maybeShowOptedInNotificationBanner();
-      }
-    });
+          const telemetryBanner = updatedConfig?.banner;
+
+          this.maybeStartTelemetryPoller();
+          if (telemetryBanner) {
+            this.maybeShowOptedInNotificationBanner();
+          }
+        })
+      )
+      .subscribe();
 
     return {
       telemetryService: this.getTelemetryServicePublicApis(),
@@ -278,6 +298,20 @@ export class TelemetryPlugin
 
   public stop() {
     this.telemetrySender?.stop();
+  }
+
+  private getSendToEnv(sendUsageTo: string): 'production' | 'staging' {
+    return sendUsageTo === 'prod' ? 'production' : 'staging';
+  }
+
+  /**
+   * Kibana should skip telemetry collection if reporting is taking a screenshot
+   * or Synthetics monitoring is navigating Kibana.
+   * @param screenshotMode {@link ScreenshotModePluginSetup}
+   * @private
+   */
+  private shouldSkipTelemetry(screenshotMode: ScreenshotModePluginSetup): boolean {
+    return screenshotMode.isScreenshotMode() || isSyntheticsMonitor();
   }
 
   private getTelemetryServicePublicApis(): TelemetryServicePublicApis {

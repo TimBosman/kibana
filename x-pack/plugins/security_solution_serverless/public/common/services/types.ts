@@ -6,10 +6,10 @@
  */
 
 import type { CoreStart } from '@kbn/core/public';
-import type { ProjectNavLinks } from '../../navigation/links/types';
+import type { ExperimentalFeatures } from '../../../common/experimental_features';
 import type { SecuritySolutionServerlessPluginStartDeps } from '../../types';
 
 export interface InternalServices {
-  getProjectNavLinks$: () => ProjectNavLinks;
+  experimentalFeatures: ExperimentalFeatures;
 }
 export type Services = CoreStart & SecuritySolutionServerlessPluginStartDeps & InternalServices;

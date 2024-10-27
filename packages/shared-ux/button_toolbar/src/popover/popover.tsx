@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useState } from 'react';
@@ -12,7 +13,10 @@ import { Props as EuiPopoverProps } from '@elastic/eui/src/components/popover/po
 
 import { ToolbarButtonProps, ToolbarButton } from '../buttons';
 
-type AllowedButtonProps = Omit<ToolbarButtonProps, 'iconSide' | 'onClick' | 'fill'>;
+type AllowedButtonProps = Omit<
+  ToolbarButtonProps<'standard'>,
+  'iconSide' | 'onClick' | 'fill' | 'label'
+>;
 type AllowedPopoverProps = Omit<
   EuiPopoverProps,
   'button' | 'isOpen' | 'closePopover' | 'anchorPosition'
@@ -22,8 +26,9 @@ type AllowedPopoverProps = Omit<
  * Props for `ToolbarPopover`.
  */
 export type Props = AllowedButtonProps &
-  AllowedPopoverProps & {
+  Omit<AllowedPopoverProps, 'children'> & {
     children: (arg: { closePopover: () => void }) => React.ReactNode;
+    label: NonNullable<ToolbarButtonProps<'standard'>['label']>;
   };
 
 /**
@@ -35,6 +40,7 @@ export const ToolbarPopover = ({
   iconType,
   size = 'm',
   children,
+  isDisabled,
   ...popover
 }: Props) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -46,6 +52,7 @@ export const ToolbarPopover = ({
     <ToolbarButton
       onClick={onButtonClick}
       size={size}
+      isDisabled={isDisabled}
       {...{ type, label, iconType: iconType || 'arrowDown', iconSide: iconType ? 'left' : 'right' }}
     />
   );

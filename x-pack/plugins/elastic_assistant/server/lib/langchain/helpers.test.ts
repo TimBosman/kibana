@@ -5,14 +5,15 @@
  * 2.0.
  */
 
-import type { Message } from '@kbn/elastic-assistant';
-import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from 'langchain/schema';
+import { KibanaRequest } from '@kbn/core-http-server';
+import type { Message } from '@kbn/elastic-assistant-common';
+import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { ExecuteConnectorRequestBody } from '@kbn/elastic-assistant-common';
 
 import {
   getLangChainMessage,
   getLangChainMessages,
-  getMessageContentAndRole,
-  unsafeGetAssistantMessagesFromRequest,
+  requestHasRequiredAnonymizationParams,
 } from './helpers';
 import { langChainMessages } from '../../__mocks__/lang_chain_messages';
 
@@ -95,91 +96,41 @@ describe('helpers', () => {
     });
   });
 
-  describe('getMessageContentAndRole', () => {
-    const testCases: Array<[string, Pick<Message, 'content' | 'role'>]> = [
-      ['Prompt 1', { content: 'Prompt 1', role: 'user' }],
-      ['Prompt 2', { content: 'Prompt 2', role: 'user' }],
-      ['', { content: '', role: 'user' }],
-    ];
-
-    testCases.forEach(([prompt, expectedOutput]) => {
-      test(`Given the prompt "${prompt}", it returns the prompt as content with a "user" role`, () => {
-        const result = getMessageContentAndRole(prompt);
-
-        expect(result).toEqual(expectedOutput);
-      });
-    });
-  });
-
-  describe('unsafeGetAssistantMessagesFromRequest', () => {
-    const rawSubActionParamsBody = {
-      messages: [
-        { role: 'user', content: '\n\n\n\nWhat is my name?' },
-        {
-          role: 'assistant',
-          content:
-            "Hello! Since we are communicating through text, I do not have the information about your name. Please feel free to share your name with me, if you'd like.",
+  describe('requestHasRequiredAnonymizationParams', () => {
+    it('returns true if the request has valid anonymization params', () => {
+      const request = {
+        body: {
+          replacements: { key: 'value' },
         },
-        { role: 'user', content: '\n\nMy name is Andrew' },
-        {
-          role: 'assistant',
-          content:
-            "Hi, Andrew! It's nice to meet you. How can I help you or what would you like to talk about today?",
+      } as unknown as KibanaRequest<unknown, unknown, ExecuteConnectorRequestBody>;
+
+      const result = requestHasRequiredAnonymizationParams(request);
+
+      expect(result).toBe(true);
+    });
+
+    it('returns true if replacements is empty', () => {
+      const request = {
+        body: {
+          replacements: {},
         },
-        { role: 'user', content: '\n\nDo you know my name?' },
-      ],
-    };
+      } as unknown as KibanaRequest<unknown, unknown, ExecuteConnectorRequestBody>;
 
-    it('returns the expected assistant messages from a conversation', () => {
-      const result = unsafeGetAssistantMessagesFromRequest(JSON.stringify(rawSubActionParamsBody));
+      const result = requestHasRequiredAnonymizationParams(request);
 
-      const expected = [
-        { role: 'user', content: '\n\n\n\nWhat is my name?' },
-        {
-          role: 'assistant',
-          content:
-            "Hello! Since we are communicating through text, I do not have the information about your name. Please feel free to share your name with me, if you'd like.",
+      expect(result).toBe(true);
+    });
+
+    it('returns false if replacements has non-string values', () => {
+      const request = {
+        body: {
+          replacements: { key: 76543 }, // <-- non-string value
         },
-        { role: 'user', content: '\n\nMy name is Andrew' },
-        {
-          role: 'assistant',
-          content:
-            "Hi, Andrew! It's nice to meet you. How can I help you or what would you like to talk about today?",
-        },
-        { role: 'user', content: '\n\nDo you know my name?' },
-      ];
+      } as unknown as KibanaRequest<unknown, unknown, ExecuteConnectorRequestBody>;
 
-      expect(result).toEqual(expected);
-    });
+      const result = requestHasRequiredAnonymizationParams(request);
 
-    it('returns an empty array when the rawSubActionParamsBody is undefined', () => {
-      const result = unsafeGetAssistantMessagesFromRequest(undefined);
-
-      expect(result).toEqual([]);
-    });
-
-    it('returns an empty array when the rawSubActionParamsBody messages[] array is empty', () => {
-      const hasEmptyMessages = {
-        messages: [],
-      };
-
-      const result = unsafeGetAssistantMessagesFromRequest(JSON.stringify(hasEmptyMessages));
-
-      expect(result).toEqual([]);
-    });
-
-    it('returns an empty array when the rawSubActionParamsBody shape is unexpected', () => {
-      const unexpected = { invalidKey: 'some_value' };
-
-      const result = unsafeGetAssistantMessagesFromRequest(JSON.stringify(unexpected));
-
-      expect(result).toEqual([]);
-    });
-
-    it('returns an empty array when the rawSubActionParamsBody is invalid JSON', () => {
-      const result = unsafeGetAssistantMessagesFromRequest('[]');
-
-      expect(result).toEqual([]);
+      expect(result).toBe(false);
     });
   });
 });

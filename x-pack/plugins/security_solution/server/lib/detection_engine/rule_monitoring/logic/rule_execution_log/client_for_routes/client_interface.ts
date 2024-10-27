@@ -12,6 +12,7 @@ import type {
   RuleExecutionEventType,
   RuleExecutionStatus,
   SortFieldOfRuleExecutionResult,
+  RuleRunType,
 } from '../../../../../../../common/api/detection_engine/rule_monitoring';
 import type { RuleObjectId } from '../../../../../../../common/api/detection_engine/model/rule_schema';
 import type { SortOrder } from '../../../../../../../common/api/detection_engine';
@@ -39,11 +40,20 @@ export interface GetExecutionEventsArgs {
   /** Saved object id of the rule (`rule.id`). */
   ruleId: RuleObjectId;
 
-  /** Include events of the specified types. If empty, all types of events will be included. */
-  eventTypes: RuleExecutionEventType[];
+  /** Include events of matching the search term. If omitted, all events will be included. */
+  searchTerm?: string;
 
-  /** Include events having these log levels. If empty, events of all levels will be included. */
-  logLevels: LogLevel[];
+  /** Include events of the specified types. If omitted, all types of events will be included. */
+  eventTypes?: RuleExecutionEventType[];
+
+  /** Include events having these log levels. If omitted, events of all levels will be included. */
+  logLevels?: LogLevel[];
+
+  /** Include events recorded starting from the specified moment. If omitted, all events will be included. */
+  dateStart?: string;
+
+  /** Include events recorded till the specified moment. If omitted, all events will be included. */
+  dateEnd?: string;
 
   /** What order to sort by (e.g. `asc` or `desc`). */
   sortOrder: SortOrder;
@@ -82,4 +92,6 @@ export interface GetExecutionResultsArgs {
 
   /** Number of results to fetch per page. */
   perPage: number;
+
+  runTypeFilters: RuleRunType[];
 }

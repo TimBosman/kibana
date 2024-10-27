@@ -14,5 +14,6 @@ export type {
   FindFileStructureResponse,
   InputOverrides,
   IngestPipeline,
-  Mappings,
 } from './types';
+
+export { TIKA_PREVIEW_CHARS } from './constants';

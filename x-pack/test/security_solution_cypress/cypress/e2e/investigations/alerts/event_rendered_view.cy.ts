@@ -12,20 +12,20 @@ import {
   EVENT_SUMMARY_COLUMN,
   ALERT_RENDERER_HOST_NAME,
   SHOW_TOP_N_HEADER,
+  HOVER_ACTIONS,
 } from '../../../screens/alerts';
 import {
   DATA_GRID_COLUMN_ORDER_BTN,
   DATA_GRID_FIELD_SORT_BTN,
 } from '../../../screens/common/data_grid';
-import { HOVER_ACTIONS } from '../../../screens/timeline';
 import {
   showHoverActionsEventRenderedView,
   switchAlertTableToEventRenderedView,
   waitForAlerts,
 } from '../../../tasks/alerts';
 import { createRule } from '../../../tasks/api_calls/rules';
-import { cleanKibana } from '../../../tasks/common';
-import { login, visit } from '../../../tasks/login';
+import { login } from '../../../tasks/login';
+import { visit } from '../../../tasks/navigation';
 import { ALERTS_URL } from '../../../urls/navigation';
 import {
   TOP_N_ALERT_HISTOGRAM,
@@ -33,11 +33,7 @@ import {
   XY_CHART,
 } from '../../../screens/shared';
 
-describe(`Event Rendered View`, () => {
-  before(() => {
-    cleanKibana();
-  });
-
+describe(`Event Rendered View`, { tags: ['@ess', '@serverless'] }, () => {
   beforeEach(() => {
     login();
     createRule(getNewRule());
@@ -47,19 +43,19 @@ describe(`Event Rendered View`, () => {
     waitForAlerts();
   });
 
-  it('Event Summary Column', () => {
+  it('should show Event Summary column correctly', () => {
     cy.get(EVENT_SUMMARY_COLUMN).should('be.visible');
     cy.get(EVENT_SUMMARY_ALERT_RENDERER_CONTENT).should('be.visible');
   });
 
-  it('Hover Action TopN in event summary column', () => {
+  it('should show TopN in Event Summary column', () => {
     showHoverActionsEventRenderedView(ALERT_RENDERER_HOST_NAME);
     cy.get(HOVER_ACTIONS.SHOW_TOP).trigger('click');
     cy.get(TOP_N_ALERT_HISTOGRAM).should('be.visible');
     cy.get(SHOW_TOP_N_HEADER).first().should('have.text', 'Top host.name');
     cy.get(XY_CHART).should('be.visible');
     cy.get(TOP_N_CONTAINER_CLOSE_BTN).trigger('click');
-    cy.get(XY_CHART).should('not.be.visible');
+    cy.get(XY_CHART).should('not.exist');
   });
 
   /*
@@ -68,15 +64,15 @@ describe(`Event Rendered View`, () => {
    * This test main checks if Alert Table controls are rendered properly.
    *
    * */
-  it('Field Browser is not visible', () => {
+  it('should not show Field Browser', () => {
     cy.get(FIELDS_BROWSER_BTN).should('not.exist');
   });
 
-  it('Sorting control is not visible', () => {
-    cy.get(DATA_GRID_FIELD_SORT_BTN).should('not.be.visible');
+  it('should now show Sorting Control', () => {
+    cy.get(DATA_GRID_FIELD_SORT_BTN).should('not.exist');
   });
 
-  it('Column Order button is not visible', () => {
+  it('should not show column order control', () => {
     cy.get(DATA_GRID_COLUMN_ORDER_BTN).should('not.exist');
   });
 });

@@ -1,12 +1,13 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import { CoreSetup, CoreStart, Plugin } from '@kbn/core/server';
+import { CoreSetup, CoreStart, Plugin, PluginInitializerContext } from '@kbn/core/server';
 import { StartServicesAccessor } from '@kbn/core/server';
 import type {
   PluginSetup as DataPluginSetup,
@@ -37,13 +38,18 @@ export interface SavedSearchServerStartDeps {
 export class SavedSearchServerPlugin
   implements Plugin<object, object, object, SavedSearchServerStartDeps>
 {
+  constructor(private initializerContext: PluginInitializerContext) {}
+
   public setup(
     core: CoreSetup,
     { data, contentManagement, expressions }: SavedSearchPublicSetupDependencies
   ) {
     contentManagement.register({
       id: SavedSearchType,
-      storage: new SavedSearchStorage(),
+      storage: new SavedSearchStorage({
+        throwOnResultValidationError: this.initializerContext.env.mode.dev,
+        logger: this.initializerContext.logger.get('storage'),
+      }),
       version: {
         latest: LATEST_VERSION,
       },

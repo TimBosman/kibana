@@ -42,7 +42,8 @@ export const RANDOM_SAMPLER_OPTION = {
 /**
  * Default option for random sampler type
  */
-export type RandomSamplerOption = typeof RANDOM_SAMPLER_OPTION[keyof typeof RANDOM_SAMPLER_OPTION];
+export type RandomSamplerOption =
+  (typeof RANDOM_SAMPLER_OPTION)[keyof typeof RANDOM_SAMPLER_OPTION];
 
 /**
  * Type for the random sampler probability
@@ -58,8 +59,8 @@ export class RandomSampler {
   private docCount$ = new BehaviorSubject<number>(0);
   private mode$ = new BehaviorSubject<RandomSamplerOption>(RANDOM_SAMPLER_OPTION.ON_AUTOMATIC);
   private probability$ = new BehaviorSubject<RandomSamplerProbability>(DEFAULT_PROBABILITY);
-  private setRandomSamplerModeInStorage: (mode: RandomSamplerOption) => void;
-  private setRandomSamplerProbabilityInStorage: (prob: RandomSamplerProbability) => void;
+  private setRandomSamplerModeInStorage?: (mode: RandomSamplerOption) => void;
+  private setRandomSamplerProbabilityInStorage?: (prob: RandomSamplerProbability) => void;
 
   /**
    * Initial values
@@ -69,15 +70,17 @@ export class RandomSampler {
    * @param setRandomSamplerProbability - initial setter for random sampler probability
    */
   constructor(
-    randomSamplerMode: RandomSamplerOption,
-    setRandomSamplerMode: (mode: RandomSamplerOption) => void,
-    randomSamplerProbability: RandomSamplerProbability,
-    setRandomSamplerProbability: (prob: RandomSamplerProbability) => void
+    randomSamplerMode?: RandomSamplerOption,
+    setRandomSamplerMode?: (mode: RandomSamplerOption) => void,
+    randomSamplerProbability?: RandomSamplerProbability,
+    setRandomSamplerProbability?: (prob: RandomSamplerProbability) => void
   ) {
-    this.mode$.next(randomSamplerMode);
-    this.setRandomSamplerModeInStorage = setRandomSamplerMode;
-    this.probability$.next(randomSamplerProbability);
-    this.setRandomSamplerProbabilityInStorage = setRandomSamplerProbability;
+    if (randomSamplerMode) this.mode$.next(randomSamplerMode);
+
+    if (setRandomSamplerMode) this.setRandomSamplerModeInStorage = setRandomSamplerMode;
+    if (randomSamplerProbability) this.probability$.next(randomSamplerProbability);
+    if (setRandomSamplerProbability)
+      this.setRandomSamplerProbabilityInStorage = setRandomSamplerProbability;
   }
 
   /**
@@ -100,7 +103,9 @@ export class RandomSampler {
    * @param {RandomSamplerOption} mode - mode to use when wrapping/unwrapping random sampling aggs
    */
   public setMode(mode: RandomSamplerOption) {
-    this.setRandomSamplerModeInStorage(mode);
+    if (this.setRandomSamplerModeInStorage) {
+      this.setRandomSamplerModeInStorage(mode);
+    }
     return this.mode$.next(mode);
   }
 
@@ -123,7 +128,9 @@ export class RandomSampler {
    * @param {RandomSamplerProbability} probability - numeric value 0 < probability < 1 to use for random sampling
    */
   public setProbability(probability: RandomSamplerProbability) {
-    this.setRandomSamplerProbabilityInStorage(probability);
+    if (this.setRandomSamplerProbabilityInStorage) {
+      this.setRandomSamplerProbabilityInStorage(probability);
+    }
     return this.probability$.next(probability);
   }
 
@@ -151,7 +158,7 @@ export class RandomSampler {
     const mode = this.getMode();
     const probability = this.getProbability();
 
-    let prob = {};
+    let prob = Object.create(null);
     if (mode === RANDOM_SAMPLER_OPTION.ON_MANUAL) {
       prob = { probability };
     } else if (mode === RANDOM_SAMPLER_OPTION.OFF) {

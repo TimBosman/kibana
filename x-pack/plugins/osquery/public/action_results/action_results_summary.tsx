@@ -16,6 +16,7 @@ import { useActionResultsPrivileges } from './use_action_privileges';
 
 interface ActionResultsSummaryProps {
   actionId: string;
+  startDate?: string;
   expirationDate?: string;
   agentIds?: string[];
   error?: string;
@@ -32,6 +33,7 @@ const ActionResultsSummaryComponent: React.FC<ActionResultsSummaryProps> = ({
   expirationDate,
   agentIds,
   error,
+  startDate,
 }) => {
   const [pageIndex] = useState(0);
   const [pageSize] = useState(50);
@@ -46,6 +48,7 @@ const ActionResultsSummaryComponent: React.FC<ActionResultsSummaryProps> = ({
     data: { aggregations, edges },
   } = useActionResults({
     actionId,
+    startDate,
     activePage: pageIndex,
     agentIds,
     limit: pageSize,
@@ -75,10 +78,13 @@ const ActionResultsSummaryComponent: React.FC<ActionResultsSummaryProps> = ({
     }
   }, [edges, error, expired]);
 
-  const renderAgentIdColumn = useCallback((agentId) => <AgentIdToName agentId={agentId} />, []);
-  const renderRowsColumn = useCallback((rowsCount) => rowsCount ?? '-', []);
+  const renderAgentIdColumn = useCallback(
+    (agentId: any) => <AgentIdToName agentId={agentId} />,
+    []
+  );
+  const renderRowsColumn = useCallback((rowsCount: any) => rowsCount ?? '-', []);
   const renderStatusColumn = useCallback(
-    (_, item) => {
+    (_: any, item: any) => {
       if (item.fields['error.skipped']) {
         return i18n.translate('xpack.osquery.liveQueryActionResults.table.skippedStatusText', {
           defaultMessage: 'skipped',
@@ -158,7 +164,7 @@ const ActionResultsSummaryComponent: React.FC<ActionResultsSummaryProps> = ({
     setIsLive(() => {
       if (!agentIds?.length || expired || error) return false;
 
-      return !!(aggregations.totalResponded !== agentIds?.length);
+      return aggregations.totalResponded !== agentIds?.length;
     });
   }, [agentIds?.length, aggregations.totalResponded, error, expired]);
 

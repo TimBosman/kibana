@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { dataViewMock } from '../__mocks__';
@@ -41,11 +42,11 @@ describe('formatHit', () => {
       fieldFormatsMock
     );
     expect(formatted).toEqual([
-      ['extension', 'formatted:png'],
-      ['message', 'formatted:foobar'],
-      ['object.value', 'formatted:42,13'],
-      ['_index', 'formatted:logs'],
-      ['_score', undefined],
+      ['extension', 'formatted:png', 'extension'],
+      ['message', 'formatted:foobar', 'message'],
+      ['object.value', 'formatted:42,13', 'object.value'],
+      ['_index', 'formatted:logs', '_index'],
+      ['_score', undefined, '_score'],
     ]);
   });
 
@@ -83,9 +84,9 @@ describe('formatHit', () => {
       fieldFormatsMock
     );
     expect(formatted).toEqual([
-      ['extension', 'formatted:png'],
-      ['message', 'formatted:foobar'],
-      ['and 3 more fields', ''],
+      ['extension', 'formatted:png', 'extension'],
+      ['message', 'formatted:foobar', 'message'],
+      ['and 3 more fields', '', null],
     ]);
   });
 
@@ -98,10 +99,10 @@ describe('formatHit', () => {
       fieldFormatsMock
     );
     expect(formatted).toEqual([
-      ['message', 'formatted:foobar'],
-      ['object.value', 'formatted:42,13'],
-      ['_index', 'formatted:logs'],
-      ['_score', undefined],
+      ['message', 'formatted:foobar', 'message'],
+      ['object.value', 'formatted:42,13', 'object.value'],
+      ['_index', 'formatted:logs', '_index'],
+      ['_score', undefined, '_score'],
     ]);
   });
 
@@ -114,9 +115,9 @@ describe('formatHit', () => {
       fieldFormatsMock
     );
     expect(formatted).toEqual([
-      ['bytesDisplayName', 'formatted:123'],
-      ['_index', 'formatted:logs'],
-      ['_score', undefined],
+      ['bytesDisplayName', 'formatted:123', 'bytes'],
+      ['_index', 'formatted:logs', '_index'],
+      ['_score', undefined, '_score'],
     ]);
   });
 });

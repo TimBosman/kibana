@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
@@ -50,6 +51,7 @@ export const dataViewsServiceFactory = (deps: DataViewsServiceFactoryDeps) =>
       apiClient: new IndexPatternsApiServer(
         elasticsearchClient,
         savedObjectsClient,
+        uiSettingsClient,
         rollupsEnabled
       ),
       fieldFormats: formats,
@@ -63,13 +65,21 @@ export const dataViewsServiceFactory = (deps: DataViewsServiceFactoryDeps) =>
         byPassCapabilities
           ? true
           : request
-          ? (await capabilities.resolveCapabilities(request)).indexPatterns.save === true
+          ? (
+              await capabilities.resolveCapabilities(request, {
+                capabilityPath: 'indexPatterns.save',
+              })
+            ).indexPatterns.save === true
           : false,
       getCanSaveAdvancedSettings: async () =>
         byPassCapabilities
           ? true
           : request
-          ? (await capabilities.resolveCapabilities(request)).advancedSettings.save === true
+          ? (
+              await capabilities.resolveCapabilities(request, {
+                capabilityPath: 'advancedSettings.save',
+              })
+            ).advancedSettings.save === true
           : false,
       scriptedFieldsEnabled: deps.scriptedFieldsEnabled,
     });

@@ -5,11 +5,14 @@
  * 2.0.
  */
 
-import React, { FC } from 'react';
-import { EuiPageBody, EuiPanel } from '@elastic/eui';
+import type { FC } from 'react';
+import React, { useCallback } from 'react';
+import { EuiFlexGroup, EuiPageBody, EuiPanel } from '@elastic/eui';
 import { i18n } from '@kbn/i18n';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { SavedObjectFinder } from '@kbn/saved-objects-finder-plugin/public';
+import type { FinderAttributes, SavedObjectCommon } from '@kbn/saved-objects-finder-plugin/common';
+import { CreateDataViewButton } from '../../../../components/create_data_view_button';
 import { useMlKibana, useNavigateToPath } from '../../../../contexts/kibana';
 import { MlPageHeader } from '../../../../components/page_header';
 
@@ -17,18 +20,30 @@ export interface PageProps {
   nextStepPath: string;
 }
 
-export const Page: FC<PageProps> = ({ nextStepPath }) => {
-  const RESULTS_PER_PAGE = 20;
+const RESULTS_PER_PAGE = 20;
+
+type SavedObject = SavedObjectCommon<FinderAttributes & { isTextBasedQuery?: boolean }>;
+
+export const Page: FC<PageProps> = ({
+  nextStepPath,
+  extraButtons,
+}: {
+  nextStepPath: string;
+  extraButtons?: React.ReactNode;
+}) => {
   const { contentManagement, uiSettings } = useMlKibana().services;
   const navigateToPath = useNavigateToPath();
 
-  const onObjectSelection = (id: string, type: string) => {
-    navigateToPath(
-      `${nextStepPath}?${type === 'index-pattern' ? 'index' : 'savedSearchId'}=${encodeURIComponent(
-        id
-      )}`
-    );
-  };
+  const onObjectSelection = useCallback(
+    (id: string, type: string, name?: string) => {
+      navigateToPath(
+        `${nextStepPath}?${
+          type === 'index-pattern' ? 'index' : 'savedSearchId'
+        }=${encodeURIComponent(id)}`
+      );
+    },
+    [navigateToPath, nextStepPath]
+  );
 
   return (
     <div data-test-subj="mlPageSourceSelection">
@@ -57,6 +72,9 @@ export const Page: FC<PageProps> = ({ nextStepPath }) => {
                     defaultMessage: 'Saved search',
                   }
                 ),
+                showSavedObject: (savedObject: SavedObject) =>
+                  // ES|QL Based saved searches are not supported across ML, filter them out
+                  savedObject.attributes.isTextBasedQuery !== true,
               },
               {
                 type: 'index-pattern',
@@ -74,7 +92,17 @@ export const Page: FC<PageProps> = ({ nextStepPath }) => {
               contentClient: contentManagement.client,
               uiSettings,
             }}
-          />
+          >
+            <EuiFlexGroup direction="row" gutterSize="s">
+              <CreateDataViewButton
+                onDataViewCreated={(dataView) => {
+                  onObjectSelection(dataView.id!, 'index-pattern', dataView.getIndexPattern());
+                }}
+                allowAdHocDataView={true}
+              />
+              {extraButtons ? extraButtons : null}
+            </EuiFlexGroup>
+          </SavedObjectFinder>
         </EuiPanel>
       </EuiPageBody>
     </div>

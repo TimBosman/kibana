@@ -20,6 +20,17 @@ export function createTestConfig(options: CreateTestConfigOptions) {
         ...services,
         ...options.services,
       },
+      esTestCluster: {
+        ...svlSharedConfig.get('esTestCluster'),
+        serverArgs: [
+          ...svlSharedConfig.get('esTestCluster.serverArgs'),
+          // custom native roles are enabled only for search and security projects
+          ...(options.serverlessProject !== 'oblt'
+            ? ['xpack.security.authc.native_roles.enabled=true']
+            : []),
+          ...(options.esServerArgs ?? []),
+        ],
+      },
       kbnTestServer: {
         ...svlSharedConfig.get('kbnTestServer'),
         serverArgs: [

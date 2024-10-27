@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
@@ -37,6 +38,8 @@ export interface EmbeddableContainerSettings {
    * Initialise children in the order specified. If an ID does not match it will be skipped and if a child is not included it will be initialized in the default order after the list of provided IDs.
    */
   childIdInitializeOrder?: string[];
+
+  untilContainerInitialized?: () => Promise<void>;
 }
 
 export interface IContainer<
@@ -96,7 +99,8 @@ export interface IContainer<
     E extends Embeddable<EEI, EEO> = Embeddable<EEI, EEO>
   >(
     type: string,
-    explicitInput: Partial<EEI>
+    explicitInput: Partial<EEI>,
+    attributes?: unknown
   ): Promise<E | ErrorEmbeddable>;
 
   replaceEmbeddable<
@@ -106,6 +110,7 @@ export interface IContainer<
   >(
     id: string,
     newExplicitInput: Partial<EEI>,
-    newType?: string
-  ): void;
+    newType?: string,
+    generateNewId?: boolean
+  ): Promise<string>;
 }

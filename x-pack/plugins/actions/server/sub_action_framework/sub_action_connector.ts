@@ -15,17 +15,23 @@ import axios, {
   AxiosRequestHeaders,
   AxiosHeaders,
   AxiosHeaderValue,
+  AxiosBasicCredentials,
 } from 'axios';
 import { SavedObjectsClientContract } from '@kbn/core-saved-objects-api-server';
 import { ElasticsearchClient } from '@kbn/core-elasticsearch-server';
 import { finished } from 'stream/promises';
 import { IncomingMessage } from 'http';
+import { PassThrough } from 'stream';
+import { KibanaRequest } from '@kbn/core-http-server';
+import { inspect } from 'util';
+import { ConnectorUsageCollector } from '../usage';
 import { assertURL } from './helpers/validators';
 import { ActionsConfigurationUtilities } from '../actions_config';
 import { SubAction, SubActionRequestParams } from './types';
 import { ServiceParams } from './types';
 import * as i18n from './translations';
 import { request } from '../lib/axios_utils';
+import { combineHeadersWithBasicAuthHeader } from '../lib/get_basic_auth_header';
 
 const isObject = (value: unknown): value is Record<string, unknown> => {
   return isPlainObject(value);
@@ -38,6 +44,7 @@ export abstract class SubActionConnector<Config, Secrets> {
   private axiosInstance: AxiosInstance;
   private subActions: Map<string, SubAction> = new Map();
   private configurationUtilities: ActionsConfigurationUtilities;
+  protected readonly kibanaRequest?: KibanaRequest;
   protected logger: Logger;
   protected esClient: ElasticsearchClient;
   protected savedObjectsClient: SavedObjectsClientContract;
@@ -54,6 +61,7 @@ export abstract class SubActionConnector<Config, Secrets> {
     this.esClient = params.services.scopedClusterClient;
     this.configurationUtilities = params.configurationUtilities;
     this.axiosInstance = axios.create();
+    this.kibanaRequest = params.request;
   }
 
   private normalizeURL(url: string) {
@@ -82,15 +90,26 @@ export abstract class SubActionConnector<Config, Secrets> {
     }
   }
 
-  private getHeaders(headers?: AxiosRequestHeaders): Record<string, AxiosHeaderValue> {
-    return { ...headers, 'Content-Type': 'application/json' };
+  private getHeaders(
+    auth?: AxiosBasicCredentials,
+    headers?: AxiosRequestHeaders
+  ): Record<string, AxiosHeaderValue> {
+    const headersWithBasicAuth = combineHeadersWithBasicAuthHeader({
+      username: auth?.username,
+      password: auth?.password,
+      headers,
+    });
+
+    return { 'Content-Type': 'application/json', ...headersWithBasicAuth };
   }
 
   private validateResponse(responseSchema: Type<unknown>, data: unknown) {
     try {
       responseSchema.validate(data);
     } catch (resValidationError) {
-      throw new Error(`Response validation failed (${resValidationError})`);
+      const err = new Error(`Response validation failed (${resValidationError})`);
+      this.logger.debug(() => `${err.message}:\n${inspect(data, { depth: 10 })}`);
+      throw err;
     }
   }
 
@@ -112,14 +131,18 @@ export abstract class SubActionConnector<Config, Secrets> {
 
   protected abstract getResponseErrorMessage(error: AxiosError): string;
 
-  protected async request<R>({
-    url,
-    data,
-    method = 'get',
-    responseSchema,
-    headers,
-    ...config
-  }: SubActionRequestParams<R>): Promise<AxiosResponse<R>> {
+  protected async request<R>(
+    {
+      url,
+      data,
+      method = 'get',
+      responseSchema,
+      headers,
+      timeout,
+      ...config
+    }: SubActionRequestParams<R>,
+    connectorUsageCollector: ConnectorUsageCollector
+  ): Promise<AxiosResponse<R>> {
     try {
       this.assertURL(url);
       this.ensureUriAllowed(url);
@@ -129,15 +152,19 @@ export abstract class SubActionConnector<Config, Secrets> {
         `Request to external service. Connector Id: ${this.connector.id}. Connector type: ${this.connector.type} Method: ${method}. URL: ${normalizedURL}`
       );
 
+      const { auth, ...restConfig } = config;
+
       const res = await request({
-        ...config,
+        ...restConfig,
         axios: this.axiosInstance,
         url: normalizedURL,
         logger: this.logger,
         method,
         data: this.normalizeData(data),
         configurationUtilities: this.configurationUtilities,
-        headers: this.getHeaders(headers as AxiosHeaders),
+        headers: this.getHeaders(auth, headers as AxiosHeaders),
+        timeout,
+        connectorUsageCollector,
       });
 
       this.validateResponse(responseSchema, res.data);
@@ -156,11 +183,13 @@ export abstract class SubActionConnector<Config, Secrets> {
           try {
             const incomingMessage = error.response.data as IncomingMessage;
 
-            incomingMessage.on('data', (chunk) => {
+            const pt = incomingMessage.pipe(new PassThrough());
+
+            pt.on('data', (chunk) => {
               responseBody += chunk.toString();
             });
 
-            await finished(incomingMessage);
+            await finished(pt);
 
             error.response.data = JSON.parse(responseBody);
           } catch {

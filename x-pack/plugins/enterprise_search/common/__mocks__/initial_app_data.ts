@@ -41,6 +41,7 @@ export const DEFAULT_INITIAL_APP_DATA = {
   },
   appSearch: {
     accountId: 'some-id-string',
+    kibanaUIsEnabled: true,
     onboardingComplete: true,
     role: {
       id: 'account_id:somestring|user_oid:somestring',
@@ -59,6 +60,7 @@ export const DEFAULT_INITIAL_APP_DATA = {
     organization: {
       name: 'ACME Donuts',
       defaultOrgName: 'My Organization',
+      kibanaUIsEnabled: false,
     },
     account: {
       id: 'some-id-string',

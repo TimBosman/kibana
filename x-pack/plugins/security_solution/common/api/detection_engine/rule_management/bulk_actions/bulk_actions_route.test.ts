@@ -5,146 +5,171 @@
  * 2.0.
  */
 
-import { left } from 'fp-ts/lib/Either';
-import { exactCheck, foldLeftRight, getPaths } from '@kbn/securitysolution-io-ts-utils';
+import { expectParseError, expectParseSuccess, stringifyZodError } from '@kbn/zod-helpers';
 import {
-  PerformBulkActionRequestBody,
-  BulkActionType,
-  BulkActionEditType,
-} from './bulk_actions_route';
-
-const retrieveValidationMessage = (payload: unknown) => {
-  const decoded = PerformBulkActionRequestBody.decode(payload);
-  const checked = exactCheck(payload, decoded);
-  return foldLeftRight(checked);
-};
+  BulkActionEditTypeEnum,
+  BulkActionTypeEnum,
+  PerformRulesBulkActionRequestBody,
+} from './bulk_actions_route.gen';
 
 describe('Perform bulk action request schema', () => {
   describe('cases common to every bulk action', () => {
     // missing query means it will request for all rules
     test('valid request: missing query', () => {
-      const payload: PerformBulkActionRequestBody = {
+      const payload: PerformRulesBulkActionRequestBody = {
         query: undefined,
-        action: BulkActionType.enable,
+        action: BulkActionTypeEnum.enable,
       };
-      const message = retrieveValidationMessage(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-      expect(getPaths(left(message.errors))).toEqual([]);
-      expect(message.schema).toEqual(payload);
+      expectParseSuccess(result);
+      expect(result.data).toEqual(payload);
     });
 
     test('invalid request: missing action', () => {
-      const payload: Omit<PerformBulkActionRequestBody, 'action'> = {
+      const payload: Omit<PerformRulesBulkActionRequestBody, 'action'> = {
         query: 'name: test',
       };
-      const message = retrieveValidationMessage(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseError(result);
 
-      expect(getPaths(left(message.errors))).toEqual([
-        'Invalid value "undefined" supplied to "action"',
-        'Invalid value "undefined" supplied to "edit"',
-      ]);
-      expect(message.schema).toEqual({});
+      expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+        `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 4 more"`
+      );
     });
 
     test('invalid request: unknown action', () => {
-      const payload: Omit<PerformBulkActionRequestBody, 'action'> & { action: 'unknown' } = {
-        query: 'name: test',
+      const payload: Omit<PerformRulesBulkActionRequestBody, 'action'> & { action: 'unknown' } = {
         action: 'unknown',
       };
-      const message = retrieveValidationMessage(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseError(result);
 
-      expect(getPaths(left(message.errors))).toEqual([
-        'Invalid value "unknown" supplied to "action"',
-        'Invalid value "undefined" supplied to "edit"',
-      ]);
-      expect(message.schema).toEqual({});
+      expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+        `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 4 more"`
+      );
     });
 
-    test('invalid request: unknown property', () => {
+    test('strips unknown properties', () => {
       const payload = {
         query: 'name: test',
-        action: BulkActionType.enable,
+        action: BulkActionTypeEnum.enable,
         mock: ['id'],
       };
-      const message = retrieveValidationMessage(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseSuccess(result);
 
-      expect(getPaths(left(message.errors))).toEqual(['invalid keys "mock,["id"]"']);
-      expect(message.schema).toEqual({});
+      expect(result.data).toEqual({
+        query: 'name: test',
+        action: BulkActionTypeEnum.enable,
+      });
     });
 
     test('invalid request: wrong type for ids', () => {
       const payload = {
         ids: 'mock',
-        action: BulkActionType.enable,
+        action: BulkActionTypeEnum.enable,
       };
-      const message = retrieveValidationMessage(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseError(result);
 
-      expect(getPaths(left(message.errors))).toEqual(['Invalid value "mock" supplied to "ids"']);
-      expect(message.schema).toEqual({});
+      expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+        `"ids: Expected array, received string, action: Invalid literal value, expected \\"delete\\", ids: Expected array, received string, action: Invalid literal value, expected \\"disable\\", ids: Expected array, received string, and 10 more"`
+      );
     });
   });
 
   describe('bulk enable', () => {
     test('valid request', () => {
-      const payload: PerformBulkActionRequestBody = {
+      const payload: PerformRulesBulkActionRequestBody = {
         query: 'name: test',
-        action: BulkActionType.enable,
+        action: BulkActionTypeEnum.enable,
       };
-      const message = retrieveValidationMessage(payload);
-      expect(getPaths(left(message.errors))).toEqual([]);
-      expect(message.schema).toEqual(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseSuccess(result);
+      expect(result.data).toEqual(payload);
     });
   });
 
   describe('bulk disable', () => {
     test('valid request', () => {
-      const payload: PerformBulkActionRequestBody = {
+      const payload: PerformRulesBulkActionRequestBody = {
         query: 'name: test',
-        action: BulkActionType.disable,
+        action: BulkActionTypeEnum.disable,
       };
-      const message = retrieveValidationMessage(payload);
-      expect(getPaths(left(message.errors))).toEqual([]);
-      expect(message.schema).toEqual(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseSuccess(result);
+      expect(result.data).toEqual(payload);
     });
   });
 
   describe('bulk export', () => {
     test('valid request', () => {
-      const payload: PerformBulkActionRequestBody = {
+      const payload: PerformRulesBulkActionRequestBody = {
         query: 'name: test',
-        action: BulkActionType.export,
+        action: BulkActionTypeEnum.export,
       };
-      const message = retrieveValidationMessage(payload);
-      expect(getPaths(left(message.errors))).toEqual([]);
-      expect(message.schema).toEqual(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseSuccess(result);
+      expect(result.data).toEqual(payload);
     });
   });
 
   describe('bulk delete', () => {
     test('valid request', () => {
-      const payload: PerformBulkActionRequestBody = {
+      const payload: PerformRulesBulkActionRequestBody = {
         query: 'name: test',
-        action: BulkActionType.delete,
+        action: BulkActionTypeEnum.delete,
       };
-      const message = retrieveValidationMessage(payload);
-      expect(getPaths(left(message.errors))).toEqual([]);
-      expect(message.schema).toEqual(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseSuccess(result);
+      expect(result.data).toEqual(payload);
     });
   });
 
   describe('bulk duplicate', () => {
     test('valid request', () => {
-      const payload: PerformBulkActionRequestBody = {
+      const payload: PerformRulesBulkActionRequestBody = {
         query: 'name: test',
-        action: BulkActionType.duplicate,
-        [BulkActionType.duplicate]: {
+        action: BulkActionTypeEnum.duplicate,
+        [BulkActionTypeEnum.duplicate]: {
           include_exceptions: false,
           include_expired_exceptions: false,
         },
       };
-      const message = retrieveValidationMessage(payload);
-      expect(getPaths(left(message.errors))).toEqual([]);
-      expect(message.schema).toEqual(payload);
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseSuccess(result);
+      expect(result.data).toEqual(payload);
+    });
+  });
+
+  describe('bulk manual rule run', () => {
+    test('invalid request: missing manual rule run payload', () => {
+      const payload = {
+        query: 'name: test',
+        action: BulkActionTypeEnum.run,
+      };
+
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseError(result);
+
+      expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+        `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 3 more"`
+      );
+    });
+
+    test('valid request', () => {
+      const payload: PerformRulesBulkActionRequestBody = {
+        query: 'name: test',
+        action: BulkActionTypeEnum.run,
+        [BulkActionTypeEnum.run]: {
+          start_date: new Date().toISOString(),
+          end_date: new Date().toISOString(),
+        },
+      };
+      const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+      expectParseSuccess(result);
+      expect(result.data).toEqual(payload);
     });
   });
 
@@ -153,47 +178,30 @@ describe('Perform bulk action request schema', () => {
       test('invalid request: missing edit payload', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
+          action: BulkActionTypeEnum.edit,
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+        expectParseError(result);
 
-        expect(getPaths(left(message.errors))).toEqual([
-          'Invalid value "edit" supplied to "action"',
-          'Invalid value "undefined" supplied to "edit"',
-        ]);
-        expect(message.schema).toEqual({});
-      });
-
-      test('invalid request: specified edit payload for another action', () => {
-        const payload = {
-          query: 'name: test',
-          action: BulkActionType.enable,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.set_tags, value: ['test-tag'] }],
-        };
-
-        const message = retrieveValidationMessage(payload);
-
-        expect(getPaths(left(message.errors))).toEqual([
-          'invalid keys "edit,[{"type":"set_tags","value":["test-tag"]}]"',
-        ]);
-        expect(message.schema).toEqual({});
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 3 more"`
+        );
       });
 
       test('invalid request: wrong type for edit payload', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: { type: BulkActionEditType.set_tags, value: ['test-tag'] },
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: { type: BulkActionEditTypeEnum.set_tags, value: ['test-tag'] },
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+        expectParseError(result);
 
-        expect(getPaths(left(message.errors))).toEqual([
-          'Invalid value "edit" supplied to "action"',
-          'Invalid value "{"type":"set_tags","value":["test-tag"]}" supplied to "edit"',
-        ]);
-        expect(message.schema).toEqual({});
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 3 more"`
+        );
       });
     });
 
@@ -201,57 +209,61 @@ describe('Perform bulk action request schema', () => {
       test('invalid request: wrong tags type', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.set_tags, value: 'test-tag' }],
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [{ type: BulkActionEditTypeEnum.set_tags, value: 'test-tag' }],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+        expectParseError(result);
 
-        expect(getPaths(left(message.errors))).toEqual([
-          'Invalid value "edit" supplied to "action"',
-          'Invalid value "test-tag" supplied to "edit,value"',
-          'Invalid value "set_tags" supplied to "edit,type"',
-        ]);
-        expect(message.schema).toEqual({});
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 13 more"`
+        );
       });
 
       test('valid request: add_tags edit action', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.add_tags, value: ['test-tag'] }],
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            { type: BulkActionEditTypeEnum.add_tags, value: ['test-tag'] },
+          ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
 
       test('valid request: set_tags edit action', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.set_tags, value: ['test-tag'] }],
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            { type: BulkActionEditTypeEnum.set_tags, value: ['test-tag'] },
+          ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
 
       test('valid request: delete_tags edit action', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.delete_tags, value: ['test-tag'] }],
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            { type: BulkActionEditTypeEnum.delete_tags, value: ['test-tag'] },
+          ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
     });
 
@@ -259,63 +271,117 @@ describe('Perform bulk action request schema', () => {
       test('invalid request: wrong index_patterns type', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.set_tags, value: 'logs-*' }],
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [{ type: BulkActionEditTypeEnum.set_tags, value: 'logs-*' }],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+        expectParseError(result);
 
-        expect(getPaths(left(message.errors))).toEqual([
-          'Invalid value "edit" supplied to "action"',
-          'Invalid value "logs-*" supplied to "edit,value"',
-          'Invalid value "set_tags" supplied to "edit,type"',
-        ]);
-        expect(message.schema).toEqual({});
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 13 more"`
+        );
       });
 
       test('valid request: set_index_patterns edit action', () => {
-        const payload: PerformBulkActionRequestBody = {
+        const payload: PerformRulesBulkActionRequestBody = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
-            { type: BulkActionEditType.set_index_patterns, value: ['logs-*'] },
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            { type: BulkActionEditTypeEnum.set_index_patterns, value: ['logs-*'] },
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
 
       test('valid request: add_index_patterns edit action', () => {
-        const payload: PerformBulkActionRequestBody = {
+        const payload: PerformRulesBulkActionRequestBody = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
-            { type: BulkActionEditType.add_index_patterns, value: ['logs-*'] },
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            { type: BulkActionEditTypeEnum.add_index_patterns, value: ['logs-*'] },
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
 
       test('valid request: delete_index_patterns edit action', () => {
-        const payload: PerformBulkActionRequestBody = {
+        const payload: PerformRulesBulkActionRequestBody = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
-            { type: BulkActionEditType.delete_index_patterns, value: ['logs-*'] },
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            { type: BulkActionEditTypeEnum.delete_index_patterns, value: ['logs-*'] },
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
+      });
+    });
+
+    describe('investigation_fields', () => {
+      test('valid request: set_investigation_fields edit action', () => {
+        const payload: PerformRulesBulkActionRequestBody = {
+          query: 'name: test',
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            {
+              type: BulkActionEditTypeEnum.set_investigation_fields,
+              value: { field_names: ['field-1'] },
+            },
+          ],
+        };
+
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
+      });
+
+      test('valid request: add_investigation_fields edit action', () => {
+        const payload: PerformRulesBulkActionRequestBody = {
+          query: 'name: test',
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            {
+              type: BulkActionEditTypeEnum.add_investigation_fields,
+              value: { field_names: ['field-2'] },
+            },
+          ],
+        };
+
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
+      });
+
+      test('valid request: delete_investigation_fields edit action', () => {
+        const payload: PerformRulesBulkActionRequestBody = {
+          query: 'name: test',
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
+            {
+              type: BulkActionEditTypeEnum.delete_investigation_fields,
+              value: { field_names: ['field-3'] },
+            },
+          ],
+        };
+
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
     });
 
@@ -323,27 +389,25 @@ describe('Perform bulk action request schema', () => {
       test('invalid request: wrong timeline payload type', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.set_timeline, value: [] }],
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [{ type: BulkActionEditTypeEnum.set_timeline, value: [] }],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([
-          'Invalid value "edit" supplied to "action"',
-          'Invalid value "set_timeline" supplied to "edit,type"',
-          'Invalid value "[]" supplied to "edit,value"',
-        ]);
-        expect(message.schema).toEqual({});
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 11 more"`
+        );
       });
 
       test('invalid request: missing timeline_id', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.set_timeline,
+              type: BulkActionEditTypeEnum.set_timeline,
               value: {
                 timeline_title: 'Test timeline title',
               },
@@ -351,24 +415,21 @@ describe('Perform bulk action request schema', () => {
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual(
-          expect.arrayContaining([
-            'Invalid value "{"timeline_title":"Test timeline title"}" supplied to "edit,value"',
-            'Invalid value "undefined" supplied to "edit,value,timeline_id"',
-          ])
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 14 more"`
         );
-        expect(message.schema).toEqual({});
       });
 
       test('valid request: set_timeline edit action', () => {
-        const payload: PerformBulkActionRequestBody = {
+        const payload: PerformRulesBulkActionRequestBody = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.set_timeline,
+              type: BulkActionEditTypeEnum.set_timeline,
               value: {
                 timeline_id: 'timelineid',
                 timeline_title: 'Test timeline title',
@@ -377,10 +438,10 @@ describe('Perform bulk action request schema', () => {
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
     });
 
@@ -388,118 +449,104 @@ describe('Perform bulk action request schema', () => {
       test('invalid request: wrong schedules payload type', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.set_schedule, value: [] }],
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [{ type: BulkActionEditTypeEnum.set_schedule, value: [] }],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([
-          'Invalid value "edit" supplied to "action"',
-          'Invalid value "set_schedule" supplied to "edit,type"',
-          'Invalid value "[]" supplied to "edit,value"',
-        ]);
-        expect(message.schema).toEqual({});
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 11 more"`
+        );
       });
 
       test('invalid request: wrong type of payload data', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.set_schedule,
+              type: BulkActionEditTypeEnum.set_schedule,
               value: {
                 interval: '-10m',
                 lookback: '1m',
               },
             },
           ],
-        } as PerformBulkActionRequestBody;
+        } as PerformRulesBulkActionRequestBody;
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual(
-          expect.arrayContaining([
-            'Invalid value "edit" supplied to "action"',
-            'Invalid value "{"interval":"-10m","lookback":"1m"}" supplied to "edit,value"',
-            'Invalid value "-10m" supplied to "edit,value,interval"',
-          ])
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"edit.0.value.interval: Invalid"`
         );
-        expect(message.schema).toEqual({});
       });
 
       test('invalid request: missing interval', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.set_schedule,
+              type: BulkActionEditTypeEnum.set_schedule,
               value: {
                 lookback: '1m',
               },
             },
           ],
-        } as PerformBulkActionRequestBody;
+        } as PerformRulesBulkActionRequestBody;
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual(
-          expect.arrayContaining([
-            'Invalid value "edit" supplied to "action"',
-            'Invalid value "{"lookback":"1m"}" supplied to "edit,value"',
-            'Invalid value "undefined" supplied to "edit,value,interval"',
-          ])
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 14 more"`
         );
-        expect(message.schema).toEqual({});
       });
 
       test('invalid request: missing lookback', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.set_schedule,
+              type: BulkActionEditTypeEnum.set_schedule,
               value: {
                 interval: '1m',
               },
             },
           ],
-        } as PerformBulkActionRequestBody;
+        } as PerformRulesBulkActionRequestBody;
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual(
-          expect.arrayContaining([
-            'Invalid value "edit" supplied to "action"',
-            'Invalid value "{"interval":"1m"}" supplied to "edit,value"',
-            'Invalid value "undefined" supplied to "edit,value,lookback"',
-          ])
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 14 more"`
         );
-        expect(message.schema).toEqual({});
       });
 
       test('valid request: set_schedule edit action', () => {
-        const payload: PerformBulkActionRequestBody = {
+        const payload: PerformRulesBulkActionRequestBody = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.set_schedule,
+              type: BulkActionEditTypeEnum.set_schedule,
               value: {
                 interval: '1m',
                 lookback: '1m',
               },
             },
           ],
-        } as PerformBulkActionRequestBody;
+        } as PerformRulesBulkActionRequestBody;
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
     });
 
@@ -507,25 +554,25 @@ describe('Perform bulk action request schema', () => {
       test('invalid request: invalid rule actions payload', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [{ type: BulkActionEditType.add_rule_actions, value: [] }],
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [{ type: BulkActionEditTypeEnum.add_rule_actions, value: [] }],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual(
-          expect.arrayContaining(['Invalid value "[]" supplied to "edit,value"'])
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 11 more"`
         );
-        expect(message.schema).toEqual({});
       });
 
       test('invalid request: missing actions in payload', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.add_rule_actions,
+              type: BulkActionEditTypeEnum.add_rule_actions,
               value: {
                 throttle: '1h',
               },
@@ -533,21 +580,21 @@ describe('Perform bulk action request schema', () => {
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual(
-          expect.arrayContaining(['Invalid value "undefined" supplied to "edit,value,actions"'])
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"action: Invalid literal value, expected \\"delete\\", action: Invalid literal value, expected \\"disable\\", action: Invalid literal value, expected \\"enable\\", action: Invalid literal value, expected \\"export\\", action: Invalid literal value, expected \\"duplicate\\", and 15 more"`
         );
-        expect(message.schema).toEqual({});
       });
 
       test('invalid request: invalid action_type_id property in actions array', () => {
         const payload = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.add_rule_actions,
+              type: BulkActionEditTypeEnum.add_rule_actions,
               value: {
                 throttle: '1h',
                 actions: [
@@ -567,20 +614,20 @@ describe('Perform bulk action request schema', () => {
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
-        expect(getPaths(left(message.errors))).toEqual(
-          expect.arrayContaining(['invalid keys "action_type_id"'])
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
+        expectParseError(result);
+        expect(stringifyZodError(result.error)).toMatchInlineSnapshot(
+          `"edit.0.value.actions.0: Unrecognized key(s) in object: 'action_type_id'"`
         );
-        expect(message.schema).toEqual({});
       });
 
       test('valid request: add_rule_actions edit action', () => {
-        const payload: PerformBulkActionRequestBody = {
+        const payload: PerformRulesBulkActionRequestBody = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.add_rule_actions,
+              type: BulkActionEditTypeEnum.add_rule_actions,
               value: {
                 throttle: '1h',
                 actions: [
@@ -599,19 +646,19 @@ describe('Perform bulk action request schema', () => {
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
 
       test('valid request: set_rule_actions edit action', () => {
-        const payload: PerformBulkActionRequestBody = {
+        const payload: PerformRulesBulkActionRequestBody = {
           query: 'name: test',
-          action: BulkActionType.edit,
-          [BulkActionType.edit]: [
+          action: BulkActionTypeEnum.edit,
+          [BulkActionTypeEnum.edit]: [
             {
-              type: BulkActionEditType.set_rule_actions,
+              type: BulkActionEditTypeEnum.set_rule_actions,
               value: {
                 throttle: '1h',
                 actions: [
@@ -632,10 +679,10 @@ describe('Perform bulk action request schema', () => {
           ],
         };
 
-        const message = retrieveValidationMessage(payload);
+        const result = PerformRulesBulkActionRequestBody.safeParse(payload);
 
-        expect(getPaths(left(message.errors))).toEqual([]);
-        expect(message.schema).toEqual(payload);
+        expectParseSuccess(result);
+        expect(result.data).toEqual(payload);
       });
     });
   });

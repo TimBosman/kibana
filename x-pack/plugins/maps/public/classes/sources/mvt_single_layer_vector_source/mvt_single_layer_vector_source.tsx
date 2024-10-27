@@ -112,26 +112,17 @@ export class MVTSingleLayerVectorSource extends AbstractSource implements IMvtVe
   }
 
   getFieldByName(fieldName: string): MVTField | null {
-    try {
-      return this.createField({ fieldName });
-    } catch (e) {
-      return null;
-    }
-  }
-
-  createField({ fieldName }: { fieldName: string }): MVTField {
     const field = this._descriptor.fields.find((f: MVTFieldDescriptor) => {
       return f.name === fieldName;
     });
-    if (!field) {
-      throw new Error(`Cannot create field for fieldName ${fieldName}`);
-    }
-    return new MVTField({
-      fieldName: field.name,
-      type: field.type,
-      source: this,
-      origin: FIELD_ORIGIN.SOURCE,
-    });
+    return field
+      ? new MVTField({
+          fieldName: field.name,
+          type: field.type,
+          source: this,
+          origin: FIELD_ORIGIN.SOURCE,
+        })
+      : null;
   }
 
   getGeoJsonWithMeta(): Promise<GeoJsonWithMeta> {
@@ -208,7 +199,7 @@ export class MVTSingleLayerVectorSource extends AbstractSource implements IMvtVe
   async getTooltipProperties(properties: GeoJsonProperties): Promise<ITooltipProperty[]> {
     const tooltips = [];
     for (const key in properties) {
-      if (properties.hasOwnProperty(key)) {
+      if (Object.hasOwn(properties, key)) {
         for (let i = 0; i < this._tooltipFields.length; i++) {
           const mvtField = this._tooltipFields[i];
           if (mvtField.getName() === key) {
@@ -236,6 +227,10 @@ export class MVTSingleLayerVectorSource extends AbstractSource implements IMvtVe
 
   getFeatureActions(args: GetFeatureActionsArgs): TooltipFeatureAction[] {
     // Its not possible to filter by geometry for vector tile sources since there is no way to get original geometry
+    return [];
+  }
+
+  getInspectorRequestIds(): string[] {
     return [];
   }
 }

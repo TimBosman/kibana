@@ -12,7 +12,13 @@ const TEST_START_TIME = 'Sep 19, 2015 @ 06:31:44.000';
 const TEST_END_TIME = 'Sep 23, 2015 @ 18:31:44.000';
 
 export default ({ getService, getPageObjects }: FtrProviderContext) => {
-  const PageObjects = getPageObjects(['common', 'timePicker', 'header', 'unifiedFieldList']);
+  const PageObjects = getPageObjects([
+    'common',
+    'timePicker',
+    'header',
+    'unifiedFieldList',
+    'svlCommonPage',
+  ]);
   const esArchiver = getService('esArchiver');
   const kibanaServer = getService('kibanaServer');
   const comboBox = getService('comboBox');
@@ -23,6 +29,7 @@ export default ({ getService, getPageObjects }: FtrProviderContext) => {
 
   describe('Field stats', () => {
     before(async () => {
+      await PageObjects.svlCommonPage.loginAsAdmin();
       await kibanaServer.savedObjects.cleanStandardList();
       await esArchiver.loadIfNeeded('x-pack/test/functional/es_archives/logstash_functional');
       await kibanaServer.importExport.load(
@@ -60,7 +67,7 @@ export default ({ getService, getPageObjects }: FtrProviderContext) => {
 
     describe('field distribution', () => {
       before(async () => {
-        await PageObjects.unifiedFieldList.toggleSidebarSection('empty'); // it will allow to render more fields in Available fields section
+        await PageObjects.unifiedFieldList.toggleSidebarSection('meta'); // it will allow to render more fields in Available fields section
       });
 
       it('should return an auto histogram for numbers and top values', async () => {

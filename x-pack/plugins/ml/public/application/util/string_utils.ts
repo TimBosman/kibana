@@ -15,7 +15,7 @@ import { escapeKuery } from '@kbn/es-query';
 import { isDefined } from '@kbn/ml-is-defined';
 import type { MlCustomUrlAnomalyRecordDoc } from '@kbn/ml-anomaly-utils';
 import type { DataGridItem } from '@kbn/ml-data-grid';
-import { Detector } from '../../../common/types/anomaly_detection_jobs';
+import type { Detector } from '../../../common/types/anomaly_detection_jobs';
 
 // Replaces all instances of dollar delimited tokens in the specified String
 // with corresponding values from the supplied object, optionally
@@ -140,6 +140,26 @@ export function escapeKueryForFieldValuePair(
   return `${escapeKuery(name)}:${escapeKuery(value.toString())}`;
 }
 
+const replaceEmptyStringWithQuotation = (s: string) => (s === '' ? '""' : s);
+
+/**
+ *
+ * Helper function to returns escaped combined field name and value
+ * which also replaces empty str with " to ensure compatability with kql queries
+ * @param name fieldName of selection
+ * @param value fieldValue of selection
+ * @returns {string} escaped `name:value` compatible with embeddable input
+ */
+export function escapeKueryForEmbeddableFieldValuePair(
+  name: string,
+  value: string | number | boolean | undefined
+): string {
+  if (!isDefined(name) || !isDefined(value)) return '';
+  return `${replaceEmptyStringWithQuotation(escapeKuery(name))}:${replaceEmptyStringWithQuotation(
+    escapeKuery(value.toString())
+  )}`;
+}
+
 export function calculateTextWidth(txt: string | number, isNumber: boolean) {
   txt = isNumber && typeof txt === 'number' ? d3.format(',')(txt) : txt;
 
@@ -167,9 +187,13 @@ export function calculateTextWidth(txt: string | number, isNumber: boolean) {
 }
 
 export function stringMatch(str: string | undefined, substr: any) {
-  return (
-    typeof str === 'string' &&
-    typeof substr === 'string' &&
-    (str.toLowerCase().match(substr.toLowerCase()) === null) === false
-  );
+  try {
+    return (
+      typeof str === 'string' &&
+      typeof substr === 'string' &&
+      (str.toLowerCase().match(substr.toLowerCase()) === null) === false
+    );
+  } catch (error) {
+    return false;
+  }
 }

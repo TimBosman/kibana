@@ -5,24 +5,44 @@
  * 2.0.
  */
 
-import { UsageCollectionSetup } from '@kbn/usage-collection-plugin/public';
+import {
+  AnalyticsServiceStart,
+  I18nStart,
+  OverlayStart,
+  ThemeServiceStart,
+} from '@kbn/core/public';
+import { CloudSetup } from '@kbn/cloud-plugin/public';
+import { ConsolePluginStart } from '@kbn/console-plugin/public';
 import { ManagementSetup } from '@kbn/management-plugin/public';
-import { SharePluginStart } from '@kbn/share-plugin/public';
-import { ExtensionsSetup, PublicApiServiceSetup } from './services';
+import { MlPluginStart } from '@kbn/ml-plugin/public';
+import { SharePluginSetup, SharePluginStart } from '@kbn/share-plugin/public';
+import { UsageCollectionSetup } from '@kbn/usage-collection-plugin/public';
+import { LicensingPluginStart } from '@kbn/licensing-plugin/public';
 
-export interface IndexManagementPluginSetup {
-  apiService: PublicApiServiceSetup;
-  extensionsService: ExtensionsSetup;
+export interface IndexManagementStartServices {
+  analytics: Pick<AnalyticsServiceStart, 'reportEvent'>;
+  i18n: I18nStart;
+  overlays: OverlayStart;
+  theme: Pick<ThemeServiceStart, 'theme$'>;
 }
 
 export interface SetupDependencies {
   fleet?: unknown;
   usageCollection: UsageCollectionSetup;
   management: ManagementSetup;
+  share: SharePluginSetup;
+  cloud?: CloudSetup;
 }
 
 export interface StartDependencies {
+  cloud?: CloudSetup;
+  console?: ConsolePluginStart;
   share: SharePluginStart;
+  fleet?: unknown;
+  usageCollection: UsageCollectionSetup;
+  management: ManagementSetup;
+  licensing?: LicensingPluginStart;
+  ml?: MlPluginStart;
 }
 
 export interface ClientConfigType {
@@ -32,7 +52,13 @@ export interface ClientConfigType {
   enableIndexActions?: boolean;
   enableLegacyTemplates?: boolean;
   enableIndexStats?: boolean;
+  enableSizeAndDocCount?: boolean;
+  enableDataStreamStats?: boolean;
+  editableIndexSettings?: 'all' | 'limited';
+  enableMappingsSourceFieldSection?: boolean;
+  enableTogglingDataRetention?: boolean;
+  enableProjectLevelRetentionChecks?: boolean;
   dev: {
-    enableIndexDetailsPage?: boolean;
+    enableSemanticText?: boolean;
   };
 }

@@ -17,11 +17,6 @@ export enum HostPolicyResponseActionStatus {
   unsupported = 'unsupported',
 }
 
-export enum HostsFields {
-  lastSeen = 'lastSeen',
-  hostName = 'hostName',
-}
-
 export interface EndpointFields {
   /** A count of pending endpoint actions against the host */
   pendingActions?: Maybe<EndpointPendingActions['pending_actions']>;
@@ -42,6 +37,7 @@ export interface HostItem {
   host?: Maybe<HostEcs>;
   lastSeen?: Maybe<string[]>;
   risk?: string;
+  criticality?: string;
 }
 
 export interface HostValue {

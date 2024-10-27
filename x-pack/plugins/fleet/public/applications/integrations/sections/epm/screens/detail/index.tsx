@@ -12,7 +12,6 @@ import { Routes, Route } from '@kbn/shared-ux-router';
 import styled from 'styled-components';
 import {
   EuiBadge,
-  EuiButtonEmpty,
   EuiCallOut,
   EuiDescriptionList,
   EuiDescriptionListDescription,
@@ -33,6 +32,7 @@ import {
   getPackageReleaseLabel,
   isPackagePrerelease,
   splitPkgKey,
+  packageToPackagePolicyInputs,
 } from '../../../../../../../common/services';
 import { HIDDEN_API_REFERENCE_PACKAGES } from '../../../../../../../common/constants';
 
@@ -67,10 +67,13 @@ import {
 import type { WithHeaderLayoutProps } from '../../../../layouts';
 import { WithHeaderLayout } from '../../../../layouts';
 
+import { PermissionsError } from '../../../../../fleet/layouts';
+
 import { DeferredAssetsWarning } from './assets/deferred_assets_warning';
 import { useIsFirstTimeAgentUserQuery } from './hooks';
 import { getInstallPkgRouteOptions } from './utils';
 import {
+  BackLink,
   IntegrationAgentPolicyCount,
   UpdateIcon,
   IconPanel,
@@ -82,9 +85,12 @@ import { OverviewPage } from './overview';
 import { PackagePoliciesPage } from './policies';
 import { SettingsPage } from './settings';
 import { CustomViewPage } from './custom';
-import { DocumentationPage } from './documentation';
+import { DocumentationPage, hasDocumentation } from './documentation';
+import { Configs } from './configs';
 
 import './index.scss';
+import type { InstallPkgRouteOptions } from './utils/get_install_route_options';
+import { InstallButton } from './settings/install_button';
 
 export type DetailViewPanelName =
   | 'overview'
@@ -92,7 +98,8 @@ export type DetailViewPanelName =
   | 'assets'
   | 'settings'
   | 'custom'
-  | 'api-reference';
+  | 'api-reference'
+  | 'configs';
 
 export interface DetailParams {
   pkgkey: string;
@@ -132,10 +139,17 @@ export function Detail() {
   const queryParams = useMemo(() => new URLSearchParams(search), [search]);
   const integration = useMemo(() => queryParams.get('integration'), [queryParams]);
   const prerelease = useMemo(() => Boolean(queryParams.get('prerelease')), [queryParams]);
+  /** Users from Security Solution onboarding page will have onboardingLink and onboardingAppId in the query params
+   ** to redirect back to the onboarding page after adding an integration
+   */
+  const onboardingLink = useMemo(() => queryParams.get('onboardingLink'), [queryParams]);
+  const onboardingAppId = useMemo(() => queryParams.get('onboardingAppId'), [queryParams]);
 
-  const canInstallPackages = useAuthz().integrations.installPackages;
-  const canReadPackageSettings = useAuthz().integrations.readPackageSettings;
-  const canReadIntegrationPolicies = useAuthz().integrations.readIntegrationPolicies;
+  const authz = useAuthz();
+  const canAddAgent = authz.fleet.addAgents;
+  const canInstallPackages = authz.integrations.installPackages;
+  const canReadPackageSettings = authz.integrations.readPackageSettings;
+  const canReadIntegrationPolicies = authz.integrations.readIntegrationPolicies;
 
   const {
     data: permissionCheck,
@@ -166,7 +180,6 @@ export function Detail() {
     }
     return getPackageInstallStatus(packageInfo?.name)?.status;
   }, [packageInfo, getPackageInstallStatus]);
-
   const isInstalled = useMemo(
     () =>
       packageInstallStatus === InstallStatus.installed ||
@@ -184,7 +197,9 @@ export function Detail() {
     boolean | undefined
   >();
 
-  const { data: settings } = useGetSettingsQuery();
+  const { data: settings, isInitialLoading: isSettingsInitialLoading } = useGetSettingsQuery({
+    enabled: authz.fleet.readSettings,
+  });
 
   useEffect(() => {
     const isEnabled = Boolean(settings?.item.prerelease_integrations_enabled) || prerelease;
@@ -197,10 +212,20 @@ export function Detail() {
     data: packageInfoData,
     error: packageInfoError,
     isLoading: packageInfoLoading,
+    isFetchedAfterMount: packageInfoIsFetchedAfterMount,
     refetch: refetchPackageInfo,
-  } = useGetPackageInfoByKeyQuery(pkgName, pkgVersion, {
-    prerelease: prereleaseIntegrationsEnabled,
-  });
+  } = useGetPackageInfoByKeyQuery(
+    pkgName,
+    pkgVersion,
+    {
+      prerelease: prereleaseIntegrationsEnabled,
+      withMetadata: true,
+    },
+    {
+      enabled: !authz.fleet.readSettings || !isSettingsInitialLoading, // Load only after settings are loaded
+      refetchOnMount: 'always',
+    }
+  );
 
   const [latestGAVersion, setLatestGAVersion] = useState<string | undefined>();
   const [latestPrereleaseVersion, setLatestPrereleaseVersion] = useState<string | undefined>();
@@ -244,14 +269,28 @@ export function Detail() {
     }
   }, [packageInstallStatus, oldPackageInstallStatus, refetchPackageInfo]);
 
-  const isLoading = packageInfoLoading || isPermissionCheckLoading || firstTimeUserLoading;
+  const isLoading =
+    packageInfoLoading ||
+    isPermissionCheckLoading ||
+    firstTimeUserLoading ||
+    !packageInfoIsFetchedAfterMount;
 
   const showCustomTab =
     useUIExtension(packageInfoData?.item?.name ?? '', 'package-detail-custom') !== undefined;
 
+  // Only show config tab if package has `inputs`
+  const showConfigTab =
+    canAddAgent && (packageInfo ? packageToPackagePolicyInputs(packageInfo).length > 0 : false);
+
+  // Only show API references tab if it is allowed & has documentation to show
+  const showDocumentationTab =
+    !HIDDEN_API_REFERENCE_PACKAGES.includes(pkgName) &&
+    packageInfo &&
+    hasDocumentation({ packageInfo, integration });
+
   // Track install status state
   useEffect(() => {
-    if (packageInfoData?.item) {
+    if (packageInfoIsFetchedAfterMount && packageInfoData?.item) {
       const packageInfoResponse = packageInfoData.item;
       setPackageInfo(packageInfoResponse);
 
@@ -265,7 +304,7 @@ export function Detail() {
         setPackageInstallStatus({ name, status, version: installedVersion || null });
       }
     }
-  }, [packageInfoData, setPackageInstallStatus, setPackageInfo]);
+  }, [packageInfoData, packageInfoIsFetchedAfterMount, setPackageInstallStatus, setPackageInfo]);
 
   const integrationInfo = useMemo(
     () =>
@@ -293,16 +332,11 @@ export function Detail() {
 
   const headerLeftContent = useMemo(
     () => (
-      <EuiFlexGroup direction="column" gutterSize="m">
+      <EuiFlexGroup direction="column" gutterSize="m" data-test-subj="headerLeft">
         <EuiFlexItem>
           {/* Allows button to break out of full width */}
           <div>
-            <EuiButtonEmpty iconType="arrowLeft" size="xs" flush="left" href={href}>
-              <FormattedMessage
-                id="xpack.fleet.epm.browseAllButtonText"
-                defaultMessage="Back to integrations"
-              />
-            </EuiButtonEmpty>
+            <BackLink queryParams={queryParams} href={href} />
           </div>
         </EuiFlexItem>
         <EuiFlexItem>
@@ -329,13 +363,23 @@ export function Detail() {
                 </EuiFlexItem>
                 <EuiFlexItem>
                   <EuiFlexGroup gutterSize="xs">
-                    <EuiFlexItem grow={false}>
-                      <EuiBadge color="default">
-                        {i18n.translate('xpack.fleet.epm.elasticAgentBadgeLabel', {
-                          defaultMessage: 'Elastic Agent',
-                        })}
-                      </EuiBadge>
-                    </EuiFlexItem>
+                    {packageInfo?.type === 'content' ? (
+                      <EuiFlexItem grow={false}>
+                        <EuiBadge color="default">
+                          {i18n.translate('xpack.fleet.epm.contentPackageBadgeLabel', {
+                            defaultMessage: 'Content only',
+                          })}
+                        </EuiBadge>
+                      </EuiFlexItem>
+                    ) : (
+                      <EuiFlexItem grow={false}>
+                        <EuiBadge color="default">
+                          {i18n.translate('xpack.fleet.epm.elasticAgentBadgeLabel', {
+                            defaultMessage: 'Elastic Agent',
+                          })}
+                        </EuiBadge>
+                      </EuiFlexItem>
+                    )}
                     {packageInfo?.release && packageInfo.release !== 'ga' ? (
                       <EuiFlexItem grow={false}>
                         <HeaderReleaseBadge release={getPackageReleaseLabel(packageInfo.version)} />
@@ -349,7 +393,7 @@ export function Detail() {
         </EuiFlexItem>
       </EuiFlexGroup>
     ),
-    [integrationInfo, isLoading, packageInfo, href]
+    [integrationInfo, isLoading, packageInfo, href, queryParams]
   );
 
   const handleAddIntegrationPolicyClick = useCallback<ReactEventHandler>(
@@ -363,7 +407,7 @@ export function Detail() {
         hash,
       });
 
-      const navigateOptions = getInstallPkgRouteOptions({
+      const defaultNavigateOptions: InstallPkgRouteOptions = getInstallPkgRouteOptions({
         agentPolicyId: agentPolicyIdFromContext,
         currentPath,
         integration,
@@ -373,6 +417,25 @@ export function Detail() {
         isGuidedOnboardingActive,
         pkgkey,
       });
+
+      /** Users from Security Solution onboarding page will have onboardingLink and onboardingAppId in the query params
+       ** to redirect back to the onboarding page after adding an integration
+       */
+      const navigateOptions: InstallPkgRouteOptions =
+        onboardingAppId && onboardingLink
+          ? [
+              defaultNavigateOptions[0],
+              {
+                ...defaultNavigateOptions[1],
+                state: {
+                  ...(defaultNavigateOptions[1]?.state ?? {}),
+                  onCancelNavigateTo: [onboardingAppId, { path: onboardingLink }],
+                  onCancelUrl: onboardingLink,
+                  onSaveNavigateTo: [onboardingAppId, { path: onboardingLink }],
+                },
+              },
+            ]
+          : defaultNavigateOptions;
 
       services.application.navigateToApp(...navigateOptions);
     },
@@ -385,6 +448,8 @@ export function Detail() {
       isExperimentalAddIntegrationPageEnabled,
       isFirstTimeAgentUser,
       isGuidedOnboardingActive,
+      onboardingAppId,
+      onboardingLink,
       pathname,
       pkgkey,
       search,
@@ -466,7 +531,7 @@ export function Detail() {
                   </EuiFlexGroup>
                 ),
               },
-              ...(isInstalled
+              ...(isInstalled && packageInfo.type !== 'content'
                 ? [
                     { isDivider: true },
                     {
@@ -478,31 +543,37 @@ export function Detail() {
                     },
                   ]
                 : []),
-              { isDivider: true },
-              {
-                content: (
-                  <WithGuidedOnboardingTour
-                    packageKey={pkgkey}
-                    tourType={'addIntegrationButton'}
-                    isTourVisible={isOverviewPage && isGuidedOnboardingActive}
-                    tourOffset={10}
-                  >
-                    <AddIntegrationButton
-                      userCanInstallPackages={userCanInstallPackages}
-                      href={getHref('add_integration_to_policy', {
-                        pkgkey,
-                        ...(integration ? { integration } : {}),
-                        ...(agentPolicyIdFromContext
-                          ? { agentPolicyId: agentPolicyIdFromContext }
-                          : {}),
-                      })}
-                      missingSecurityConfiguration={missingSecurityConfiguration}
-                      packageName={integrationInfo?.title || packageInfo.title}
-                      onClick={handleAddIntegrationPolicyClick}
-                    />
-                  </WithGuidedOnboardingTour>
-                ),
-              },
+              ...(packageInfo.type === 'content'
+                ? !isInstalled
+                  ? [{ isDivider: true }, { content: <InstallButton {...packageInfo} /> }]
+                  : [] // if content package is already installed, don't show install button in header
+                : [
+                    { isDivider: true },
+                    {
+                      content: (
+                        <WithGuidedOnboardingTour
+                          packageKey={pkgkey}
+                          tourType={'addIntegrationButton'}
+                          isTourVisible={isOverviewPage && isGuidedOnboardingActive}
+                          tourOffset={10}
+                        >
+                          <AddIntegrationButton
+                            userCanInstallPackages={userCanInstallPackages}
+                            href={getHref('add_integration_to_policy', {
+                              pkgkey,
+                              ...(integration ? { integration } : {}),
+                              ...(agentPolicyIdFromContext
+                                ? { agentPolicyId: agentPolicyIdFromContext }
+                                : {}),
+                            })}
+                            missingSecurityConfiguration={missingSecurityConfiguration}
+                            packageName={integrationInfo?.title || packageInfo.title}
+                            onClick={handleAddIntegrationPolicyClick}
+                          />
+                        </WithGuidedOnboardingTour>
+                      ),
+                    },
+                  ]),
             ].map((item, index) => (
               <EuiFlexItem grow={false} key={index} data-test-subj={item['data-test-subj']}>
                 {item.isDivider ?? false ? (
@@ -565,7 +636,7 @@ export function Detail() {
       },
     ];
 
-    if (canReadIntegrationPolicies && isInstalled) {
+    if (canReadIntegrationPolicies && isInstalled && packageInfo.type !== 'content') {
       tabs.push({
         id: 'policies',
         name: (
@@ -625,6 +696,24 @@ export function Detail() {
       });
     }
 
+    if (canReadPackageSettings && showConfigTab) {
+      tabs.push({
+        id: 'configs',
+        name: (
+          <FormattedMessage
+            id="xpack.fleet.epm.packageDetailsNav.configsText"
+            defaultMessage="Configs"
+          />
+        ),
+        isSelected: panel === 'configs',
+        'data-test-subj': `tab-configs`,
+        href: getHref('integration_details_configs', {
+          pkgkey: packageInfoKey,
+          ...(integration ? { integration } : {}),
+        }),
+      });
+    }
+
     if (canReadPackageSettings && showCustomTab) {
       tabs.push({
         id: 'custom',
@@ -643,7 +732,7 @@ export function Detail() {
       });
     }
 
-    if (!HIDDEN_API_REFERENCE_PACKAGES.includes(packageInfo.name)) {
+    if (showDocumentationTab) {
       tabs.push({
         id: 'api-reference',
         name: (
@@ -668,11 +757,13 @@ export function Detail() {
     getHref,
     integration,
     canReadIntegrationPolicies,
-    numOfDeferredInstallations,
     isInstalled,
     CustomAssets,
     canReadPackageSettings,
+    showConfigTab,
     showCustomTab,
+    showDocumentationTab,
+    numOfDeferredInstallations,
   ]);
 
   const securityCallout = missingSecurityConfiguration ? (
@@ -741,13 +832,27 @@ export function Detail() {
             />
           </Route>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_settings}>
-            <SettingsPage packageInfo={packageInfo} theme$={services.theme.theme$} />
+            <SettingsPage
+              packageInfo={packageInfo}
+              packageMetadata={packageInfoData?.metadata}
+              startServices={services}
+            />
           </Route>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_assets}>
-            <AssetsPage packageInfo={packageInfo} />
+            <AssetsPage packageInfo={packageInfo} refetchPackageInfo={refetchPackageInfo} />
+          </Route>
+          <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_configs}>
+            <Configs packageInfo={packageInfo} />
           </Route>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_policies}>
-            <PackagePoliciesPage name={packageInfo.name} version={packageInfo.version} />
+            {canReadIntegrationPolicies ? (
+              <PackagePoliciesPage name={packageInfo.name} version={packageInfo.version} />
+            ) : (
+              <PermissionsError
+                error="MISSING_PRIVILEGES"
+                requiredFleetRole="Agent Policies Read and Integrations Read"
+              />
+            )}
           </Route>
           <Route path={INTEGRATIONS_ROUTING_PATHS.integration_details_custom}>
             <CustomViewPage packageInfo={packageInfo} />

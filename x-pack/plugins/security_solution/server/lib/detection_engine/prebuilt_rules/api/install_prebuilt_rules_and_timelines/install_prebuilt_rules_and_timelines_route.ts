@@ -8,8 +8,6 @@
 import type { RulesClient } from '@kbn/alerting-plugin/server';
 import type { ExceptionListClient } from '@kbn/lists-plugin/server';
 import { transformError } from '@kbn/securitysolution-es-utils';
-import { validate } from '@kbn/securitysolution-io-ts-utils';
-import moment from 'moment';
 import {
   InstallPrebuiltRulesAndTimelinesResponse,
   PREBUILT_RULES_URL,
@@ -20,6 +18,7 @@ import type {
 } from '../../../../../types';
 import { buildSiemResponse } from '../../../routes/utils';
 import { getExistingPrepackagedRules } from '../../../rule_management/logic/search/get_existing_prepackaged_rules';
+import { PREBUILT_RULES_OPERATION_SOCKET_TIMEOUT_MS } from '../../constants';
 import { ensureLatestRulesPackageInstalled } from '../../logic/ensure_latest_rules_package_installed';
 import { getRulesToInstall } from '../../logic/get_rules_to_install';
 import { getRulesToUpdate } from '../../logic/get_rules_to_update';
@@ -37,11 +36,7 @@ export const installPrebuiltRulesAndTimelinesRoute = (router: SecuritySolutionPl
       options: {
         tags: ['access:securitySolution'],
         timeout: {
-          // FUNFACT: If we do not add a very long timeout what will happen
-          // is that Chrome which receive a 408 error and then do a retry.
-          // This retry can cause lots of connections to happen. Using a very
-          // long timeout will ensure that Chrome does not do retries and saturate the connections.
-          idleSocket: moment.duration('1', 'hour').asMilliseconds(),
+          idleSocket: PREBUILT_RULES_OPERATION_SOCKET_TIMEOUT_MS,
         },
       },
     })
@@ -90,6 +85,7 @@ export const createPrepackagedRules = async (
   const savedObjectsClient = context.core.savedObjects.client;
   const siemClient = context.getAppClient();
   const exceptionsListClient = context.getExceptionListClient() ?? exceptionsClient;
+  const detectionRulesClient = context.getDetectionRulesClient();
   const ruleAssetsClient = createPrebuiltRuleAssetsClient(savedObjectsClient);
 
   if (!siemClient || !rulesClient) {
@@ -111,16 +107,14 @@ export const createPrepackagedRules = async (
   const rulesToInstall = getRulesToInstall(latestPrebuiltRules, installedPrebuiltRules);
   const rulesToUpdate = getRulesToUpdate(latestPrebuiltRules, installedPrebuiltRules);
 
-  const result = await createPrebuiltRules(rulesClient, rulesToInstall);
+  const result = await createPrebuiltRules(detectionRulesClient, rulesToInstall);
   if (result.errors.length > 0) {
     throw new AggregateError(result.errors, 'Error installing new prebuilt rules');
   }
 
-  const { result: timelinesResult, error: timelinesError } = await performTimelinesInstallation(
-    context
-  );
+  const { result: timelinesResult } = await performTimelinesInstallation(context);
 
-  await upgradePrebuiltRules(rulesClient, rulesToUpdate);
+  await upgradePrebuiltRules(detectionRulesClient, rulesToUpdate);
 
   const prebuiltRulesOutput: InstallPrebuiltRulesAndTimelinesResponse = {
     rules_installed: rulesToInstall.length,
@@ -129,17 +123,5 @@ export const createPrepackagedRules = async (
     timelines_updated: timelinesResult?.timelines_updated ?? 0,
   };
 
-  const [validated, genericErrors] = validate(
-    prebuiltRulesOutput,
-    InstallPrebuiltRulesAndTimelinesResponse
-  );
-
-  if (genericErrors != null && timelinesError != null) {
-    throw new PrepackagedRulesError(
-      [genericErrors, timelinesError].filter((msg) => msg != null).join(', '),
-      500
-    );
-  }
-
-  return validated;
+  return InstallPrebuiltRulesAndTimelinesResponse.parse(prebuiltRulesOutput);
 };

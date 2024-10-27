@@ -14,13 +14,14 @@ import {
   EuiFlexItem,
   EuiCopy,
   EuiCodeBlock,
+  EuiLink,
 } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n-react';
 import { i18n } from '@kbn/i18n';
 
 import { useStartServices } from '../../hooks';
 
-import { agentPolicyRouteService } from '../../../common';
+import { agentPolicyRouteService, API_VERSIONS } from '../../../common';
 
 import { sendGetK8sManifest } from '../../hooks/use_request/k8s';
 
@@ -31,6 +32,16 @@ interface Props {
   fleetServerHost?: string;
 }
 
+export const getManifestDownloadLink = (fleetServerHost?: string, enrollmentAPIKey?: string) => {
+  const searchParams = new URLSearchParams({
+    apiVersion: API_VERSIONS.public.v1,
+    ...(fleetServerHost && { fleetServer: fleetServerHost }),
+    ...(enrollmentAPIKey && { enrolToken: enrollmentAPIKey }),
+  });
+
+  return `${agentPolicyRouteService.getK8sFullDownloadPath()}?${searchParams.toString()}`;
+};
+
 export const KubernetesInstructions: React.FunctionComponent<Props> = ({
   enrollmentAPIKey,
   onCopy,
@@ -38,7 +49,7 @@ export const KubernetesInstructions: React.FunctionComponent<Props> = ({
   fleetServerHost,
 }) => {
   const core = useStartServices();
-  const { notifications } = core;
+  const { notifications, docLinks } = core;
 
   const [yaml, setYaml] = useState<string>('');
   const [copyButtonClicked, setCopyButtonClicked] = useState(false);
@@ -87,7 +98,21 @@ export const KubernetesInstructions: React.FunctionComponent<Props> = ({
   const downloadDescription = (
     <FormattedMessage
       id="xpack.fleet.agentEnrollment.downloadDescriptionForK8s"
-      defaultMessage="Copy or download the Kubernetes manifest."
+      defaultMessage="Copy or download the Kubernetes manifest. Note that the following manifest contains resource limits that may not be appropriate for a production environment, review our guide on {scalingGuideLink} before deploying this manifest."
+      values={{
+        scalingGuideLink: (
+          <EuiLink
+            external
+            href={docLinks.links.fleet.scalingKubernetesResourcesAndLimits}
+            target="_blank"
+          >
+            <FormattedMessage
+              id="xpack.fleet.fleet.agentEnrollment.k8ScalingGuideLinkText"
+              defaultMessage="Scaling Elastic Agent on Kubernetes"
+            />
+          </EuiLink>
+        ),
+      }}
     />
   );
 
@@ -111,13 +136,8 @@ export const KubernetesInstructions: React.FunctionComponent<Props> = ({
     </EuiCopy>
   );
 
-  const searchParams = new URLSearchParams({
-    ...(fleetServerHost && { fleetServer: fleetServerHost }),
-    ...(enrollmentAPIKey && { enrolToken: enrollmentAPIKey }),
-  });
-
   const downloadLink = core.http.basePath.prepend(
-    `${agentPolicyRouteService.getK8sFullDownloadPath()}${searchParams.toString()}`
+    getManifestDownloadLink(fleetServerHost, enrollmentAPIKey)
   );
 
   const k8sDownloadYaml = (
@@ -136,7 +156,7 @@ export const KubernetesInstructions: React.FunctionComponent<Props> = ({
         ) : (
           <FormattedMessage
             id="xpack.fleet.enrollmentInstructions.downloadManifestButtonk8s"
-            defaultMessage="Download Manifest"
+            defaultMessage="Download manifest"
           />
         )}
       </EuiButton>

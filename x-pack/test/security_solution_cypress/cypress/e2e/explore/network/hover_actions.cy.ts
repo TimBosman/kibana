@@ -9,8 +9,9 @@ import { TOP_N_CONTAINER } from '../../../screens/network/flows';
 import { GLOBAL_SEARCH_BAR_FILTER_ITEM } from '../../../screens/search_bar';
 import { DATA_PROVIDERS } from '../../../screens/timeline';
 
-import { login, visit } from '../../../tasks/login';
-import { NETWORK_URL } from '../../../urls/navigation';
+import { login } from '../../../tasks/login';
+import { visitWithTimeRange } from '../../../tasks/navigation';
+import { networkUrl } from '../../../urls/navigation';
 import {
   clickOnAddToTimeline,
   clickOnCopyValue,
@@ -24,8 +25,7 @@ import { openTimelineUsingToggle } from '../../../tasks/security_main';
 
 const testDomain = 'myTest';
 
-// tracked by https://github.com/elastic/kibana/issues/161874
-describe.skip('Hover actions', { tags: ['@ess', '@serverless'] }, () => {
+describe('Hover actions', { tags: ['@ess', '@serverless'] }, () => {
   const onBeforeLoadCallback = (win: Cypress.AUTWindow) => {
     // avoid cypress being held by windows prompt and timeout
     cy.stub(win, 'prompt').returns(true);
@@ -36,14 +36,24 @@ describe.skip('Hover actions', { tags: ['@ess', '@serverless'] }, () => {
   });
 
   after(() => {
-    cy.task('esArchiverUnload', 'network');
+    cy.task('esArchiverUnload', { archiveName: 'network' });
   });
 
   beforeEach(() => {
     login();
-    visit(NETWORK_URL, { onBeforeLoad: onBeforeLoadCallback });
+    visitWithTimeRange(networkUrl('flows'), {
+      visitOptions: { onBeforeLoad: onBeforeLoadCallback },
+    });
     openHoverActions();
     mouseoverOnToOverflowItem();
+  });
+
+  it('Copy value', () => {
+    cy.document().then((doc) => cy.spy(doc, 'execCommand').as('execCommand'));
+
+    clickOnCopyValue();
+
+    cy.get('@execCommand').should('have.been.calledOnceWith', 'copy');
   });
 
   it('Adds global filter - filter in', () => {
@@ -72,13 +82,5 @@ describe.skip('Hover actions', { tags: ['@ess', '@serverless'] }, () => {
   it('Show topN', () => {
     clickOnShowTopN();
     cy.get(TOP_N_CONTAINER).should('exist').should('contain.text', 'Top destination.domain');
-  });
-
-  it('Copy value', () => {
-    cy.document().then((doc) => cy.spy(doc, 'execCommand').as('execCommand'));
-
-    clickOnCopyValue();
-
-    cy.get('@execCommand').should('have.been.calledOnceWith', 'copy');
   });
 });

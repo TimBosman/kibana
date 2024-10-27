@@ -7,7 +7,7 @@
 
 import type { IKibanaResponse, Logger } from '@kbn/core/server';
 import { transformError } from '@kbn/securitysolution-es-utils';
-
+import { buildRouteValidationWithZod } from '@kbn/zod-helpers';
 import { DETECTION_ENGINE_RULES_URL_FIND } from '../../../../../../../common/constants';
 import type { FindRulesResponse } from '../../../../../../../common/api/detection_engine/rule_management';
 import {
@@ -18,7 +18,6 @@ import {
 import type { SecuritySolutionPluginRouter } from '../../../../../../types';
 import { findRules } from '../../../logic/search/find_rules';
 import { buildSiemResponse } from '../../../../routes/utils';
-import { buildRouteValidation } from '../../../../../../utils/build_validation/route_validation';
 import { transformFindAlerts } from '../../../utils/utils';
 
 export const findRulesRoute = (router: SecuritySolutionPluginRouter, logger: Logger) => {
@@ -35,7 +34,7 @@ export const findRulesRoute = (router: SecuritySolutionPluginRouter, logger: Log
         version: '2023-10-31',
         validate: {
           request: {
-            query: buildRouteValidation(FindRulesRequestQuery),
+            query: buildRouteValidationWithZod(FindRulesRequestQuery),
           },
         },
       },
@@ -63,11 +62,7 @@ export const findRulesRoute = (router: SecuritySolutionPluginRouter, logger: Log
           });
 
           const transformed = transformFindAlerts(rules);
-          if (transformed == null) {
-            return siemResponse.error({ statusCode: 500, body: 'Internal error transforming' });
-          } else {
-            return response.ok({ body: transformed ?? {} });
-          }
+          return response.ok({ body: transformed ?? {} });
         } catch (err) {
           const error = transformError(err);
           return siemResponse.error({

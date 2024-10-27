@@ -138,6 +138,7 @@ export type LoadingRuleAction =
   | 'export'
   | 'load'
   | 'edit'
+  | 'run'
   | null;
 
 export interface LoadingRules {
@@ -295,6 +296,9 @@ export const RulesTableContextProvider = ({ children }: RulesTableContextProvide
       pagination,
     },
     {
+      // We don't need refreshes on windows focus and reconnects if auto-refresh if off
+      refetchOnWindowFocus: isRefreshOn && !isActionInProgress,
+      refetchOnReconnect: isRefreshOn && !isActionInProgress,
       refetchInterval: isRefreshOn && !isActionInProgress && autoRefreshSettings.value,
       keepPreviousData: true, // Use this option so that the state doesn't jump between "success" and "loading" on page change
     }

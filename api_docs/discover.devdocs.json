@@ -5,6 +5,46 @@
     "functions": [
       {
         "parentPluginId": "discover",
+        "id": "def-public.apiPublishesSavedSearch",
+        "type": "Function",
+        "tags": [],
+        "label": "apiPublishesSavedSearch",
+        "description": [],
+        "signature": [
+          "(api: unknown) => api is ",
+          {
+            "pluginId": "discover",
+            "scope": "public",
+            "docId": "kibDiscoverPluginApi",
+            "section": "def-public.PublishesSavedSearch",
+            "text": "PublishesSavedSearch"
+          }
+        ],
+        "path": "src/plugins/discover/public/embeddable/types.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.apiPublishesSavedSearch.$1",
+            "type": "Unknown",
+            "tags": [],
+            "label": "api",
+            "description": [],
+            "signature": [
+              "unknown"
+            ],
+            "path": "src/plugins/discover/public/embeddable/types.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "isRequired": true
+          }
+        ],
+        "returnComment": [],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
         "id": "def-public.loadSharingDataHelpers",
         "type": "Function",
         "tags": [],
@@ -21,9 +61,483 @@
         "children": [],
         "returnComment": [],
         "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-public.LogsExplorerTabs",
+        "type": "Function",
+        "tags": [],
+        "label": "LogsExplorerTabs",
+        "description": [],
+        "signature": [
+          "React.ForwardRefExoticComponent<",
+          {
+            "pluginId": "discover",
+            "scope": "public",
+            "docId": "kibDiscoverPluginApi",
+            "section": "def-public.LogsExplorerTabsProps",
+            "text": "LogsExplorerTabsProps"
+          },
+          " & ",
+          {
+            "pluginId": "@kbn/shared-ux-utility",
+            "scope": "common",
+            "docId": "kibKbnSharedUxUtilityPluginApi",
+            "section": "def-common.WithSuspenseExtendedDeps",
+            "text": "WithSuspenseExtendedDeps"
+          },
+          " & React.RefAttributes<{}>>"
+        ],
+        "path": "src/plugins/discover/public/components/logs_explorer_tabs/index.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "returnComment": [],
+        "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.LogsExplorerTabs.$1",
+            "type": "Uncategorized",
+            "tags": [],
+            "label": "props",
+            "description": [],
+            "signature": [
+              "P"
+            ],
+            "path": "node_modules/@types/react/ts5.0/index.d.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          }
+        ],
+        "initialIsOpen": false
       }
     ],
     "interfaces": [
+      {
+        "parentPluginId": "discover",
+        "id": "def-public.DataDocumentsMsg",
+        "type": "Interface",
+        "tags": [],
+        "label": "DataDocumentsMsg",
+        "description": [],
+        "signature": [
+          {
+            "pluginId": "discover",
+            "scope": "public",
+            "docId": "kibDiscoverPluginApi",
+            "section": "def-public.DataDocumentsMsg",
+            "text": "DataDocumentsMsg"
+          },
+          " extends ",
+          "DataMsg"
+        ],
+        "path": "src/plugins/discover/public/application/main/state_management/discover_data_state_container.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DataDocumentsMsg.result",
+            "type": "Array",
+            "tags": [],
+            "label": "result",
+            "description": [],
+            "signature": [
+              {
+                "pluginId": "@kbn/discover-utils",
+                "scope": "common",
+                "docId": "kibKbnDiscoverUtilsPluginApi",
+                "section": "def-common.DataTableRecord",
+                "text": "DataTableRecord"
+              },
+              "[] | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_data_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DataDocumentsMsg.esqlQueryColumns",
+            "type": "Array",
+            "tags": [],
+            "label": "esqlQueryColumns",
+            "description": [],
+            "signature": [
+              {
+                "pluginId": "expressions",
+                "scope": "common",
+                "docId": "kibExpressionsPluginApi",
+                "section": "def-common.DatatableColumn",
+                "text": "DatatableColumn"
+              },
+              "[] | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_data_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DataDocumentsMsg.esqlHeaderWarning",
+            "type": "string",
+            "tags": [],
+            "label": "esqlHeaderWarning",
+            "description": [],
+            "signature": [
+              "string | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_data_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DataDocumentsMsg.interceptedWarnings",
+            "type": "Array",
+            "tags": [],
+            "label": "interceptedWarnings",
+            "description": [],
+            "signature": [
+              "SearchResponseIncompleteWarning",
+              "[] | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_data_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          }
+        ],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-public.DiscoverAppState",
+        "type": "Interface",
+        "tags": [],
+        "label": "DiscoverAppState",
+        "description": [],
+        "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.columns",
+            "type": "Array",
+            "tags": [],
+            "label": "columns",
+            "description": [
+              "\nColumns displayed in the table"
+            ],
+            "signature": [
+              "string[] | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.filters",
+            "type": "Array",
+            "tags": [],
+            "label": "filters",
+            "description": [
+              "\nArray of applied filters"
+            ],
+            "signature": [
+              {
+                "pluginId": "@kbn/es-query",
+                "scope": "common",
+                "docId": "kibKbnEsQueryPluginApi",
+                "section": "def-common.Filter",
+                "text": "Filter"
+              },
+              "[] | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.grid",
+            "type": "Object",
+            "tags": [],
+            "label": "grid",
+            "description": [
+              "\nData Grid related state"
+            ],
+            "signature": [
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.DiscoverGridSettings",
+                "text": "DiscoverGridSettings"
+              },
+              " | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.hideChart",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "hideChart",
+            "description": [
+              "\nHide chart"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.dataSource",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "dataSource",
+            "description": [
+              "\nThe current data source"
+            ],
+            "signature": [
+              "DiscoverDataSource",
+              " | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.interval",
+            "type": "string",
+            "tags": [],
+            "label": "interval",
+            "description": [
+              "\nUsed interval of the histogram"
+            ],
+            "signature": [
+              "string | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.query",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "query",
+            "description": [
+              "\nLucence or KQL query"
+            ],
+            "signature": [
+              {
+                "pluginId": "@kbn/es-query",
+                "scope": "common",
+                "docId": "kibKbnEsQueryPluginApi",
+                "section": "def-common.Query",
+                "text": "Query"
+              },
+              " | ",
+              {
+                "pluginId": "@kbn/es-query",
+                "scope": "common",
+                "docId": "kibKbnEsQueryPluginApi",
+                "section": "def-common.AggregateQuery",
+                "text": "AggregateQuery"
+              },
+              " | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.sort",
+            "type": "Array",
+            "tags": [],
+            "label": "sort",
+            "description": [
+              "\nArray of the used sorting [[field,direction],...]"
+            ],
+            "signature": [
+              "string[][] | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.savedQuery",
+            "type": "string",
+            "tags": [],
+            "label": "savedQuery",
+            "description": [
+              "\nid of the used saved query"
+            ],
+            "signature": [
+              "string | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.viewMode",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "viewMode",
+            "description": [
+              "\nTable view: Documents vs Field Statistics"
+            ],
+            "signature": [
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.VIEW_MODE",
+                "text": "VIEW_MODE"
+              },
+              " | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.hideAggregatedPreview",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "hideAggregatedPreview",
+            "description": [
+              "\nHide mini distribution/preview charts when in Field Statistics mode"
+            ],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.rowHeight",
+            "type": "number",
+            "tags": [],
+            "label": "rowHeight",
+            "description": [
+              "\nDocument explorer row height option"
+            ],
+            "signature": [
+              "number | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.headerRowHeight",
+            "type": "number",
+            "tags": [],
+            "label": "headerRowHeight",
+            "description": [
+              "\nDocument explorer header row height option"
+            ],
+            "signature": [
+              "number | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.rowsPerPage",
+            "type": "number",
+            "tags": [],
+            "label": "rowsPerPage",
+            "description": [
+              "\nNumber of rows in the grid per page"
+            ],
+            "signature": [
+              "number | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.sampleSize",
+            "type": "number",
+            "tags": [],
+            "label": "sampleSize",
+            "description": [
+              "\nCustom sample size"
+            ],
+            "signature": [
+              "number | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.breakdownField",
+            "type": "string",
+            "tags": [],
+            "label": "breakdownField",
+            "description": [
+              "\nBreakdown field of chart"
+            ],
+            "signature": [
+              "string | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverAppState.density",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "density",
+            "description": [
+              "\nDensity of table"
+            ],
+            "signature": [
+              {
+                "pluginId": "@kbn/unified-data-table",
+                "scope": "public",
+                "docId": "kibKbnUnifiedDataTablePluginApi",
+                "section": "def-public.DataGridDensity",
+                "text": "DataGridDensity"
+              },
+              " | undefined"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_app_state_container.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          }
+        ],
+        "initialIsOpen": false
+      },
       {
         "parentPluginId": "discover",
         "id": "def-public.DiscoverCustomizationService",
@@ -83,15 +597,21 @@
           },
           {
             "parentPluginId": "discover",
-            "id": "def-public.DiscoverCustomizationService.get$",
+            "id": "def-public.DiscoverCustomizationService.get",
             "type": "Function",
             "tags": [],
-            "label": "get$",
+            "label": "get",
             "description": [],
             "signature": [
-              "<TCustomizationId extends \"search_bar\" | \"top_nav\" | \"unified_histogram\">(id: TCustomizationId) => ",
-              "Observable",
-              "<Extract<",
+              "<TCustomizationId extends \"flyout\" | \"search_bar\" | \"top_nav\" | \"unified_histogram\" | \"data_table\" | \"field_list\">(id: TCustomizationId) => Extract<",
+              {
+                "pluginId": "discover",
+                "scope": "public",
+                "docId": "kibDiscoverPluginApi",
+                "section": "def-public.FlyoutCustomization",
+                "text": "FlyoutCustomization"
+              },
+              ", { id: TCustomizationId; }> | Extract<",
               {
                 "pluginId": "discover",
                 "scope": "public",
@@ -115,6 +635,80 @@
                 "section": "def-public.UnifiedHistogramCustomization",
                 "text": "UnifiedHistogramCustomization"
               },
+              ", { id: TCustomizationId; }> | Extract<",
+              "DataTableCustomization",
+              ", { id: TCustomizationId; }> | Extract<",
+              "FieldListCustomization",
+              ", { id: TCustomizationId; }> | undefined"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_service.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "children": [
+              {
+                "parentPluginId": "discover",
+                "id": "def-public.DiscoverCustomizationService.get.$1",
+                "type": "Uncategorized",
+                "tags": [],
+                "label": "id",
+                "description": [],
+                "signature": [
+                  "TCustomizationId"
+                ],
+                "path": "src/plugins/discover/public/customizations/customization_service.ts",
+                "deprecated": false,
+                "trackAdoption": false,
+                "isRequired": true
+              }
+            ],
+            "returnComment": []
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverCustomizationService.get$",
+            "type": "Function",
+            "tags": [],
+            "label": "get$",
+            "description": [],
+            "signature": [
+              "<TCustomizationId extends \"flyout\" | \"search_bar\" | \"top_nav\" | \"unified_histogram\" | \"data_table\" | \"field_list\">(id: TCustomizationId) => ",
+              "Observable",
+              "<Extract<",
+              {
+                "pluginId": "discover",
+                "scope": "public",
+                "docId": "kibDiscoverPluginApi",
+                "section": "def-public.FlyoutCustomization",
+                "text": "FlyoutCustomization"
+              },
+              ", { id: TCustomizationId; }> | Extract<",
+              {
+                "pluginId": "discover",
+                "scope": "public",
+                "docId": "kibDiscoverPluginApi",
+                "section": "def-public.SearchBarCustomization",
+                "text": "SearchBarCustomization"
+              },
+              ", { id: TCustomizationId; }> | Extract<",
+              {
+                "pluginId": "discover",
+                "scope": "public",
+                "docId": "kibDiscoverPluginApi",
+                "section": "def-public.TopNavCustomization",
+                "text": "TopNavCustomization"
+              },
+              ", { id: TCustomizationId; }> | Extract<",
+              {
+                "pluginId": "discover",
+                "scope": "public",
+                "docId": "kibDiscoverPluginApi",
+                "section": "def-public.UnifiedHistogramCustomization",
+                "text": "UnifiedHistogramCustomization"
+              },
+              ", { id: TCustomizationId; }> | Extract<",
+              "DataTableCustomization",
+              ", { id: TCustomizationId; }> | Extract<",
+              "FieldListCustomization",
               ", { id: TCustomizationId; }> | undefined>"
             ],
             "path": "src/plugins/discover/public/customizations/customization_service.ts",
@@ -147,7 +741,7 @@
             "label": "enable",
             "description": [],
             "signature": [
-              "(id: \"search_bar\" | \"top_nav\" | \"unified_histogram\") => void"
+              "(id: \"flyout\" | \"search_bar\" | \"top_nav\" | \"unified_histogram\" | \"data_table\" | \"field_list\") => void"
             ],
             "path": "src/plugins/discover/public/customizations/customization_service.ts",
             "deprecated": false,
@@ -161,7 +755,7 @@
                 "label": "id",
                 "description": [],
                 "signature": [
-                  "\"search_bar\" | \"top_nav\" | \"unified_histogram\""
+                  "\"flyout\" | \"search_bar\" | \"top_nav\" | \"unified_histogram\" | \"data_table\" | \"field_list\""
                 ],
                 "path": "src/plugins/discover/public/customizations/customization_service.ts",
                 "deprecated": false,
@@ -179,7 +773,7 @@
             "label": "disable",
             "description": [],
             "signature": [
-              "(id: \"search_bar\" | \"top_nav\" | \"unified_histogram\") => void"
+              "(id: \"flyout\" | \"search_bar\" | \"top_nav\" | \"unified_histogram\" | \"data_table\" | \"field_list\") => void"
             ],
             "path": "src/plugins/discover/public/customizations/customization_service.ts",
             "deprecated": false,
@@ -193,7 +787,7 @@
                 "label": "id",
                 "description": [],
                 "signature": [
-                  "\"search_bar\" | \"top_nav\" | \"unified_histogram\""
+                  "\"flyout\" | \"search_bar\" | \"top_nav\" | \"unified_histogram\" | \"data_table\" | \"field_list\""
                 ],
                 "path": "src/plugins/discover/public/customizations/customization_service.ts",
                 "deprecated": false,
@@ -208,83 +802,31 @@
       },
       {
         "parentPluginId": "discover",
-        "id": "def-public.DiscoverProfileOptions",
-        "type": "Interface",
-        "tags": [],
-        "label": "DiscoverProfileOptions",
-        "description": [],
-        "path": "src/plugins/discover/public/customizations/types.ts",
-        "deprecated": false,
-        "trackAdoption": false,
-        "children": [
-          {
-            "parentPluginId": "discover",
-            "id": "def-public.DiscoverProfileOptions.customize",
-            "type": "Function",
-            "tags": [],
-            "label": "customize",
-            "description": [],
-            "signature": [
-              "(options: ",
-              "CustomizationCallbackContext",
-              ") => void | (() => void) | Promise<void | (() => void)>"
-            ],
-            "path": "src/plugins/discover/public/customizations/types.ts",
-            "deprecated": false,
-            "trackAdoption": false,
-            "returnComment": [],
-            "children": [
-              {
-                "parentPluginId": "discover",
-                "id": "def-public.DiscoverProfileOptions.customize.$1",
-                "type": "Object",
-                "tags": [],
-                "label": "options",
-                "description": [],
-                "signature": [
-                  "CustomizationCallbackContext"
-                ],
-                "path": "src/plugins/discover/public/customizations/types.ts",
-                "deprecated": false,
-                "trackAdoption": false
-              }
-            ]
-          },
-          {
-            "parentPluginId": "discover",
-            "id": "def-public.DiscoverProfileOptions.deepLinks",
-            "type": "Array",
-            "tags": [],
-            "label": "deepLinks",
-            "description": [],
-            "signature": [
-              {
-                "pluginId": "@kbn/core-application-browser",
-                "scope": "common",
-                "docId": "kibKbnCoreApplicationBrowserPluginApi",
-                "section": "def-common.AppDeepLink",
-                "text": "AppDeepLink"
-              },
-              "<string>[] | undefined"
-            ],
-            "path": "src/plugins/discover/public/customizations/types.ts",
-            "deprecated": false,
-            "trackAdoption": false
-          }
-        ],
-        "initialIsOpen": false
-      },
-      {
-        "parentPluginId": "discover",
         "id": "def-public.DiscoverStateContainer",
         "type": "Interface",
         "tags": [],
         "label": "DiscoverStateContainer",
         "description": [],
-        "path": "src/plugins/discover/public/application/main/services/discover_state.ts",
+        "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
         "deprecated": false,
         "trackAdoption": false,
         "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverStateContainer.globalState",
+            "type": "Object",
+            "tags": [],
+            "label": "globalState",
+            "description": [
+              "\nGlobal State, the _g part of the URL"
+            ],
+            "signature": [
+              "DiscoverGlobalStateContainer"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
           {
             "parentPluginId": "discover",
             "id": "def-public.DiscoverStateContainer.appState",
@@ -297,7 +839,7 @@
             "signature": [
               "DiscoverAppStateContainer"
             ],
-            "path": "src/plugins/discover/public/application/main/services/discover_state.ts",
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -313,7 +855,7 @@
             "signature": [
               "DiscoverDataStateContainer"
             ],
-            "path": "src/plugins/discover/public/application/main/services/discover_state.ts",
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -336,9 +878,11 @@
               },
               "<",
               "InternalState",
-              ", InternalStateTransitions, {}>"
+              ", ",
+              "InternalStateTransitions",
+              ", {}>"
             ],
-            "path": "src/plugins/discover/public/application/main/services/discover_state.ts",
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -354,7 +898,7 @@
             "signature": [
               "DiscoverSavedSearchContainer"
             ],
-            "path": "src/plugins/discover/public/application/main/services/discover_state.ts",
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -376,7 +920,7 @@
                 "text": "IKbnUrlStateStorage"
               }
             ],
-            "path": "src/plugins/discover/public/application/main/services/discover_state.ts",
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -392,7 +936,23 @@
             "signature": [
               "DiscoverSearchSessionManager"
             ],
-            "path": "src/plugins/discover/public/application/main/services/discover_state.ts",
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.DiscoverStateContainer.customizationContext",
+            "type": "Object",
+            "tags": [],
+            "label": "customizationContext",
+            "description": [
+              "\nContext object for customization related properties"
+            ],
+            "signature": [
+              "DiscoverCustomizationContext"
+            ],
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -448,7 +1008,15 @@
                 "section": "def-common.DataView",
                 "text": "DataView"
               },
-              ") => Promise<void>; onOpenSavedSearch: (savedSearchId: string) => void; onUpdateQuery: (payload: { dateRange: ",
+              ") => Promise<void>; transitionFromESQLToDataView: (dataViewId: string) => void; transitionFromDataViewToESQL: (dataView: ",
+              {
+                "pluginId": "dataViews",
+                "scope": "common",
+                "docId": "kibDataViewsPluginApi",
+                "section": "def-common.DataView",
+                "text": "DataView"
+              },
+              ") => void; onOpenSavedSearch: (savedSearchId: string) => void; onUpdateQuery: (payload: { dateRange: ",
               {
                 "pluginId": "@kbn/es-query",
                 "scope": "common",
@@ -472,7 +1040,7 @@
                 "section": "def-common.AggregateQuery",
                 "text": "AggregateQuery"
               },
-              " | undefined; }, isUpdate?: boolean | undefined) => void; onChangeDataView: (id: string) => Promise<void>; setDataView: (dataView: ",
+              " | undefined; }, isUpdate?: boolean | undefined) => void; onChangeDataView: (id: string | ",
               {
                 "pluginId": "dataViews",
                 "scope": "common",
@@ -480,9 +1048,33 @@
                 "section": "def-common.DataView",
                 "text": "DataView"
               },
-              ") => void; undoSavedSearchChanges: () => void; updateAdHocDataViewId: () => void; }"
+              ") => Promise<void>; setDataView: (dataView: ",
+              {
+                "pluginId": "dataViews",
+                "scope": "common",
+                "docId": "kibDataViewsPluginApi",
+                "section": "def-common.DataView",
+                "text": "DataView"
+              },
+              ") => void; undoSavedSearchChanges: () => Promise<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "public",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-public.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ">; updateAdHocDataViewId: () => Promise<",
+              {
+                "pluginId": "dataViews",
+                "scope": "common",
+                "docId": "kibDataViewsPluginApi",
+                "section": "def-common.DataView",
+                "text": "DataView"
+              },
+              " | undefined>; updateESQLQuery: (queryOrUpdater: string | ((prevQuery: string) => string)) => void; }"
             ],
-            "path": "src/plugins/discover/public/application/main/services/discover_state.ts",
+            "path": "src/plugins/discover/public/application/main/state_management/discover_state.ts",
             "deprecated": false,
             "trackAdoption": false
           }
@@ -491,69 +1083,146 @@
       },
       {
         "parentPluginId": "discover",
-        "id": "def-public.ISearchEmbeddable",
+        "id": "def-public.FlyoutCustomization",
         "type": "Interface",
         "tags": [],
-        "label": "ISearchEmbeddable",
+        "label": "FlyoutCustomization",
         "description": [],
-        "signature": [
+        "path": "src/plugins/discover/public/customizations/customization_types/flyout_customization.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
           {
-            "pluginId": "discover",
-            "scope": "public",
-            "docId": "kibDiscoverPluginApi",
-            "section": "def-public.ISearchEmbeddable",
-            "text": "ISearchEmbeddable"
+            "parentPluginId": "discover",
+            "id": "def-public.FlyoutCustomization.id",
+            "type": "string",
+            "tags": [],
+            "label": "id",
+            "description": [],
+            "signature": [
+              "\"flyout\""
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/flyout_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false
           },
-          " extends ",
           {
-            "pluginId": "embeddable",
-            "scope": "public",
-            "docId": "kibEmbeddablePluginApi",
-            "section": "def-public.IEmbeddable",
-            "text": "IEmbeddable"
+            "parentPluginId": "discover",
+            "id": "def-public.FlyoutCustomization.size",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "size",
+            "description": [],
+            "signature": [
+              "Property",
+              ".Width<string | number> | undefined"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/flyout_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false
           },
-          "<",
           {
-            "pluginId": "discover",
-            "scope": "public",
-            "docId": "kibDiscoverPluginApi",
-            "section": "def-public.SearchInput",
-            "text": "SearchInput"
+            "parentPluginId": "discover",
+            "id": "def-public.FlyoutCustomization.title",
+            "type": "string",
+            "tags": [],
+            "label": "title",
+            "description": [],
+            "signature": [
+              "string | undefined"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/flyout_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false
           },
-          ", ",
-          "SearchOutput",
-          ", any>"
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.FlyoutCustomization.actions",
+            "type": "Object",
+            "tags": [],
+            "label": "actions",
+            "description": [],
+            "signature": [
+              "{ defaultActions?: ",
+              "FlyoutDefaultActions",
+              " | undefined; getActionItems?: (() => ",
+              "FlyoutActionItem",
+              "[]) | undefined; }"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/flyout_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.FlyoutCustomization.Content",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "Content",
+            "description": [],
+            "signature": [
+              "React.ComponentType<",
+              "FlyoutContentProps",
+              "> | undefined"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/flyout_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.FlyoutCustomization.docViewsRegistry",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "docViewsRegistry",
+            "description": [],
+            "signature": [
+              {
+                "pluginId": "@kbn/unified-doc-viewer",
+                "scope": "common",
+                "docId": "kibKbnUnifiedDocViewerPluginApi",
+                "section": "def-common.DocViewsRegistry",
+                "text": "DocViewsRegistry"
+              },
+              " | ((prevRegistry: ",
+              {
+                "pluginId": "@kbn/unified-doc-viewer",
+                "scope": "common",
+                "docId": "kibKbnUnifiedDocViewerPluginApi",
+                "section": "def-common.DocViewsRegistry",
+                "text": "DocViewsRegistry"
+              },
+              ") => ",
+              {
+                "pluginId": "@kbn/unified-doc-viewer",
+                "scope": "common",
+                "docId": "kibKbnUnifiedDocViewerPluginApi",
+                "section": "def-common.DocViewsRegistry",
+                "text": "DocViewsRegistry"
+              },
+              ") | undefined"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/flyout_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          }
         ],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-public.HasTimeRange",
+        "type": "Interface",
+        "tags": [],
+        "label": "HasTimeRange",
+        "description": [],
         "path": "src/plugins/discover/public/embeddable/types.ts",
         "deprecated": false,
         "trackAdoption": false,
         "children": [
           {
             "parentPluginId": "discover",
-            "id": "def-public.ISearchEmbeddable.getSavedSearch",
-            "type": "Function",
-            "tags": [],
-            "label": "getSavedSearch",
-            "description": [],
-            "signature": [
-              "() => ",
-              {
-                "pluginId": "savedSearch",
-                "scope": "public",
-                "docId": "kibSavedSearchPluginApi",
-                "section": "def-public.SavedSearch",
-                "text": "SavedSearch"
-              }
-            ],
-            "path": "src/plugins/discover/public/embeddable/types.ts",
-            "deprecated": false,
-            "trackAdoption": false,
-            "children": [],
-            "returnComment": []
-          },
-          {
-            "parentPluginId": "discover",
-            "id": "def-public.ISearchEmbeddable.hasTimeRange",
+            "id": "def-public.HasTimeRange.hasTimeRange",
             "type": "Function",
             "tags": [],
             "label": "hasTimeRange",
@@ -566,6 +1235,434 @@
             "trackAdoption": false,
             "children": [],
             "returnComment": []
+          }
+        ],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-public.LogsExplorerTabsProps",
+        "type": "Interface",
+        "tags": [],
+        "label": "LogsExplorerTabsProps",
+        "description": [],
+        "path": "src/plugins/discover/public/components/logs_explorer_tabs/logs_explorer_tabs.tsx",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.LogsExplorerTabsProps.services",
+            "type": "Object",
+            "tags": [],
+            "label": "services",
+            "description": [],
+            "signature": [
+              "{ share?: ",
+              {
+                "pluginId": "share",
+                "scope": "public",
+                "docId": "kibSharePluginApi",
+                "section": "def-public.SharePublicStart",
+                "text": "SharePublicStart"
+              },
+              " | undefined; }"
+            ],
+            "path": "src/plugins/discover/public/components/logs_explorer_tabs/logs_explorer_tabs.tsx",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.LogsExplorerTabsProps.selectedTab",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "selectedTab",
+            "description": [],
+            "signature": [
+              "\"discover\" | \"logs-explorer\""
+            ],
+            "path": "src/plugins/discover/public/components/logs_explorer_tabs/logs_explorer_tabs.tsx",
+            "deprecated": false,
+            "trackAdoption": false
+          }
+        ],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-public.PublishesSavedSearch",
+        "type": "Interface",
+        "tags": [],
+        "label": "PublishesSavedSearch",
+        "description": [],
+        "path": "src/plugins/discover/public/embeddable/types.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.PublishesSavedSearch.savedSearch$",
+            "type": "Object",
+            "tags": [],
+            "label": "savedSearch$",
+            "description": [],
+            "signature": [
+              "{ source: ",
+              "Observable",
+              "<any> | undefined; readonly value: ",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              "; error: (err: any) => void; forEach: { (next: (value: ",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ") => void): Promise<void>; (next: (value: ",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ") => void, promiseCtor: PromiseConstructorLike): Promise<void>; }; complete: () => void; getValue: () => ",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              "; closed: boolean; pipe: { (): ",
+              "Observable",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ">; <A>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>): ",
+              "Observable",
+              "<A>; <A, B>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>): ",
+              "Observable",
+              "<B>; <A, B, C>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>, op3: ",
+              "OperatorFunction",
+              "<B, C>): ",
+              "Observable",
+              "<C>; <A, B, C, D>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>, op3: ",
+              "OperatorFunction",
+              "<B, C>, op4: ",
+              "OperatorFunction",
+              "<C, D>): ",
+              "Observable",
+              "<D>; <A, B, C, D, E>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>, op3: ",
+              "OperatorFunction",
+              "<B, C>, op4: ",
+              "OperatorFunction",
+              "<C, D>, op5: ",
+              "OperatorFunction",
+              "<D, E>): ",
+              "Observable",
+              "<E>; <A, B, C, D, E, F>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>, op3: ",
+              "OperatorFunction",
+              "<B, C>, op4: ",
+              "OperatorFunction",
+              "<C, D>, op5: ",
+              "OperatorFunction",
+              "<D, E>, op6: ",
+              "OperatorFunction",
+              "<E, F>): ",
+              "Observable",
+              "<F>; <A, B, C, D, E, F, G>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>, op3: ",
+              "OperatorFunction",
+              "<B, C>, op4: ",
+              "OperatorFunction",
+              "<C, D>, op5: ",
+              "OperatorFunction",
+              "<D, E>, op6: ",
+              "OperatorFunction",
+              "<E, F>, op7: ",
+              "OperatorFunction",
+              "<F, G>): ",
+              "Observable",
+              "<G>; <A, B, C, D, E, F, G, H>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>, op3: ",
+              "OperatorFunction",
+              "<B, C>, op4: ",
+              "OperatorFunction",
+              "<C, D>, op5: ",
+              "OperatorFunction",
+              "<D, E>, op6: ",
+              "OperatorFunction",
+              "<E, F>, op7: ",
+              "OperatorFunction",
+              "<F, G>, op8: ",
+              "OperatorFunction",
+              "<G, H>): ",
+              "Observable",
+              "<H>; <A, B, C, D, E, F, G, H, I>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>, op3: ",
+              "OperatorFunction",
+              "<B, C>, op4: ",
+              "OperatorFunction",
+              "<C, D>, op5: ",
+              "OperatorFunction",
+              "<D, E>, op6: ",
+              "OperatorFunction",
+              "<E, F>, op7: ",
+              "OperatorFunction",
+              "<F, G>, op8: ",
+              "OperatorFunction",
+              "<G, H>, op9: ",
+              "OperatorFunction",
+              "<H, I>): ",
+              "Observable",
+              "<I>; <A, B, C, D, E, F, G, H, I>(op1: ",
+              "OperatorFunction",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", A>, op2: ",
+              "OperatorFunction",
+              "<A, B>, op3: ",
+              "OperatorFunction",
+              "<B, C>, op4: ",
+              "OperatorFunction",
+              "<C, D>, op5: ",
+              "OperatorFunction",
+              "<D, E>, op6: ",
+              "OperatorFunction",
+              "<E, F>, op7: ",
+              "OperatorFunction",
+              "<F, G>, op8: ",
+              "OperatorFunction",
+              "<G, H>, op9: ",
+              "OperatorFunction",
+              "<H, I>, ...operations: ",
+              "OperatorFunction",
+              "<any, any>[]): ",
+              "Observable",
+              "<unknown>; }; operator: ",
+              "Operator",
+              "<any, ",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              "> | undefined; lift: <R>(operator: ",
+              "Operator",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ", R>) => ",
+              "Observable",
+              "<R>; subscribe: { (observerOrNext?: Partial<",
+              "Observer",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ">> | ((value: ",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ") => void) | undefined): ",
+              "Subscription",
+              "; (next?: ((value: ",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ") => void) | null | undefined, error?: ((error: any) => void) | null | undefined, complete?: (() => void) | null | undefined): ",
+              "Subscription",
+              "; }; toPromise: { (): Promise<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              " | undefined>; (PromiseCtor: PromiseConstructor): Promise<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              " | undefined>; (PromiseCtor: PromiseConstructorLike): Promise<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              " | undefined>; }; observers: ",
+              "Observer",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ">[]; isStopped: boolean; hasError: boolean; thrownError: any; unsubscribe: () => void; readonly observed: boolean; asObservable: () => ",
+              "Observable",
+              "<",
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.SavedSearch",
+                "text": "SavedSearch"
+              },
+              ">; }"
+            ],
+            "path": "src/plugins/discover/public/embeddable/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
           }
         ],
         "initialIsOpen": false
@@ -652,6 +1749,20 @@
             "path": "src/plugins/discover/public/customizations/customization_types/search_bar_customization.ts",
             "deprecated": false,
             "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.SearchBarCustomization.hideDataViewPicker",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "hideDataViewPicker",
+            "description": [],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/search_bar_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false
           }
         ],
         "initialIsOpen": false
@@ -713,6 +1824,39 @@
             "trackAdoption": false,
             "children": [],
             "returnComment": []
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.TopNavCustomization.defaultBadges",
+            "type": "Object",
+            "tags": [],
+            "label": "defaultBadges",
+            "description": [],
+            "signature": [
+              "TopNavDefaultBadges",
+              " | undefined"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/top_nav_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-public.TopNavCustomization.getBadges",
+            "type": "Function",
+            "tags": [],
+            "label": "getBadges",
+            "description": [],
+            "signature": [
+              "(() => ",
+              "TopNavBadge",
+              "[]) | undefined"
+            ],
+            "path": "src/plugins/discover/public/customizations/customization_types/top_nav_customization.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "children": [],
+            "returnComment": []
           }
         ],
         "initialIsOpen": false
@@ -767,9 +1911,9 @@
           ">; scopedHistory: ",
           {
             "pluginId": "@kbn/core-application-browser",
-            "scope": "common",
+            "scope": "public",
             "docId": "kibKbnCoreApplicationBrowserPluginApi",
-            "section": "def-common.ScopedHistory",
+            "section": "def-public.ScopedHistory",
             "text": "ScopedHistory"
           },
           "<unknown>; customizationCallbacks: ",
@@ -780,7 +1924,15 @@
             "section": "def-public.CustomizationCallback",
             "text": "CustomizationCallback"
           },
-          "[]; }"
+          "[]; stateStorageContainer?: ",
+          {
+            "pluginId": "kibanaUtils",
+            "scope": "public",
+            "docId": "kibKibanaUtilsPluginApi",
+            "section": "def-public.IKbnUrlStateStorage",
+            "text": "IKbnUrlStateStorage"
+          },
+          " | undefined; }"
         ],
         "path": "src/plugins/discover/public/components/discover_container/index.ts",
         "deprecated": false,
@@ -795,6 +1947,14 @@
         "label": "DiscoverCustomization",
         "description": [],
         "signature": [
+          {
+            "pluginId": "discover",
+            "scope": "public",
+            "docId": "kibDiscoverPluginApi",
+            "section": "def-public.FlyoutCustomization",
+            "text": "FlyoutCustomization"
+          },
+          " | ",
           {
             "pluginId": "discover",
             "scope": "public",
@@ -817,83 +1977,15 @@
             "docId": "kibDiscoverPluginApi",
             "section": "def-public.UnifiedHistogramCustomization",
             "text": "UnifiedHistogramCustomization"
-          }
+          },
+          " | ",
+          "DataTableCustomization",
+          " | ",
+          "FieldListCustomization"
         ],
         "path": "src/plugins/discover/public/customizations/customization_service.ts",
         "deprecated": false,
         "trackAdoption": false,
-        "initialIsOpen": false
-      },
-      {
-        "parentPluginId": "discover",
-        "id": "def-public.DiscoverProfileId",
-        "type": "Type",
-        "tags": [],
-        "label": "DiscoverProfileId",
-        "description": [],
-        "signature": [
-          "string"
-        ],
-        "path": "src/plugins/discover/public/customizations/types.ts",
-        "deprecated": false,
-        "trackAdoption": false,
-        "initialIsOpen": false
-      },
-      {
-        "parentPluginId": "discover",
-        "id": "def-public.RegisterCustomizationProfile",
-        "type": "Type",
-        "tags": [],
-        "label": "RegisterCustomizationProfile",
-        "description": [],
-        "signature": [
-          "(id: string, options: ",
-          {
-            "pluginId": "discover",
-            "scope": "public",
-            "docId": "kibDiscoverPluginApi",
-            "section": "def-public.DiscoverProfileOptions",
-            "text": "DiscoverProfileOptions"
-          },
-          ") => void"
-        ],
-        "path": "src/plugins/discover/public/customizations/types.ts",
-        "deprecated": false,
-        "trackAdoption": false,
-        "returnComment": [],
-        "children": [
-          {
-            "parentPluginId": "discover",
-            "id": "def-public.RegisterCustomizationProfile.$1",
-            "type": "string",
-            "tags": [],
-            "label": "id",
-            "description": [],
-            "path": "src/plugins/discover/public/customizations/types.ts",
-            "deprecated": false,
-            "trackAdoption": false
-          },
-          {
-            "parentPluginId": "discover",
-            "id": "def-public.RegisterCustomizationProfile.$2",
-            "type": "Object",
-            "tags": [],
-            "label": "options",
-            "description": [],
-            "signature": [
-              {
-                "pluginId": "discover",
-                "scope": "public",
-                "docId": "kibDiscoverPluginApi",
-                "section": "def-public.DiscoverProfileOptions",
-                "text": "DiscoverProfileOptions"
-              }
-            ],
-            "path": "src/plugins/discover/public/customizations/types.ts",
-            "deprecated": false,
-            "trackAdoption": false
-          }
-        ],
         "initialIsOpen": false
       },
       {
@@ -928,27 +2020,42 @@
       },
       {
         "parentPluginId": "discover",
-        "id": "def-public.SearchInput",
+        "id": "def-public.SearchEmbeddableSerializedState",
         "type": "Type",
         "tags": [],
-        "label": "SearchInput",
+        "label": "SearchEmbeddableSerializedState",
         "description": [],
         "signature": [
           {
-            "pluginId": "savedSearch",
+            "pluginId": "@kbn/presentation-publishing",
             "scope": "public",
-            "docId": "kibSavedSearchPluginApi",
-            "section": "def-public.SearchByValueInput",
-            "text": "SearchByValueInput"
+            "docId": "kibKbnPresentationPublishingPluginApi",
+            "section": "def-public.SerializedTitles",
+            "text": "SerializedTitles"
           },
-          " | ",
+          " & ",
           {
-            "pluginId": "savedSearch",
+            "pluginId": "@kbn/presentation-publishing",
             "scope": "public",
-            "docId": "kibSavedSearchPluginApi",
-            "section": "def-public.SearchByReferenceInput",
-            "text": "SearchByReferenceInput"
-          }
+            "docId": "kibKbnPresentationPublishingPluginApi",
+            "section": "def-public.SerializedTimeRange",
+            "text": "SerializedTimeRange"
+          },
+          " & Partial<Pick<",
+          "SavedSearchAttributes",
+          ", keyof ",
+          "SavedSearchAttributes",
+          ">> & { attributes?: (",
+          "SavedSearchAttributes",
+          " & { references: ",
+          {
+            "pluginId": "@kbn/core-saved-objects-common",
+            "scope": "common",
+            "docId": "kibKbnCoreSavedObjectsCommonPluginApi",
+            "section": "def-common.SavedObjectReference",
+            "text": "SavedObjectReference"
+          },
+          "[] | undefined; }) | undefined; savedObjectId?: string | undefined; }"
         ],
         "path": "src/plugins/discover/public/embeddable/types.ts",
         "deprecated": false,
@@ -987,7 +2094,7 @@
       "tags": [],
       "label": "DiscoverSetup",
       "description": [],
-      "path": "src/plugins/discover/public/plugin.tsx",
+      "path": "src/plugins/discover/public/types.ts",
       "deprecated": false,
       "trackAdoption": false,
       "children": [
@@ -1010,9 +2117,72 @@
             },
             " | undefined"
           ],
-          "path": "src/plugins/discover/public/plugin.tsx",
+          "path": "src/plugins/discover/public/types.ts",
           "deprecated": false,
           "trackAdoption": false
+        },
+        {
+          "parentPluginId": "discover",
+          "id": "def-public.DiscoverSetup.showInlineTopNav",
+          "type": "Function",
+          "tags": [],
+          "label": "showInlineTopNav",
+          "description": [],
+          "signature": [
+            "() => void"
+          ],
+          "path": "src/plugins/discover/public/types.ts",
+          "deprecated": false,
+          "trackAdoption": false,
+          "children": [],
+          "returnComment": []
+        },
+        {
+          "parentPluginId": "discover",
+          "id": "def-public.DiscoverSetup.configureInlineTopNav",
+          "type": "Function",
+          "tags": [],
+          "label": "configureInlineTopNav",
+          "description": [],
+          "signature": [
+            "(projectNavId: string, options: { enabled: boolean; showLogsExplorerTabs: boolean; }) => void"
+          ],
+          "path": "src/plugins/discover/public/types.ts",
+          "deprecated": false,
+          "trackAdoption": false,
+          "children": [
+            {
+              "parentPluginId": "discover",
+              "id": "def-public.DiscoverSetup.configureInlineTopNav.$1",
+              "type": "string",
+              "tags": [],
+              "label": "projectNavId",
+              "description": [],
+              "signature": [
+                "string"
+              ],
+              "path": "src/plugins/discover/public/types.ts",
+              "deprecated": false,
+              "trackAdoption": false,
+              "isRequired": true
+            },
+            {
+              "parentPluginId": "discover",
+              "id": "def-public.DiscoverSetup.configureInlineTopNav.$2",
+              "type": "Object",
+              "tags": [],
+              "label": "options",
+              "description": [],
+              "signature": [
+                "{ enabled: boolean; showLogsExplorerTabs: boolean; }"
+              ],
+              "path": "src/plugins/discover/public/types.ts",
+              "deprecated": false,
+              "trackAdoption": false,
+              "isRequired": true
+            }
+          ],
+          "returnComment": []
         }
       ],
       "lifecycle": "setup",
@@ -1025,7 +2195,7 @@
       "tags": [],
       "label": "DiscoverStart",
       "description": [],
-      "path": "src/plugins/discover/public/plugin.tsx",
+      "path": "src/plugins/discover/public/types.ts",
       "deprecated": false,
       "trackAdoption": false,
       "children": [
@@ -1048,7 +2218,7 @@
             },
             " | undefined"
           ],
-          "path": "src/plugins/discover/public/plugin.tsx",
+          "path": "src/plugins/discover/public/types.ts",
           "deprecated": false,
           "trackAdoption": false
         },
@@ -1078,65 +2248,9 @@
             },
             ">"
           ],
-          "path": "src/plugins/discover/public/plugin.tsx",
+          "path": "src/plugins/discover/public/types.ts",
           "deprecated": false,
           "trackAdoption": false
-        },
-        {
-          "parentPluginId": "discover",
-          "id": "def-public.DiscoverStart.registerCustomizationProfile",
-          "type": "Function",
-          "tags": [],
-          "label": "registerCustomizationProfile",
-          "description": [],
-          "signature": [
-            "(id: string, options: ",
-            {
-              "pluginId": "discover",
-              "scope": "public",
-              "docId": "kibDiscoverPluginApi",
-              "section": "def-public.DiscoverProfileOptions",
-              "text": "DiscoverProfileOptions"
-            },
-            ") => void"
-          ],
-          "path": "src/plugins/discover/public/plugin.tsx",
-          "deprecated": false,
-          "trackAdoption": false,
-          "returnComment": [],
-          "children": [
-            {
-              "parentPluginId": "discover",
-              "id": "def-public.DiscoverStart.registerCustomizationProfile.$1",
-              "type": "string",
-              "tags": [],
-              "label": "id",
-              "description": [],
-              "path": "src/plugins/discover/public/customizations/types.ts",
-              "deprecated": false,
-              "trackAdoption": false
-            },
-            {
-              "parentPluginId": "discover",
-              "id": "def-public.DiscoverStart.registerCustomizationProfile.$2",
-              "type": "Object",
-              "tags": [],
-              "label": "options",
-              "description": [],
-              "signature": [
-                {
-                  "pluginId": "discover",
-                  "scope": "public",
-                  "docId": "kibDiscoverPluginApi",
-                  "section": "def-public.DiscoverProfileOptions",
-                  "text": "DiscoverProfileOptions"
-                }
-              ],
-              "path": "src/plugins/discover/public/customizations/types.ts",
-              "deprecated": false,
-              "trackAdoption": false
-            }
-          ]
         }
       ],
       "lifecycle": "start",
@@ -1169,9 +2283,9 @@
               "(req: ",
               {
                 "pluginId": "@kbn/core-http-server",
-                "scope": "common",
+                "scope": "server",
                 "docId": "kibKbnCoreHttpServerPluginApi",
-                "section": "def-common.KibanaRequest",
+                "section": "def-server.KibanaRequest",
                 "text": "KibanaRequest"
               },
               "<unknown, unknown, unknown, any>) => Promise<",
@@ -1198,9 +2312,9 @@
                 "signature": [
                   {
                     "pluginId": "@kbn/core-http-server",
-                    "scope": "common",
+                    "scope": "server",
                     "docId": "kibKbnCoreHttpServerPluginApi",
-                    "section": "def-common.KibanaRequest",
+                    "section": "def-server.KibanaRequest",
                     "text": "KibanaRequest"
                   },
                   "<unknown, unknown, unknown, any>"
@@ -1403,6 +2517,120 @@
                 "trackAdoption": false
               }
             ]
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-server.LocatorServiceScopedClient.queryFromLocator",
+            "type": "Function",
+            "tags": [],
+            "label": "queryFromLocator",
+            "description": [],
+            "signature": [
+              "(params: ",
+              {
+                "pluginId": "discover",
+                "scope": "common",
+                "docId": "kibDiscoverPluginApi",
+                "section": "def-common.DiscoverAppLocatorParams",
+                "text": "DiscoverAppLocatorParams"
+              },
+              ") => Promise<",
+              {
+                "pluginId": "@kbn/es-query",
+                "scope": "common",
+                "docId": "kibKbnEsQueryPluginApi",
+                "section": "def-common.Query",
+                "text": "Query"
+              },
+              " | ",
+              {
+                "pluginId": "@kbn/es-query",
+                "scope": "common",
+                "docId": "kibKbnEsQueryPluginApi",
+                "section": "def-common.AggregateQuery",
+                "text": "AggregateQuery"
+              },
+              " | undefined>"
+            ],
+            "path": "src/plugins/discover/server/index.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "returnComment": [],
+            "children": [
+              {
+                "parentPluginId": "discover",
+                "id": "def-server.LocatorServiceScopedClient.queryFromLocator.$1",
+                "type": "Object",
+                "tags": [],
+                "label": "params",
+                "description": [],
+                "signature": [
+                  {
+                    "pluginId": "discover",
+                    "scope": "common",
+                    "docId": "kibDiscoverPluginApi",
+                    "section": "def-common.DiscoverAppLocatorParams",
+                    "text": "DiscoverAppLocatorParams"
+                  }
+                ],
+                "path": "src/plugins/discover/server/locator/query_from_locator.ts",
+                "deprecated": false,
+                "trackAdoption": false
+              }
+            ]
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-server.LocatorServiceScopedClient.filtersFromLocator",
+            "type": "Function",
+            "tags": [],
+            "label": "filtersFromLocator",
+            "description": [],
+            "signature": [
+              "(params: ",
+              {
+                "pluginId": "discover",
+                "scope": "common",
+                "docId": "kibDiscoverPluginApi",
+                "section": "def-common.DiscoverAppLocatorParams",
+                "text": "DiscoverAppLocatorParams"
+              },
+              ") => Promise<",
+              {
+                "pluginId": "@kbn/es-query",
+                "scope": "common",
+                "docId": "kibKbnEsQueryPluginApi",
+                "section": "def-common.Filter",
+                "text": "Filter"
+              },
+              "[]>"
+            ],
+            "path": "src/plugins/discover/server/index.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "returnComment": [],
+            "children": [
+              {
+                "parentPluginId": "discover",
+                "id": "def-server.LocatorServiceScopedClient.filtersFromLocator.$1",
+                "type": "Object",
+                "tags": [],
+                "label": "params",
+                "description": [],
+                "signature": [
+                  {
+                    "pluginId": "discover",
+                    "scope": "common",
+                    "docId": "kibDiscoverPluginApi",
+                    "section": "def-common.DiscoverAppLocatorParams",
+                    "text": "DiscoverAppLocatorParams"
+                  }
+                ],
+                "path": "src/plugins/discover/server/locator/filters_from_locator.ts",
+                "deprecated": false,
+                "trackAdoption": false
+              }
+            ]
           }
         ],
         "initialIsOpen": false
@@ -1482,7 +2710,7 @@
           },
           ">"
         ],
-        "path": "src/plugins/discover/common/locator.ts",
+        "path": "src/plugins/discover/common/app_locator.ts",
         "deprecated": false,
         "trackAdoption": false,
         "children": [
@@ -1496,7 +2724,7 @@
             "signature": [
               "\"DISCOVER_APP_LOCATOR\""
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1510,7 +2738,7 @@
             "signature": [
               "any"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false,
             "children": [
@@ -1524,7 +2752,7 @@
                 "signature": [
                   "DiscoverAppLocatorDependencies"
                 ],
-                "path": "src/plugins/discover/common/locator.ts",
+                "path": "src/plugins/discover/common/app_locator.ts",
                 "deprecated": false,
                 "trackAdoption": false,
                 "isRequired": true
@@ -1549,10 +2777,16 @@
                 "text": "DiscoverAppLocatorParams"
               },
               ") => Promise<{ app: string; path: string; state: ",
-              "MainHistoryLocationState",
+              {
+                "pluginId": "discover",
+                "scope": "common",
+                "docId": "kibDiscoverPluginApi",
+                "section": "def-common.MainHistoryLocationState",
+                "text": "MainHistoryLocationState"
+              },
               "; }>"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false,
             "children": [
@@ -1572,12 +2806,116 @@
                     "text": "DiscoverAppLocatorParams"
                   }
                 ],
-                "path": "src/plugins/discover/common/locator.ts",
+                "path": "src/plugins/discover/common/app_locator.ts",
                 "deprecated": false,
                 "trackAdoption": false,
                 "isRequired": true
               }
             ],
+            "returnComment": []
+          }
+        ],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-common.DiscoverESQLLocatorDefinition",
+        "type": "Class",
+        "tags": [],
+        "label": "DiscoverESQLLocatorDefinition",
+        "description": [],
+        "signature": [
+          {
+            "pluginId": "discover",
+            "scope": "common",
+            "docId": "kibDiscoverPluginApi",
+            "section": "def-common.DiscoverESQLLocatorDefinition",
+            "text": "DiscoverESQLLocatorDefinition"
+          },
+          " implements ",
+          {
+            "pluginId": "share",
+            "scope": "common",
+            "docId": "kibSharePluginApi",
+            "section": "def-common.LocatorDefinition",
+            "text": "LocatorDefinition"
+          },
+          "<",
+          {
+            "pluginId": "@kbn/utility-types",
+            "scope": "common",
+            "docId": "kibKbnUtilityTypesPluginApi",
+            "section": "def-common.SerializableRecord",
+            "text": "SerializableRecord"
+          },
+          ">"
+        ],
+        "path": "src/plugins/discover/common/esql_locator.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-common.DiscoverESQLLocatorDefinition.id",
+            "type": "string",
+            "tags": [],
+            "label": "id",
+            "description": [],
+            "signature": [
+              "\"DISCOVER_ESQL_LOCATOR\""
+            ],
+            "path": "src/plugins/discover/common/esql_locator.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-common.DiscoverESQLLocatorDefinition.Unnamed",
+            "type": "Function",
+            "tags": [],
+            "label": "Constructor",
+            "description": [],
+            "signature": [
+              "any"
+            ],
+            "path": "src/plugins/discover/common/esql_locator.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "children": [
+              {
+                "parentPluginId": "discover",
+                "id": "def-common.DiscoverESQLLocatorDefinition.Unnamed.$1",
+                "type": "Object",
+                "tags": [],
+                "label": "deps",
+                "description": [],
+                "signature": [
+                  "DiscoverESQLLocatorDependencies"
+                ],
+                "path": "src/plugins/discover/common/esql_locator.ts",
+                "deprecated": false,
+                "trackAdoption": false,
+                "isRequired": true
+              }
+            ],
+            "returnComment": []
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-common.DiscoverESQLLocatorDefinition.getLocation",
+            "type": "Function",
+            "tags": [],
+            "label": "getLocation",
+            "description": [],
+            "signature": [
+              "() => Promise<",
+              "KibanaLocation",
+              "<object>>"
+            ],
+            "path": "src/plugins/discover/common/esql_locator.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "children": [],
             "returnComment": []
           }
         ],
@@ -1610,7 +2948,7 @@
             "text": "SerializableRecord"
           }
         ],
-        "path": "src/plugins/discover/common/locator.ts",
+        "path": "src/plugins/discover/common/app_locator.ts",
         "deprecated": false,
         "trackAdoption": false,
         "children": [
@@ -1626,7 +2964,7 @@
             "signature": [
               "string | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1642,7 +2980,7 @@
             "signature": [
               "string | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1660,37 +2998,17 @@
             "signature": [
               "string | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": true,
             "trackAdoption": false,
             "references": [
-              {
-                "plugin": "dataVisualizer",
-                "path": "x-pack/plugins/data_visualizer/public/application/common/components/results_links/results_links.tsx"
-              },
-              {
-                "plugin": "dataVisualizer",
-                "path": "x-pack/plugins/data_visualizer/public/application/index_data_visualizer/components/actions_panel/actions_panel.tsx"
-              },
-              {
-                "plugin": "exploratoryView",
-                "path": "x-pack/plugins/exploratory_view/public/components/shared/exploratory_view/hooks/use_discover_link.tsx"
-              },
               {
                 "plugin": "fleet",
                 "path": "x-pack/plugins/fleet/public/applications/fleet/sections/agent_policy/create_package_policy_page/multi_page_layout/hooks/use_get_logs_discover_link.tsx"
               },
               {
-                "plugin": "cloudSecurityPosture",
-                "path": "x-pack/plugins/cloud_security_posture/public/pages/configurations/findings_flyout/overview_tab.tsx"
-              },
-              {
-                "plugin": "discoverEnhanced",
-                "path": "x-pack/plugins/discover_enhanced/public/actions/explore_data/explore_data_context_menu_action.ts"
-              },
-              {
-                "plugin": "discoverEnhanced",
-                "path": "x-pack/plugins/discover_enhanced/public/actions/explore_data/explore_data_chart_action.ts"
+                "plugin": "exploratoryView",
+                "path": "x-pack/plugins/observability_solution/exploratory_view/public/components/shared/exploratory_view/hooks/use_discover_link.tsx"
               },
               {
                 "plugin": "osquery",
@@ -1706,7 +3024,7 @@
               },
               {
                 "plugin": "synthetics",
-                "path": "x-pack/plugins/synthetics/public/apps/synthetics/components/common/components/stderr_logs.tsx"
+                "path": "x-pack/plugins/observability_solution/synthetics/public/apps/synthetics/components/common/components/stderr_logs.tsx"
               }
             ]
           },
@@ -1727,7 +3045,7 @@
               },
               " | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1750,7 +3068,7 @@
               },
               " | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1782,7 +3100,7 @@
               },
               ") | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1805,7 +3123,7 @@
               },
               "[] | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1836,7 +3154,7 @@
               },
               " | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1852,7 +3170,7 @@
             "signature": [
               "boolean | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1868,7 +3186,7 @@
             "signature": [
               "string | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1884,7 +3202,30 @@
             "signature": [
               "string[] | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "discover",
+            "id": "def-common.DiscoverAppLocatorParams.grid",
+            "type": "Object",
+            "tags": [],
+            "label": "grid",
+            "description": [
+              "\nData Grid related state"
+            ],
+            "signature": [
+              {
+                "pluginId": "savedSearch",
+                "scope": "common",
+                "docId": "kibSavedSearchPluginApi",
+                "section": "def-common.DiscoverGridSettings",
+                "text": "DiscoverGridSettings"
+              },
+              " | undefined"
+            ],
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1900,7 +3241,7 @@
             "signature": [
               "string | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1916,7 +3257,7 @@
             "signature": [
               "string[][] | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1932,7 +3273,7 @@
             "signature": [
               "string | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1949,7 +3290,7 @@
               "VIEW_MODE",
               " | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1965,7 +3306,7 @@
             "signature": [
               "boolean | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1981,7 +3322,7 @@
             "signature": [
               "string | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
@@ -1997,23 +3338,58 @@
             "signature": [
               "boolean | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          }
+        ],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-common.MainHistoryLocationState",
+        "type": "Interface",
+        "tags": [],
+        "label": "MainHistoryLocationState",
+        "description": [
+          "\nLocation state of scoped history (history instance of Kibana Platform application service)"
+        ],
+        "path": "src/plugins/discover/common/app_locator.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "discover",
+            "id": "def-common.MainHistoryLocationState.dataViewSpec",
+            "type": "Object",
+            "tags": [],
+            "label": "dataViewSpec",
+            "description": [],
+            "signature": [
+              {
+                "pluginId": "dataViews",
+                "scope": "common",
+                "docId": "kibDataViewsPluginApi",
+                "section": "def-common.DataViewSpec",
+                "text": "DataViewSpec"
+              },
+              " | undefined"
+            ],
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           },
           {
             "parentPluginId": "discover",
-            "id": "def-common.DiscoverAppLocatorParams.profile",
-            "type": "string",
+            "id": "def-common.MainHistoryLocationState.isAlertResults",
+            "type": "CompoundType",
             "tags": [],
-            "label": "profile",
-            "description": [
-              "\nThe Discover profile to use"
-            ],
+            "label": "isAlertResults",
+            "description": [],
             "signature": [
-              "string | undefined"
+              "boolean | undefined"
             ],
-            "path": "src/plugins/discover/common/locator.ts",
+            "path": "src/plugins/discover/common/app_locator.ts",
             "deprecated": false,
             "trackAdoption": false
           }
@@ -2048,7 +3424,7 @@
         "signature": [
           "\"DISCOVER_APP_LOCATOR\""
         ],
-        "path": "src/plugins/discover/common/locator.ts",
+        "path": "src/plugins/discover/common/app_locator.ts",
         "deprecated": false,
         "trackAdoption": false,
         "initialIsOpen": false
@@ -2078,7 +3454,58 @@
           },
           ">"
         ],
-        "path": "src/plugins/discover/common/locator.ts",
+        "path": "src/plugins/discover/common/app_locator.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-common.DiscoverESQLLocator",
+        "type": "Type",
+        "tags": [],
+        "label": "DiscoverESQLLocator",
+        "description": [],
+        "signature": [
+          {
+            "pluginId": "share",
+            "scope": "common",
+            "docId": "kibSharePluginApi",
+            "section": "def-common.LocatorPublic",
+            "text": "LocatorPublic"
+          },
+          "<",
+          {
+            "pluginId": "@kbn/utility-types",
+            "scope": "common",
+            "docId": "kibKbnUtilityTypesPluginApi",
+            "section": "def-common.SerializableRecord",
+            "text": "SerializableRecord"
+          },
+          ">"
+        ],
+        "path": "src/plugins/discover/common/esql_locator.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "discover",
+        "id": "def-common.DiscoverESQLLocatorParams",
+        "type": "Type",
+        "tags": [],
+        "label": "DiscoverESQLLocatorParams",
+        "description": [],
+        "signature": [
+          {
+            "pluginId": "@kbn/utility-types",
+            "scope": "common",
+            "docId": "kibKbnUtilityTypesPluginApi",
+            "section": "def-common.SerializableRecord",
+            "text": "SerializableRecord"
+          }
+        ],
+        "path": "src/plugins/discover/common/esql_locator.ts",
         "deprecated": false,
         "trackAdoption": false,
         "initialIsOpen": false

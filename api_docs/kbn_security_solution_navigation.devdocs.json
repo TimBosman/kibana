@@ -21,6 +21,41 @@
     "functions": [
       {
         "parentPluginId": "@kbn/security-solution-navigation",
+        "id": "def-common.getNavigationPropsFromId",
+        "type": "Function",
+        "tags": [],
+        "label": "getNavigationPropsFromId",
+        "description": [
+          "\nReturns the appId, deepLinkId, and path from a given navigation id"
+        ],
+        "signature": [
+          "(id: string) => { appId: string; deepLinkId?: string | undefined; path?: string | undefined; }"
+        ],
+        "path": "x-pack/packages/security-solution/navigation/src/navigation.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "children": [
+          {
+            "parentPluginId": "@kbn/security-solution-navigation",
+            "id": "def-common.getNavigationPropsFromId.$1",
+            "type": "string",
+            "tags": [],
+            "label": "id",
+            "description": [],
+            "signature": [
+              "string"
+            ],
+            "path": "x-pack/packages/security-solution/navigation/src/navigation.ts",
+            "deprecated": false,
+            "trackAdoption": false,
+            "isRequired": true
+          }
+        ],
+        "returnComment": [],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "@kbn/security-solution-navigation",
         "id": "def-common.isAccordionLinkCategory",
         "type": "Function",
         "tags": [],
@@ -195,15 +230,15 @@
         "label": "NavigationProvider",
         "description": [],
         "signature": [
-          "({ core, children }: React.PropsWithChildren<{ core: ",
+          "({ core, children, }: React.PropsWithChildren<{ core: ",
           {
             "pluginId": "@kbn/core-lifecycle-browser",
-            "scope": "common",
+            "scope": "public",
             "docId": "kibKbnCoreLifecycleBrowserPluginApi",
-            "section": "def-common.CoreStart",
+            "section": "def-public.CoreStart",
             "text": "CoreStart"
           },
-          "; }>) => JSX.Element"
+          "; }>) => React.JSX.Element"
         ],
         "path": "x-pack/packages/security-solution/navigation/src/context.tsx",
         "deprecated": false,
@@ -214,15 +249,15 @@
             "id": "def-common.NavigationProvider.$1",
             "type": "CompoundType",
             "tags": [],
-            "label": "{ core, children }",
+            "label": "{\n  core,\n  children,\n}",
             "description": [],
             "signature": [
               "React.PropsWithChildren<{ core: ",
               {
                 "pluginId": "@kbn/core-lifecycle-browser",
-                "scope": "common",
+                "scope": "public",
                 "docId": "kibKbnCoreLifecycleBrowserPluginApi",
-                "section": "def-common.CoreStart",
+                "section": "def-public.CoreStart",
                 "text": "CoreStart"
               },
               "; }>"
@@ -594,20 +629,6 @@
           },
           {
             "parentPluginId": "@kbn/security-solution-navigation",
-            "id": "def-common.NavigationLink.externalUrl",
-            "type": "string",
-            "tags": [],
-            "label": "externalUrl",
-            "description": [],
-            "signature": [
-              "string | undefined"
-            ],
-            "path": "x-pack/packages/security-solution/navigation/src/types.ts",
-            "deprecated": false,
-            "trackAdoption": false
-          },
-          {
-            "parentPluginId": "@kbn/security-solution-navigation",
             "id": "def-common.NavigationLink.id",
             "type": "Uncategorized",
             "tags": [],
@@ -716,6 +737,20 @@
             "type": "CompoundType",
             "tags": [],
             "label": "unauthorized",
+            "description": [],
+            "signature": [
+              "boolean | undefined"
+            ],
+            "path": "x-pack/packages/security-solution/navigation/src/types.ts",
+            "deprecated": false,
+            "trackAdoption": false
+          },
+          {
+            "parentPluginId": "@kbn/security-solution-navigation",
+            "id": "def-common.NavigationLink.isFooterLink",
+            "type": "CompoundType",
+            "tags": [],
+            "label": "isFooterLink",
             "description": [],
             "signature": [
               "boolean | undefined"
@@ -904,6 +939,20 @@
     "enums": [
       {
         "parentPluginId": "@kbn/security-solution-navigation",
+        "id": "def-common.ExternalPageName",
+        "type": "Enum",
+        "tags": [],
+        "label": "ExternalPageName",
+        "description": [
+          "\nExternal (non-Security) page names that need to be linked in the Security navigation.\nFormat: `<pluginId>:<deepLinkId>/<path>`.\n\n`pluginId`: is the id of the plugin that owns the deep link\n\n`deepLinkId`: is the id of the deep link inside the plugin.\nKeep empty for the root page of the plugin, e.g. `osquery:`\n\n`path`: is the path to append to the plugin and deep link.\nThis is optional and only needed if the path is not registered in the plugin's `deepLinks`. e.g. `integrations:/browse/security`\nThe path should not be used for links displayed in the main left navigation, since highlighting won't work."
+        ],
+        "path": "x-pack/packages/security-solution/navigation/src/constants.ts",
+        "deprecated": false,
+        "trackAdoption": false,
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "@kbn/security-solution-navigation",
         "id": "def-common.LinkCategoryType",
         "type": "Enum",
         "tags": [],
@@ -921,7 +970,7 @@
         "tags": [],
         "label": "SecurityPageName",
         "description": [],
-        "path": "x-pack/packages/security-solution/navigation/src/constants.ts",
+        "path": "packages/deeplinks/security/deep_links.ts",
         "deprecated": false,
         "trackAdoption": false,
         "initialIsOpen": false
@@ -991,12 +1040,12 @@
         "label": "NavigateTo",
         "description": [],
         "signature": [
-          "(param: { url?: string | undefined; appId?: string | undefined; } & ",
+          "(param: { url?: string | undefined; appId?: string | undefined; restoreScroll?: boolean | undefined; } & ",
           {
             "pluginId": "@kbn/core-application-browser",
-            "scope": "common",
+            "scope": "public",
             "docId": "kibKbnCoreApplicationBrowserPluginApi",
-            "section": "def-common.NavigateToAppOptions",
+            "section": "def-public.NavigateToAppOptions",
             "text": "NavigateToAppOptions"
           },
           ") => void"
@@ -1014,12 +1063,12 @@
             "label": "param",
             "description": [],
             "signature": [
-              "{ url?: string | undefined; appId?: string | undefined; } & ",
+              "{ url?: string | undefined; appId?: string | undefined; restoreScroll?: boolean | undefined; } & ",
               {
                 "pluginId": "@kbn/core-application-browser",
-                "scope": "common",
+                "scope": "public",
                 "docId": "kibKbnCoreApplicationBrowserPluginApi",
-                "section": "def-common.NavigateToAppOptions",
+                "section": "def-public.NavigateToAppOptions",
                 "text": "NavigateToAppOptions"
               }
             ],
@@ -1028,6 +1077,21 @@
             "trackAdoption": false
           }
         ],
+        "initialIsOpen": false
+      },
+      {
+        "parentPluginId": "@kbn/security-solution-navigation",
+        "id": "def-common.SECURITY_UI_APP_ID",
+        "type": "string",
+        "tags": [],
+        "label": "SECURITY_UI_APP_ID",
+        "description": [],
+        "signature": [
+          "\"securitySolutionUI\""
+        ],
+        "path": "x-pack/packages/security-solution/navigation/src/constants.ts",
+        "deprecated": false,
+        "trackAdoption": false,
         "initialIsOpen": false
       }
     ],

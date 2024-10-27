@@ -6,7 +6,18 @@
  */
 
 import { i18n } from '@kbn/i18n';
-import { safeLoad } from 'js-yaml';
+import type { EuiComboBoxOptionOption } from '@elastic/eui';
+import { load } from 'js-yaml';
+
+const toSecretValidator =
+  (validator: (value: string) => string[] | undefined) =>
+  (value: string | { id: string } | undefined) => {
+    if (typeof value === 'object') {
+      return undefined;
+    }
+
+    return validator(value ?? '');
+  };
 
 export function validateKafkaHosts(value: string[]) {
   const res: Array<{ message: string; index?: number }> = [];
@@ -78,14 +89,29 @@ export function validateKafkaHosts(value: string[]) {
 export function validateESHosts(value: string[]) {
   const res: Array<{ message: string; index?: number }> = [];
   const urlIndexes: { [key: string]: number[] } = {};
+  const urlRequiredMessage = i18n.translate(
+    'xpack.fleet.settings.outputForm.elasticUrlRequiredError',
+    {
+      defaultMessage: 'URL is required',
+    }
+  );
   value.forEach((val, idx) => {
     try {
       if (!val) {
-        throw new Error('Host URL required');
-      }
-      const urlParsed = new URL(val);
-      if (!['http:', 'https:'].includes(urlParsed.protocol)) {
-        throw new Error('Invalid protocol');
+        res.push({
+          message: urlRequiredMessage,
+          index: idx,
+        });
+      } else {
+        const urlParsed = new URL(val);
+        if (!['http:', 'https:'].includes(urlParsed.protocol)) {
+          res.push({
+            message: i18n.translate('xpack.fleet.settings.outputForm.invalidProtocolError', {
+              defaultMessage: 'Invalid protocol',
+            }),
+            index: idx,
+          });
+        }
       }
     } catch (error) {
       res.push({
@@ -115,9 +141,7 @@ export function validateESHosts(value: string[]) {
 
   if (value.length === 0) {
     res.push({
-      message: i18n.translate('xpack.fleet.settings.outputForm.elasticUrlRequiredError', {
-        defaultMessage: 'URL is required',
-      }),
+      message: urlRequiredMessage,
     });
   }
 
@@ -143,7 +167,7 @@ export function validateLogstashHosts(value: string[]) {
 
       const url = new URL(`http://${val}`);
 
-      if (url.host !== val) {
+      if (url.host !== val.toLowerCase()) {
         throw new Error('Invalid host');
       }
     } catch (error) {
@@ -195,7 +219,7 @@ export function validateLogstashHosts(value: string[]) {
 
 export function validateYamlConfig(value: string) {
   try {
-    safeLoad(value);
+    load(value);
     return;
   } catch (error) {
     return [
@@ -237,6 +261,8 @@ export function validateKafkaPassword(value: string) {
   }
 }
 
+export const validateKafkaPasswordSecret = toSecretValidator(validateKafkaPassword);
+
 export function validateCATrustedFingerPrint(value: string) {
   if (value !== '' && !value.match(/^[a-zA-Z0-9]+$/)) {
     return [
@@ -247,6 +273,18 @@ export function validateCATrustedFingerPrint(value: string) {
     ];
   }
 }
+
+export function validateServiceToken(value: string) {
+  if (!value || value === '') {
+    return [
+      i18n.translate('xpack.fleet.settings.outputForm.serviceTokenRequiredErrorMessage', {
+        defaultMessage: 'Service token is required',
+      }),
+    ];
+  }
+}
+
+export const validateServiceTokenSecret = toSecretValidator(validateServiceToken);
 
 export function validateSSLCertificate(value: string) {
   if (!value || value === '') {
@@ -268,13 +306,39 @@ export function validateSSLKey(value: string) {
   }
 }
 
-export function validateKafkaDefaultTopic(value: string) {
+export const validateSSLKeySecret = toSecretValidator(validateSSLKey);
+
+export function validateKafkaStaticTopic(value: string) {
   if (!value || value === '') {
     return [
       i18n.translate('xpack.fleet.settings.outputForm.kafkaDefaultTopicRequiredMessage', {
         defaultMessage: 'Default topic is required',
       }),
     ];
+  }
+}
+
+export function validateDynamicKafkaTopics(value: Array<EuiComboBoxOptionOption<string>>) {
+  const res = [];
+  value.forEach((val, idx) => {
+    if (!val) {
+      res.push(
+        i18n.translate('xpack.fleet.settings.outputForm.kafkaTopicFieldRequiredMessage', {
+          defaultMessage: 'Topic is required',
+        })
+      );
+    }
+  });
+
+  if (value.length === 0) {
+    res.push(
+      i18n.translate('xpack.fleet.settings.outputForm.kafkaTopicRequiredMessage', {
+        defaultMessage: 'Topic is required',
+      })
+    );
+  }
+  if (res.length) {
+    return res;
   }
 }
 
@@ -302,49 +366,6 @@ export function validateKafkaPartitioningGroupEvents(value: string) {
           }
         ),
       ];
-}
-
-export function validateKafkaTopics(
-  topics: Array<{
-    topic: string;
-    when?: {
-      condition?: string;
-      type?: string;
-    };
-  }>
-) {
-  const errors: Array<{
-    message: string;
-    index: number;
-    condition?: boolean;
-  }> = [];
-
-  topics.forEach((topic, index) => {
-    if (!topic.topic || topic.topic === '') {
-      errors.push({
-        message: i18n.translate('xpack.fleet.settings.outputForm.kafkaTopicRequiredMessage', {
-          defaultMessage: 'Topic is required',
-        }),
-        index,
-      });
-    }
-    if (
-      !topic.when?.condition ||
-      topic.when.condition === '' ||
-      topic.when.condition.split(':').length - 1 !== 1
-    ) {
-      errors.push({
-        message: i18n.translate('xpack.fleet.settings.outputForm.kafkaTopicConditionRequired', {
-          defaultMessage: 'Must be a key, value pair i.e. "http.response.code: 200"',
-        }),
-        index,
-        condition: true,
-      });
-    }
-  });
-  if (errors.length) {
-    return errors;
-  }
 }
 
 export function validateKafkaHeaders(pairs: Array<{ key: string; value: string }>) {

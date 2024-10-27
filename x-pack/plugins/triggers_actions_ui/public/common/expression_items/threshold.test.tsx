@@ -49,7 +49,7 @@ describe('threshold expression', () => {
               "value": "between",
             },
             Object {
-              "text": "Not between",
+              "text": "Is not between",
               "value": "notBetween",
             },
           ]
@@ -89,10 +89,10 @@ describe('threshold expression', () => {
 
     wrapper.find('[data-test-subj="thresholdPopover"]').last().simulate('click');
     expect(wrapper.find('[data-test-subj="comparatorOptionsComboBox"]').exists()).toBeTruthy();
-    expect(wrapper.find('[data-test-subj="alertThresholdInput"]').exists()).toBeTruthy();
+    expect(wrapper.find('[data-test-subj="alertThresholdInput0"]').exists()).toBeTruthy();
 
     wrapper
-      .find('[data-test-subj="alertThresholdInput"]')
+      .find('[data-test-subj="alertThresholdInput0"]')
       .last()
       .simulate('change', { target: { value: 1000 } });
     expect(onChangeSelectedThreshold).toHaveBeenCalled();
@@ -115,6 +115,23 @@ describe('threshold expression', () => {
     expect(onChangeSelectedThresholdComparator).toHaveBeenCalled();
   });
 
+  it('renders threshold unit correctly', async () => {
+    const wrapper = mountWithIntl(
+      <ThresholdExpression
+        thresholdComparator={'>'}
+        threshold={[10]}
+        errors={{ threshold0: [], threshold1: [] }}
+        onChangeSelectedThreshold={jest.fn()}
+        onChangeSelectedThresholdComparator={jest.fn()}
+        unit="%"
+      />
+    );
+
+    expect(wrapper.find('[data-test-subj="thresholdPopover"]').last().text()).toMatchInlineSnapshot(
+      `"Is above 10%"`
+    );
+  });
+
   it('renders the correct number of threshold inputs', async () => {
     const wrapper = mountWithIntl(
       <ThresholdExpression
@@ -128,21 +145,22 @@ describe('threshold expression', () => {
 
     wrapper.find('[data-test-subj="thresholdPopover"]').last().simulate('click');
     expect(wrapper.find('[data-test-subj="comparatorOptionsComboBox"]').exists()).toBeTruthy();
-    expect(wrapper.find('input[data-test-subj="alertThresholdInput"]').length).toEqual(1);
+    expect(wrapper.find('input[data-test-subj="alertThresholdInput0"]').length).toEqual(1);
 
     wrapper
       .find('[data-test-subj="comparatorOptionsComboBox"]')
       .last()
       .simulate('change', { target: { value: 'between' } });
     wrapper.update();
-    expect(wrapper.find('input[data-test-subj="alertThresholdInput"]').length).toEqual(2);
+    expect(wrapper.find('input[data-test-subj="alertThresholdInput0"]').length).toEqual(1);
+    expect(wrapper.find('input[data-test-subj="alertThresholdInput1"]').length).toEqual(1);
 
     wrapper
       .find('[data-test-subj="comparatorOptionsComboBox"]')
       .last()
       .simulate('change', { target: { value: '<' } });
     wrapper.update();
-    expect(wrapper.find('input[data-test-subj="alertThresholdInput"]').length).toEqual(1);
+    expect(wrapper.find('input[data-test-subj="alertThresholdInput0"]').length).toEqual(1);
   });
 
   it('is valid when the threshold value is 0', () => {
@@ -157,9 +175,9 @@ describe('threshold expression', () => {
         onChangeSelectedThresholdComparator={onChangeSelectedThresholdComparator}
       />
     );
-    expect(wrapper.find('[data-test-subj="alertThresholdInput"]')).toMatchInlineSnapshot(`
+    expect(wrapper.find('[data-test-subj="alertThresholdInput0"]')).toMatchInlineSnapshot(`
           <EuiFieldNumber
-            data-test-subj="alertThresholdInput"
+            data-test-subj="alertThresholdInput0"
             isInvalid={false}
             min={0}
             onChange={[Function]}

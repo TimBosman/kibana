@@ -14,7 +14,7 @@ import { Logger } from '@kbn/core/server';
 import { LicensingPluginSetup } from '@kbn/licensing-plugin/server';
 import { RunContext, TaskManagerSetupContract } from '@kbn/task-manager-plugin/server';
 import { stateSchemaByVersion } from '@kbn/alerting-state-types';
-import { rawRuleSchema } from './raw_rule_schema';
+import { TaskCost } from '@kbn/task-manager-plugin/server/task';
 import { TaskRunnerFactory } from './task_runner';
 import {
   RuleType,
@@ -38,8 +38,14 @@ import { getRuleTypeFeatureUsageName } from './lib/get_rule_type_feature_usage_n
 import { InMemoryMetrics } from './monitoring';
 import { AlertingRulesConfig } from '.';
 import { AlertsService } from './alerts_service/alerts_service';
+import { getRuleTypeIdValidLegacyConsumers } from './rule_type_registry_deprecated_consumers';
+import { AlertingConfig } from './config';
 
+const RULE_TYPES_WITH_CUSTOM_COST: Record<string, TaskCost> = {
+  'siem.indicatorRule': TaskCost.ExtraLarge,
+};
 export interface ConstructorOptions {
+  config: AlertingConfig;
   logger: Logger;
   taskManager: TaskManagerSetupContract;
   taskRunnerFactory: TaskRunnerFactory;
@@ -58,6 +64,7 @@ export interface RegistryRuleType
     | 'recoveryActionGroup'
     | 'defaultActionGroupId'
     | 'actionVariables'
+    | 'category'
     | 'producer'
     | 'minimumLicenseRequired'
     | 'isExportable'
@@ -65,11 +72,13 @@ export interface RegistryRuleType
     | 'defaultScheduleInterval'
     | 'doesSetRecoveryContext'
     | 'fieldsForAAD'
+    | 'alerts'
   > {
   id: string;
   enabledInLicense: boolean;
   hasFieldsForAAD: boolean;
   hasAlertsMappings: boolean;
+  validLegacyConsumers: string[];
 }
 
 /**
@@ -102,6 +111,7 @@ export type NormalizedRuleType<
   RecoveryActionGroupId extends string,
   AlertData extends RuleAlertData
 > = {
+  validLegacyConsumers: string[];
   actionGroups: Array<ActionGroup<ActionGroupIds | RecoveryActionGroupId>>;
 } & Omit<
   RuleType<
@@ -144,6 +154,7 @@ export type UntypedNormalizedRuleType = NormalizedRuleType<
 >;
 
 export class RuleTypeRegistry {
+  private readonly config: AlertingConfig;
   private readonly logger: Logger;
   private readonly taskManager: TaskManagerSetupContract;
   private readonly ruleTypes: Map<string, UntypedNormalizedRuleType> = new Map();
@@ -155,6 +166,7 @@ export class RuleTypeRegistry {
   private readonly alertsService: AlertsService | null;
 
   constructor({
+    config,
     logger,
     taskManager,
     taskRunnerFactory,
@@ -164,6 +176,7 @@ export class RuleTypeRegistry {
     inMemoryMetrics,
     alertsService,
   }: ConstructorOptions) {
+    this.config = config;
     this.logger = logger;
     this.taskManager = taskManager;
     this.taskRunnerFactory = taskRunnerFactory;
@@ -273,13 +286,15 @@ export class RuleTypeRegistry {
       ActionGroupIds,
       RecoveryActionGroupId,
       AlertData
-    >(ruleType);
+    >(ruleType, this.config);
 
     this.ruleTypes.set(
       ruleTypeIdSchema.validate(ruleType.id),
       /** stripping the typing is required in order to store the RuleTypes in a Map */
       normalizedRuleType as unknown as UntypedNormalizedRuleType
     );
+
+    const taskCost: TaskCost | undefined = RULE_TYPES_WITH_CUSTOM_COST[ruleType.id];
 
     this.taskManager.registerTaskDefinitions({
       [`alerting:${ruleType.id}`]: {
@@ -302,7 +317,7 @@ export class RuleTypeRegistry {
           spaceId: schema.string(),
           consumer: schema.maybe(schema.string()),
         }),
-        indirectParamsSchema: rawRuleSchema,
+        ...(taskCost ? { cost: taskCost } : {}),
       },
     });
 
@@ -378,6 +393,7 @@ export class RuleTypeRegistry {
           recoveryActionGroup,
           defaultActionGroupId,
           actionVariables,
+          category,
           producer,
           minimumLicenseRequired,
           isExportable,
@@ -386,6 +402,7 @@ export class RuleTypeRegistry {
           doesSetRecoveryContext,
           alerts,
           fieldsForAAD,
+          validLegacyConsumers,
         },
       ]) => {
         // KEEP the type here to be safe if not the map is  ignoring it for some reason
@@ -396,6 +413,7 @@ export class RuleTypeRegistry {
           recoveryActionGroup,
           defaultActionGroupId,
           actionVariables,
+          category,
           producer,
           minimumLicenseRequired,
           isExportable,
@@ -407,8 +425,10 @@ export class RuleTypeRegistry {
             name,
             minimumLicenseRequired
           ).isValid,
+          fieldsForAAD,
           hasFieldsForAAD: Boolean(fieldsForAAD),
           hasAlertsMappings: !!alerts,
+          validLegacyConsumers,
           ...(alerts ? { alerts } : {}),
         };
         return ruleType;
@@ -449,7 +469,8 @@ function augmentActionGroupsWithReserved<
     ActionGroupIds,
     RecoveryActionGroupId,
     AlertData
-  >
+  >,
+  config: AlertingConfig
 ): NormalizedRuleType<
   Params,
   ExtractedParams,
@@ -495,9 +516,32 @@ function augmentActionGroupsWithReserved<
     );
   }
 
+  const activeActionGroupSeverities = new Set<number>();
+  actionGroups.forEach((actionGroup) => {
+    if (!!actionGroup.severity) {
+      if (activeActionGroupSeverities.has(actionGroup.severity.level)) {
+        throw new Error(
+          i18n.translate(
+            'xpack.alerting.ruleTypeRegistry.register.duplicateActionGroupSeverityError',
+            {
+              defaultMessage:
+                'Rule type [id="{id}"] cannot be registered. Action group definitions cannot contain duplicate severity levels.',
+              values: {
+                id,
+              },
+            }
+          )
+        );
+      }
+      activeActionGroupSeverities.add(actionGroup.severity.level);
+    }
+  });
+
   return {
     ...ruleType,
+    ...(config?.rules?.overwriteProducer ? { producer: config.rules.overwriteProducer } : {}),
     actionGroups: [...actionGroups, ...reservedActionGroups],
     recoveryActionGroup: recoveryActionGroup ?? RecoveredActionGroup,
+    validLegacyConsumers: getRuleTypeIdValidLegacyConsumers(id),
   };
 }

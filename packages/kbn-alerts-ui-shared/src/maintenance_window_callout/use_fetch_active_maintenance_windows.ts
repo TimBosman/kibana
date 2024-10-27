@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import type { UseQueryOptions } from '@tanstack/react-query';
@@ -37,6 +38,6 @@ const FETCH_ERROR = i18n.translate('alertsUIShared.maintenanceWindowCallout.fetc
 const FETCH_ERROR_DESCRIPTION = i18n.translate(
   'alertsUIShared.maintenanceWindowCallout.fetchErrorDescription',
   {
-    defaultMessage: 'Rule notifications are stopped while the maintenance window is running.',
+    defaultMessage: 'Rule notifications are stopped while maintenance windows are running.',
   }
 );

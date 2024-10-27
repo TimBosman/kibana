@@ -7,9 +7,9 @@
 
 import type { Logger } from '@kbn/logging';
 import { ScreenshotModePluginSetup } from '@kbn/screenshot-mode-plugin/server';
+import { ConfigType } from '@kbn/screenshotting-server';
 import * as puppeteer from 'puppeteer';
 import { Size } from '../../../common/layout';
-import { ConfigType } from '../../config';
 import { PreserveLayout } from '../../layouts/preserve_layout';
 import { HeadlessChromiumDriver } from './driver';
 
@@ -26,6 +26,7 @@ describe('chromium driver', () => {
     mockLogger.get = () => mockLogger;
 
     mockConfig = {
+      enabled: true,
       networkPolicy: {
         enabled: false,
         rules: [],

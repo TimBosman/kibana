@@ -20,6 +20,13 @@ export const getAllActionRoute = (
   router.get(
     {
       path: `${BASE_ACTION_API_PATH}`,
+      options: {
+        access: 'public',
+        summary: `Get all connectors`,
+        // @ts-expect-error TODO(https://github.com/elastic/kibana/issues/196095): Replace {RouteDeprecationInfo}
+        deprecated: true,
+        tags: ['oas-tag:connectors'],
+      },
       validate: {},
     },
     router.handleLegacyErrors(async function (context, req, res) {

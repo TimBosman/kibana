@@ -5,9 +5,10 @@
  * 2.0.
  */
 
-import type { ISavedObjectsRepository, Logger } from '@kbn/core/server';
+import type { Logger } from '@kbn/core/server';
 import type { MakeSchemaFrom } from '@kbn/usage-collection-plugin/server';
 import type { Owner } from '../../common/constants/types';
+import type { TelemetrySavedObjectsClient } from './telemetry_saved_objects_client';
 
 export type BucketKeyString = Omit<Bucket, 'key'> & { key: string };
 
@@ -35,7 +36,7 @@ export interface ReferencesAggregation {
 }
 
 export interface CollectTelemetryDataParams {
-  savedObjectsClient: ISavedObjectsRepository;
+  savedObjectsClient: TelemetrySavedObjectsClient;
   logger: Logger;
 }
 
@@ -155,6 +156,16 @@ export interface LatestDates {
   closedAt: string;
 }
 
+export interface CustomFieldsTelemetry {
+  totalsByType: Record<string, number>;
+  totals: number;
+  required: number;
+}
+
+export interface CustomFieldsSolutionTelemetry {
+  customFields: CustomFieldsTelemetry;
+}
+
 export interface CasesTelemetry {
   cases: {
     all: Count &
@@ -197,7 +208,15 @@ export interface CasesTelemetry {
         manually: number;
         automatic: number;
       };
+      customFields: CustomFieldsTelemetry;
     };
+    sec: CustomFieldsSolutionTelemetry;
+    obs: CustomFieldsSolutionTelemetry;
+    main: CustomFieldsSolutionTelemetry;
+  };
+  casesSystemAction: {
+    totalCasesCreated: number;
+    totalRules: number;
   };
 }
 
@@ -209,3 +228,4 @@ export type AssigneesSchema = MakeSchemaFrom<Assignees>;
 export type AttachmentFrameworkSchema = MakeSchemaFrom<AttachmentFramework['attachmentFramework']>;
 export type AttachmentItemsSchema = MakeSchemaFrom<AttachmentStats>;
 export type SolutionTelemetrySchema = MakeSchemaFrom<SolutionTelemetry>;
+export type CustomFieldsSolutionTelemetrySchema = MakeSchemaFrom<CustomFieldsSolutionTelemetry>;

@@ -24,7 +24,12 @@ describe('tagKibanaAssets', () => {
     description: '',
     name: 'Managed',
   };
-  const managedTagPayloadArg2 = { id: 'fleet-managed-default', overwrite: true, refresh: false };
+  const managedTagPayloadArg2 = {
+    id: 'fleet-managed-default',
+    overwrite: true,
+    refresh: false,
+    managed: true,
+  };
 
   beforeEach(() => {
     savedObjectTagAssignmentService.updateTagAssignments.mockReset();
@@ -55,7 +60,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         color: '#0077CC',
       },
-      { id: 'fleet-managed-default', overwrite: true, refresh: false }
+      { id: 'fleet-managed-default', overwrite: true, refresh: false, managed: true }
     );
     expect(savedObjectTagClient.create).toHaveBeenCalledWith(
       {
@@ -63,7 +68,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         color: '#4DD2CA',
       },
-      { id: 'fleet-pkg-system-default', overwrite: true, refresh: false }
+      { id: 'fleet-pkg-system-default', overwrite: true, refresh: false, managed: true }
     );
     expect(savedObjectTagAssignmentService.updateTagAssignments).toHaveBeenCalledWith({
       tags: ['fleet-managed-default', 'fleet-pkg-system-default'],
@@ -201,7 +206,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         color: '#0077CC',
       },
-      { id: 'fleet-managed-default', overwrite: true, refresh: false }
+      { id: 'fleet-managed-default', overwrite: true, refresh: false, managed: true }
     );
 
     expect(savedObjectTagClient.create).toHaveBeenCalledWith(
@@ -210,7 +215,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         color: '#4DD2CA',
       },
-      { id: 'fleet-pkg-system-default', overwrite: true, refresh: false }
+      { id: 'fleet-pkg-system-default', overwrite: true, refresh: false, managed: true }
     );
     expect(savedObjectTagAssignmentService.updateTagAssignments).toHaveBeenCalledWith({
       tags: ['managed', 'fleet-pkg-system-default'],
@@ -248,7 +253,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         color: '#0077CC',
       },
-      { id: 'fleet-managed-default', overwrite: true, refresh: false }
+      { id: 'fleet-managed-default', overwrite: true, refresh: false, managed: true }
     );
 
     expect(savedObjectTagClient.create).not.toHaveBeenCalledWith(
@@ -257,7 +262,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         color: '#4DD2CA',
       },
-      { id: 'system', overwrite: true, refresh: false }
+      { id: 'system', overwrite: true, refresh: false, managed: true }
     );
     expect(savedObjectTagAssignmentService.updateTagAssignments).toHaveBeenCalledWith({
       tags: ['fleet-managed-default', 'system'],
@@ -339,7 +344,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         name: 'TestPackage',
       },
-      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false }
+      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false, managed: true }
     );
     expect(savedObjectTagClient.create).toHaveBeenCalledWith(
       {
@@ -351,6 +356,7 @@ describe('tagKibanaAssets', () => {
         id: FOO_TAG_ID,
         overwrite: true,
         refresh: false,
+        managed: true,
       }
     );
     expect(savedObjectTagAssignmentService.updateTagAssignments).toHaveBeenCalledTimes(3);
@@ -436,7 +442,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         name: 'TestPackage',
       },
-      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false }
+      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false, managed: true }
     );
     expect(savedObjectTagClient.create).toHaveBeenCalledWith(
       {
@@ -448,6 +454,7 @@ describe('tagKibanaAssets', () => {
         id: BAR_TAG_ID,
         overwrite: true,
         refresh: false,
+        managed: true,
       }
     );
     expect(savedObjectTagAssignmentService.updateTagAssignments).toHaveBeenCalledTimes(3);
@@ -538,7 +545,7 @@ describe('tagKibanaAssets', () => {
         description: '',
         name: 'TestPackage',
       },
-      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false }
+      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false, managed: true }
     );
     expect(savedObjectTagClient.create).toHaveBeenCalledWith(
       {
@@ -550,6 +557,7 @@ describe('tagKibanaAssets', () => {
         id: MY_CUSTOM_TAG_ID,
         overwrite: true,
         refresh: false,
+        managed: true,
       }
     );
     expect(savedObjectTagAssignmentService.updateTagAssignments).toHaveBeenCalledTimes(3);
@@ -684,59 +692,122 @@ describe('tagKibanaAssets', () => {
         description: '',
         color: '#4DD2CA',
       },
-      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false }
+      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false, managed: true }
     );
   });
 
-  it('should respect SecuritySolution tags', async () => {
-    savedObjectTagClient.get.mockRejectedValue(new Error('not found'));
-    savedObjectTagClient.create.mockImplementation(({ name }: { name: string }) =>
-      Promise.resolve({ id: name.toLowerCase(), name })
-    );
-    const kibanaAssets = {
-      dashboard: [
-        { id: 'dashboard1', type: 'dashboard' },
-        { id: 'dashboard2', type: 'dashboard' },
-        { id: 'search_id1', type: 'search' },
-        { id: 'search_id2', type: 'search' },
-      ],
-    } as any;
-    const assetTags = [
-      {
-        text: 'Security Solution',
-        asset_types: ['dashboard'],
-      },
-    ];
-    await tagKibanaAssets({
-      savedObjectTagAssignmentService,
-      savedObjectTagClient,
-      kibanaAssets,
-      pkgTitle: 'TestPackage',
-      pkgName: 'test-pkg',
-      spaceId: 'default',
-      importedAssets: [],
-      assetTags,
+  describe('Security Solution tag', () => {
+    it('creates tag in default space', async () => {
+      savedObjectTagClient.get.mockRejectedValue(new Error('not found'));
+      savedObjectTagClient.create.mockImplementation(({ name }: { name: string }) =>
+        Promise.resolve({ id: name.toLowerCase(), name })
+      );
+      const kibanaAssets = {
+        dashboard: [
+          { id: 'dashboard1', type: 'dashboard' },
+          { id: 'dashboard2', type: 'dashboard' },
+          { id: 'search_id1', type: 'search' },
+          { id: 'search_id2', type: 'search' },
+        ],
+      } as any;
+      const assetTags = [
+        {
+          text: 'Security Solution',
+          asset_types: ['dashboard'],
+        },
+      ];
+      await tagKibanaAssets({
+        savedObjectTagAssignmentService,
+        savedObjectTagClient,
+        kibanaAssets,
+        pkgTitle: 'TestPackage',
+        pkgName: 'test-pkg',
+        spaceId: 'default',
+        importedAssets: [],
+        assetTags,
+      });
+      expect(savedObjectTagClient.create).toHaveBeenCalledWith(
+        managedTagPayloadArg1,
+        managedTagPayloadArg2
+      );
+      expect(savedObjectTagClient.create).toHaveBeenCalledWith(
+        {
+          color: '#4DD2CA',
+          description: '',
+          name: 'TestPackage',
+        },
+        { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false, managed: true }
+      );
+      expect(savedObjectTagClient.create).toHaveBeenCalledWith(
+        {
+          color: expect.any(String),
+          description: 'Tag defined in package-spec',
+          name: 'Security Solution',
+        },
+        { id: 'security-solution-default', overwrite: true, refresh: false, managed: true }
+      );
     });
-    expect(savedObjectTagClient.create).toHaveBeenCalledWith(
-      managedTagPayloadArg1,
-      managedTagPayloadArg2
-    );
-    expect(savedObjectTagClient.create).toHaveBeenCalledWith(
-      {
-        color: '#4DD2CA',
-        description: '',
-        name: 'TestPackage',
-      },
-      { id: 'fleet-pkg-test-pkg-default', overwrite: true, refresh: false }
-    );
-    expect(savedObjectTagClient.create).toHaveBeenCalledWith(
-      {
-        color: expect.any(String),
-        description: 'Tag defined in package-spec',
-        name: 'Security Solution',
-      },
-      { id: 'security-solution-default', overwrite: true, refresh: false }
-    );
+
+    it('creates tag in non-default space', async () => {
+      savedObjectTagClient.get.mockRejectedValue(new Error('not found'));
+      savedObjectTagClient.create.mockImplementation(({ name }: { name: string }) =>
+        Promise.resolve({ id: name.toLowerCase(), name })
+      );
+      const kibanaAssets = {
+        dashboard: [
+          { id: 'dashboard1', type: 'dashboard' },
+          { id: 'dashboard2', type: 'dashboard' },
+          { id: 'search_id1', type: 'search' },
+          { id: 'search_id2', type: 'search' },
+        ],
+      } as any;
+      const assetTags = [
+        {
+          text: 'Security Solution',
+          asset_types: ['dashboard'],
+        },
+      ];
+      await tagKibanaAssets({
+        savedObjectTagAssignmentService,
+        savedObjectTagClient,
+        kibanaAssets,
+        pkgTitle: 'TestPackage',
+        pkgName: 'test-pkg',
+        spaceId: 'my-secondary-space',
+        importedAssets: [],
+        assetTags,
+      });
+      expect(savedObjectTagClient.create).toHaveBeenCalledWith(managedTagPayloadArg1, {
+        ...managedTagPayloadArg2,
+        id: 'fleet-managed-my-secondary-space',
+      });
+      expect(savedObjectTagClient.create).toHaveBeenCalledWith(
+        {
+          color: expect.any(String),
+          description: '',
+          name: 'TestPackage',
+        },
+        {
+          id: 'fleet-pkg-test-pkg-my-secondary-space',
+          overwrite: true,
+          refresh: false,
+          managed: true,
+        }
+      );
+      expect(savedObjectTagClient.create).toHaveBeenCalledWith(
+        {
+          color: expect.anything(),
+          description: 'Tag defined in package-spec',
+          name: 'Security Solution',
+        },
+        {
+          id: 'security-solution-my-secondary-space',
+          overwrite: true,
+          refresh: false,
+          managed: true,
+        }
+      );
+    });
   });
 
   it('should only call savedObjectTagClient.create for basic tags if there are no assetTags to assign', async () => {

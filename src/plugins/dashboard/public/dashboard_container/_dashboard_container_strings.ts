@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { i18n } from '@kbn/i18n';
@@ -58,12 +59,12 @@ export const emptyScreenStrings = {
 export const dashboardSaveToastStrings = {
   getSuccessString: (dashTitle: string) =>
     i18n.translate('dashboard.dashboardWasSavedSuccessMessage', {
-      defaultMessage: `Dashboard '{dashTitle}' was saved`,
+      defaultMessage: `Dashboard ''{dashTitle}'' was saved`,
       values: { dashTitle },
     }),
   getFailureString: (dashTitle: string, errorMessage: string) =>
     i18n.translate('dashboard.dashboardWasNotSavedDangerMessage', {
-      defaultMessage: `Dashboard '{dashTitle}' was not saved. Error: {errorMessage}`,
+      defaultMessage: `Dashboard ''{dashTitle}'' was not saved. Error: {errorMessage}`,
       values: {
         dashTitle,
         errorMessage,
@@ -83,7 +84,12 @@ export const dashboardSavedObjectErrorStrings = {
     }),
 };
 
-export const panelStorageErrorStrings = {
+export const backupServiceStrings = {
+  viewModeStorageError: (message: string) =>
+    i18n.translate('dashboard.viewmodeBackup.error', {
+      defaultMessage: 'Error encountered while backing up view mode: {message}',
+      values: { message },
+    }),
   getPanelsGetError: (message: string) =>
     i18n.translate('dashboard.panelStorageError.getError', {
       defaultMessage: 'Error encountered while fetching unsaved changes: {message}',
@@ -98,5 +104,18 @@ export const panelStorageErrorStrings = {
     i18n.translate('dashboard.panelStorageError.clearError', {
       defaultMessage: 'Error encountered while clearing unsaved changes: {message}',
       values: { message },
+    }),
+};
+
+export const panelPlacementStrings = {
+  getUnknownStrategyError: (strategy: string) =>
+    i18n.translate('dashboard.panelPlacement.unknownStrategyError', {
+      defaultMessage: 'Unknown panel placement strategy: {strategy}',
+      values: { strategy },
+    }),
+  getPanelPlacementSettingsExistsError: (panelType: string) =>
+    i18n.translate('dashboard.panelPlacement.panelPlacementSettingsExistsError', {
+      defaultMessage: 'Panel placement settings for embeddable type {panelType} already exists',
+      values: { panelType },
     }),
 };

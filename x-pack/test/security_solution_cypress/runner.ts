@@ -7,25 +7,41 @@
 
 import Url from 'url';
 
+import { createEsClientForFtrConfig } from '@kbn/test';
+import { TransportResult } from '@elastic/elasticsearch';
 import { FtrProviderContext } from '../common/ftr_provider_context';
+import { tiAbusechMalware } from './pipelines/ti_abusech_malware';
+import { tiAbusechMalwareBazaar } from './pipelines/ti_abusech_malware_bazaar';
+import { tiAbusechUrl } from './pipelines/ti_abusech_url';
 
 export type { FtrProviderContext } from '../common/ftr_provider_context';
 
 export async function SecuritySolutionConfigurableCypressTestRunner({
   getService,
 }: FtrProviderContext) {
+  const log = getService('log');
   const config = getService('config');
-  const esArchiver = getService('esArchiver');
+  const es = createEsClientForFtrConfig(config);
 
-  await esArchiver.load('x-pack/test/security_solution_cypress/es_archives/auditbeat');
+  const pipelines = [tiAbusechMalware, tiAbusechMalwareBazaar, tiAbusechUrl];
+
+  log.info('configure pipelines');
+
+  for (const pipeline of pipelines) {
+    const res: TransportResult<unknown, any> = await es.transport.request({
+      method: 'PUT',
+      path: `_ingest/pipeline/${pipeline.name}`,
+      body: {
+        processors: pipeline.processors,
+        on_failure: pipeline.on_failure,
+      },
+    });
+
+    log.info(`PUT pipeline ${pipeline.name}: ${res.statusCode}`);
+  }
 
   return {
     FORCE_COLOR: '1',
-    CYPRESS_BASE_URL: Url.format(config.get('servers.kibana')),
-    CYPRESS_ELASTICSEARCH_URL: Url.format(config.get('servers.elasticsearch')),
-    CYPRESS_ELASTICSEARCH_USERNAME: config.get('servers.elasticsearch.username'),
-    CYPRESS_ELASTICSEARCH_PASSWORD: config.get('servers.elasticsearch.password'),
-    baseUrl: Url.format(config.get('servers.kibana')),
     BASE_URL: Url.format(config.get('servers.kibana')),
     ELASTICSEARCH_URL: Url.format(config.get('servers.elasticsearch')),
     ELASTICSEARCH_USERNAME: config.get('servers.elasticsearch.username'),

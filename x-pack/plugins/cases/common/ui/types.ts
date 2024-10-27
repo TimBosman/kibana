@@ -12,7 +12,11 @@ import type {
   READ_CASES_CAPABILITY,
   UPDATE_CASES_CAPABILITY,
 } from '..';
-import type { CASES_CONNECTORS_CAPABILITY, PUSH_CASES_CAPABILITY } from '../constants';
+import type {
+  CASES_CONNECTORS_CAPABILITY,
+  CASES_SETTINGS_CAPABILITY,
+  PUSH_CASES_CAPABILITY,
+} from '../constants';
 import type { SnakeToCamelCase } from '../types';
 import type {
   CaseSeverity,
@@ -25,6 +29,8 @@ import type {
   Attachment,
   ExternalReferenceAttachment,
   PersistableStateAttachment,
+  Configuration,
+  CustomFieldTypes,
 } from '../types/domain';
 import type {
   CasePatchRequest,
@@ -64,14 +70,6 @@ export interface CasesUiConfigType {
   };
 }
 
-export const StatusAll = 'all' as const;
-export type StatusAllType = typeof StatusAll;
-
-export type CaseStatusWithAllStatus = CaseStatuses | StatusAllType;
-
-export const SeverityAll = 'all' as const;
-export type CaseSeverityWithAll = CaseSeverity | typeof SeverityAll;
-
 export const UserActionTypeAll = 'all' as const;
 export type CaseUserActionTypeWithAll = UserActionFindRequestTypes | typeof UserActionTypeAll;
 
@@ -110,6 +108,7 @@ export type CasesMetrics = SnakeToCamelCase<CasesMetricsResponse>;
 export type CaseUpdateRequest = SnakeToCamelCase<CasePatchRequest>;
 export type CaseConnectors = SnakeToCamelCase<GetCaseConnectorsResponse>;
 export type CaseUsers = GetCaseUsersResponse;
+export type CaseUICustomField = CaseUI['customFields'][number];
 
 export interface ResolvedCase {
   case: CaseUI;
@@ -117,6 +116,21 @@ export interface ResolvedCase {
   aliasTargetId?: ResolvedSimpleSavedObject['alias_target_id'];
   aliasPurpose?: ResolvedSimpleSavedObject['alias_purpose'];
 }
+
+export type CasesConfigurationUI = Pick<
+  SnakeToCamelCase<Configuration>,
+  | 'closureType'
+  | 'connector'
+  | 'mappings'
+  | 'customFields'
+  | 'templates'
+  | 'id'
+  | 'version'
+  | 'owner'
+>;
+
+export type CasesConfigurationUICustomField = CasesConfigurationUI['customFields'][number];
+export type CasesConfigurationUITemplate = CasesConfigurationUI['templates'][number];
 
 export type SortOrder = 'asc' | 'desc';
 
@@ -131,35 +145,35 @@ export interface QueryParams extends SortingParams {
   page: number;
   perPage: number;
 }
-export type PartialQueryParams = Partial<QueryParams>;
 
-export interface UrlQueryParams extends SortingParams {
-  page: string;
-  perPage: string;
-}
-
-export interface ParsedUrlQueryParams extends Partial<UrlQueryParams> {
-  [index: string]: string | string[] | undefined | null;
-}
-
-export type LocalStorageQueryParams = Partial<Omit<QueryParams, 'page'>>;
-
-export interface FilterOptions {
+export interface SystemFilterOptions {
   search: string;
   searchFields: string[];
-  severity: CaseSeverityWithAll;
-  status: CaseStatusWithAllStatus;
+  severity: CaseSeverity[];
+  status: CaseStatuses[];
   tags: string[];
-  assignees: Array<string | null> | null;
+  assignees: Array<string | null>;
   reporters: User[];
   owner: string[];
   category: string[];
 }
-export type PartialFilterOptions = Partial<FilterOptions>;
+
+export interface FilterOptions extends SystemFilterOptions {
+  customFields: {
+    [key: string]: {
+      type: CustomFieldTypes;
+      options: string[];
+    };
+  };
+}
 
 export type SingleCaseMetrics = SingleCaseMetricsResponse;
 export type SingleCaseMetricsFeature = Exclude<CaseMetricsFeature, CaseMetricsFeature.MTTR>;
 
+/**
+ * If you add a new value here and you want to support it on the URL
+ * you have to also add it here x-pack/plugins/cases/public/components/all_cases/schema.ts
+ */
 export enum SortFieldCase {
   closedAt = 'closedAt',
   createdAt = 'createdAt',
@@ -205,6 +219,7 @@ export type UpdateKey = keyof Pick<
   | 'severity'
   | 'assignees'
   | 'category'
+  | 'customFields'
 >;
 
 export interface UpdateByKey {
@@ -289,6 +304,7 @@ export interface CasesPermissions {
   delete: boolean;
   push: boolean;
   connectors: boolean;
+  settings: boolean;
 }
 
 export interface CasesCapabilities {
@@ -298,4 +314,5 @@ export interface CasesCapabilities {
   [DELETE_CASES_CAPABILITY]: boolean;
   [PUSH_CASES_CAPABILITY]: boolean;
   [CASES_CONNECTORS_CAPABILITY]: boolean;
+  [CASES_SETTINGS_CAPABILITY]: boolean;
 }

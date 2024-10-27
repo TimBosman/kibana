@@ -9,7 +9,7 @@ import { uniq, cloneDeep } from 'lodash';
 import { i18n } from '@kbn/i18n';
 import moment from 'moment-timezone';
 import type { Serializable } from '@kbn/utility-types';
-
+import { DEFAULT_COLOR_MAPPING_CONFIG } from '@kbn/coloring';
 import type { TimefilterContract } from '@kbn/data-plugin/public';
 import type { IUiSettingsClient, SavedObjectReference } from '@kbn/core/public';
 import type { DataView, DataViewsContract } from '@kbn/data-views-plugin/public';
@@ -18,6 +18,8 @@ import { emptyTitleText } from '@kbn/visualization-ui-components';
 import { RequestAdapter } from '@kbn/inspector-plugin/common';
 import { ISearchStart } from '@kbn/data-plugin/public';
 import type { DraggingIdentifier, DropType } from '@kbn/dom-drag-drop';
+import { getAbsoluteTimeRange } from '@kbn/data-plugin/common';
+import { DateRange } from '../common/types';
 import type { Document } from './persistence/saved_object_store';
 import {
   Datasource,
@@ -36,6 +38,8 @@ import {
 } from './types';
 import type { DatasourceStates, VisualizationState } from './state_management';
 import type { IndexPatternServiceAPI } from './data_views_service/service';
+import { COLOR_MAPPING_OFF_BY_DEFAULT } from '../common/constants';
+import type { RangeTypeLens } from './datasources/form_based/operations/definitions/ranges';
 
 export function getVisualizeGeoFieldMessage(fieldType: string) {
   return i18n.translate('xpack.lens.visualizeGeoFieldMessage', {
@@ -44,13 +48,44 @@ export function getVisualizeGeoFieldMessage(fieldType: string) {
   });
 }
 
+export const isLensRange = (range: unknown = {}): range is RangeTypeLens => {
+  if (!range || typeof range !== 'object') return false;
+  const { from, to, label } = range as RangeTypeLens;
+
+  return (
+    label !== undefined &&
+    (typeof from === 'number' || from === null) &&
+    (typeof to === 'number' || to === null)
+  );
+};
+
 export const getResolvedDateRange = function (timefilter: TimefilterContract) {
+  const { from, to } = timefilter.getTime();
+  return { fromDate: from, toDate: to };
+};
+
+export const getAbsoluteDateRange = function (timefilter: TimefilterContract) {
   const { from, to } = timefilter.getTime();
   const { min, max } = timefilter.calculateBounds({
     from,
     to,
   });
   return { fromDate: min?.toISOString() || from, toDate: max?.toISOString() || to };
+};
+
+export const convertToAbsoluteDateRange = function (dateRange: DateRange, now: Date) {
+  const absRange = getAbsoluteTimeRange(
+    {
+      from: dateRange.fromDate as string,
+      to: dateRange.toDate as string,
+    },
+    { forceNow: now }
+  );
+
+  return {
+    fromDate: absRange.from,
+    toDate: absRange.to,
+  };
 };
 
 export function containsDynamicMath(dateMathString: string) {
@@ -349,29 +384,26 @@ export const getSearchWarningMessages = (
     searchService: ISearchStart;
   }
 ): UserMessage[] => {
-  const warningsMap: Map<string, UserMessage[]> = new Map();
+  const userMessages: UserMessage[] = [];
 
   deps.searchService.showWarnings(adapter, (warning, meta) => {
-    const { request, response, requestId } = meta;
+    const { request, response } = meta;
 
-    const warningMessages = datasource.getSearchWarningMessages?.(
+    const userMessagesFromWarning = datasource.getSearchWarningMessages?.(
       state,
       warning,
       request,
       response
     );
 
-    if (warningMessages?.length) {
-      const key = (requestId ?? '') + warning.type + warning.reason?.type ?? '';
-      if (!warningsMap.has(key)) {
-        warningsMap.set(key, warningMessages);
-      }
+    if (userMessagesFromWarning?.length) {
+      userMessages.push(...userMessagesFromWarning);
       return true;
     }
     return false;
   });
 
-  return [...warningsMap.values()].flat();
+  return userMessages;
 };
 
 function getSafeLabel(label: string) {
@@ -424,3 +456,12 @@ export function shouldRemoveSource(
       dropType === 'replace_incompatible')
   );
 }
+
+export const getColorMappingDefaults = () => {
+  if (COLOR_MAPPING_OFF_BY_DEFAULT) {
+    return undefined;
+  }
+  return { ...DEFAULT_COLOR_MAPPING_CONFIG };
+};
+
+export const EXPRESSION_BUILD_ERROR_ID = 'expression_build_error';

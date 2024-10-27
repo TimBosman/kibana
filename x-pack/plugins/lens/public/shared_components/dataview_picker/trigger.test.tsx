@@ -5,11 +5,10 @@
  * 2.0.
  */
 import React from 'react';
+import { EuiIcon } from '@elastic/eui';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import '@testing-library/jest-dom';
 import { TriggerButton } from './trigger';
-import { EuiIcon } from '@elastic/eui';
 
 describe('TriggerButton', () => {
   describe('base version (no icons)', () => {
@@ -32,7 +31,7 @@ describe('TriggerButton', () => {
       expect(screen.getByTitle('My title')).toBeInTheDocument();
     });
 
-    it('should call the toggle callback on click', () => {
+    it('should call the toggle callback on click', async () => {
       const toggleFn = jest.fn();
       render(
         <TriggerButton
@@ -42,7 +41,7 @@ describe('TriggerButton', () => {
           title="My title"
         />
       );
-      userEvent.click(screen.getByText('Trigger'));
+      await userEvent.click(screen.getByText('Trigger'));
 
       expect(toggleFn).toHaveBeenCalled();
     });

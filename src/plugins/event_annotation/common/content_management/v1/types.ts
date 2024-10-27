@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import {
@@ -18,6 +19,7 @@ import {
   CreateResult,
   UpdateResult,
 } from '@kbn/content-management-plugin/common';
+import type { ContentManagementCrudTypes } from '@kbn/content-management-utils';
 
 import type { DataViewSpec } from '@kbn/data-views-plugin/common';
 import type { EventAnnotationConfig } from '@kbn/event-annotation-common';
@@ -79,8 +81,6 @@ export type EventAnnotationGroupGetOut = GetResult<
 // ----------- CREATE --------------
 
 export interface CreateOptions {
-  /** If a document with the given `id` already exists, overwrite it's contents (default=false). */
-  overwrite?: boolean;
   /** Array of referenced saved objects. */
   references?: Reference[];
 }
@@ -127,3 +127,13 @@ export type EventAnnotationGroupSearchIn = SearchIn<
 >;
 
 export type EventAnnotationGroupSearchOut = SearchResult<EventAnnotationGroupSavedObject>;
+
+// ----------- CRUD TYPES --------------
+
+export type EventAnnotationGroupCrudTypes = ContentManagementCrudTypes<
+  EventAnnotationGroupContentType,
+  EventAnnotationGroupSavedObjectAttributes,
+  CreateOptions,
+  UpdateOptions,
+  {}
+>;

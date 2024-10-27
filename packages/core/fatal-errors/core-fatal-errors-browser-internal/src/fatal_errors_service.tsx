@@ -1,15 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
 import { render } from 'react-dom';
 import { ReplaySubject, first, tap } from 'rxjs';
 
+import type { AnalyticsServiceStart } from '@kbn/core-analytics-browser';
 import type { InternalInjectedMetadataSetup } from '@kbn/core-injected-metadata-browser-internal';
 import type { ThemeServiceSetup } from '@kbn/core-theme-browser';
 import type { I18nStart } from '@kbn/core-i18n-browser';
@@ -20,6 +22,7 @@ import { getErrorInfo } from './get_error_info';
 
 /** @internal */
 export interface FatalErrorsServiceSetupDeps {
+  analytics: AnalyticsServiceStart;
   i18n: I18nStart;
   theme: ThemeServiceSetup;
   injectedMetadata: InternalInjectedMetadataSetup;
@@ -86,7 +89,7 @@ export class FatalErrorsService {
     return fatalErrors;
   }
 
-  private renderError({ i18n, theme, injectedMetadata }: FatalErrorsServiceSetupDeps) {
+  private renderError({ analytics, i18n, theme, injectedMetadata }: FatalErrorsServiceSetupDeps) {
     // delete all content in the rootDomElement
     this.rootDomElement.textContent = '';
 
@@ -95,7 +98,12 @@ export class FatalErrorsService {
     this.rootDomElement.appendChild(container);
 
     render(
-      <KibanaRootContextProvider i18n={i18n} theme={theme} globalStyles={true}>
+      <KibanaRootContextProvider
+        analytics={analytics}
+        i18n={i18n}
+        theme={theme}
+        globalStyles={true}
+      >
         <FatalErrorsScreen
           buildNumber={injectedMetadata.getKibanaBuildNumber()}
           kibanaVersion={injectedMetadata.getKibanaVersion()}

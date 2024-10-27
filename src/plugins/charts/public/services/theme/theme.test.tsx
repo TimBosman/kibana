@@ -1,19 +1,19 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React from 'react';
 import { from } from 'rxjs';
-import { take } from 'rxjs/operators';
+import { take } from 'rxjs';
 import { renderHook, act } from '@testing-library/react-hooks';
 import { render, act as renderAct } from '@testing-library/react';
 
 import { LIGHT_THEME, DARK_THEME } from '@elastic/charts';
-import { EUI_CHARTS_THEME_DARK, EUI_CHARTS_THEME_LIGHT } from '@elastic/eui/dist/eui_charts_theme';
 
 import { ThemeService } from './theme';
 import { coreMock } from '@kbn/core/public/mocks';
@@ -51,31 +51,6 @@ describe('ThemeService', () => {
     });
   });
 
-  describe('chartsTheme$', () => {
-    it('returns the light theme when not in dark mode', async () => {
-      setUpMockTheme.theme$ = createTheme$Mock(false);
-      const themeService = new ThemeService();
-      themeService.init(setUpMockTheme);
-
-      expect(await themeService.chartsTheme$.pipe(take(1)).toPromise()).toEqual(
-        EUI_CHARTS_THEME_LIGHT.theme
-      );
-    });
-
-    describe('in dark mode', () => {
-      it(`returns the dark theme`, async () => {
-        // Fake dark theme turned returning true
-        setUpMockTheme.theme$ = createTheme$Mock(true);
-        const themeService = new ThemeService();
-        themeService.init(setUpMockTheme);
-
-        expect(await themeService.chartsTheme$.pipe(take(1)).toPromise()).toEqual(
-          EUI_CHARTS_THEME_DARK.theme
-        );
-      });
-    });
-  });
-
   describe('chartsBaseTheme$', () => {
     it('returns the light theme when not in dark mode', async () => {
       setUpMockTheme.theme$ = createTheme$Mock(false);
@@ -95,60 +70,6 @@ describe('ThemeService', () => {
 
         expect(result).toEqual(DARK_THEME);
       });
-    });
-  });
-
-  describe('useChartsTheme', () => {
-    it('updates when the user profile settings change', () => {
-      setUpMockTheme.theme$ = createTheme$Mock(false);
-      const themeService = new ThemeService();
-      themeService.init(setUpMockTheme);
-      const { useChartsTheme } = themeService;
-
-      const { result } = renderHook(() => useChartsTheme());
-      expect(result.current).toBe(EUI_CHARTS_THEME_LIGHT.theme);
-
-      act(() => {
-        setUpMockTheme.theme$ = createTheme$Mock(true);
-        themeService.init(setUpMockTheme);
-      });
-      expect(result.current).toBe(EUI_CHARTS_THEME_DARK.theme);
-      act(() => {
-        setUpMockTheme.theme$ = createTheme$Mock(false);
-        themeService.init(setUpMockTheme);
-      });
-      expect(result.current).toBe(EUI_CHARTS_THEME_LIGHT.theme);
-    });
-
-    it('should not rerender when emitting the same value', () => {
-      setUpMockTheme.theme$ = createTheme$Mock(false);
-      const themeService = new ThemeService();
-      themeService.init(setUpMockTheme);
-      const { useChartsTheme } = themeService;
-
-      const renderCounter = jest.fn();
-      const Wrapper = () => {
-        useChartsTheme();
-        renderCounter();
-        return null;
-      };
-
-      render(<Wrapper />);
-      expect(renderCounter).toHaveBeenCalledTimes(1);
-      renderAct(() => {
-        setUpMockTheme.theme$ = createTheme$Mock(true);
-        themeService.init(setUpMockTheme);
-      });
-      expect(renderCounter).toHaveBeenCalledTimes(2);
-      renderAct(() => {
-        setUpMockTheme.theme$ = createTheme$Mock(true);
-        themeService.init(setUpMockTheme);
-      });
-      renderAct(() => {
-        setUpMockTheme.theme$ = createTheme$Mock(true);
-        themeService.init(setUpMockTheme);
-      });
-      expect(renderCounter).toHaveBeenCalledTimes(2);
     });
   });
 

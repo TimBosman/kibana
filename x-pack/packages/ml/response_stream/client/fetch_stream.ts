@@ -5,10 +5,10 @@
  * 2.0.
  */
 
-import startsWith from 'lodash/startsWith';
+import { startsWith } from 'lodash';
 import type { Reducer, ReducerAction } from 'react';
 
-import type { HttpSetup } from '@kbn/core/public';
+import type { HttpSetup, HttpFetchOptions } from '@kbn/core/public';
 
 type GeneratorError = string | null;
 
@@ -42,8 +42,9 @@ export async function* fetchStream<B extends object, R extends Reducer<any, any>
   apiVersion: string | undefined,
   abortCtrl: React.MutableRefObject<AbortController>,
   body?: B,
-  ndjson = true
-): AsyncGenerator<[GeneratorError, ReducerAction<R> | Array<ReducerAction<R>> | undefined]> {
+  ndjson = true,
+  headers?: HttpFetchOptions['headers']
+): AsyncGenerator<[GeneratorError, ReducerAction<R> | undefined]> {
   let stream: Readonly<Response> | undefined;
 
   try {
@@ -52,6 +53,7 @@ export async function* fetchStream<B extends object, R extends Reducer<any, any>
       version: apiVersion,
       asResponse: true,
       rawResponse: true,
+      headers,
       ...(body && Object.keys(body).length > 0 ? { body: JSON.stringify(body) } : {}),
     });
 
@@ -110,7 +112,9 @@ export async function* fetchStream<B extends object, R extends Reducer<any, any>
             : parts
         ) as Array<ReducerAction<R>>;
 
-        yield [null, actions];
+        for (const action of actions) {
+          yield [null, action];
+        }
       } catch (error) {
         if (error.name !== 'AbortError') {
           yield [error.toString(), undefined];

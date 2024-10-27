@@ -5,7 +5,8 @@
  * 2.0.
  */
 
-import React, { FC, useMemo, useState } from 'react';
+import type { FC } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import {
   EuiFlyout,
@@ -19,21 +20,21 @@ import {
 import { i18n } from '@kbn/i18n';
 import { extractErrorProperties } from '@kbn/ml-error-utils';
 
-import { ModelItem } from '../../model_management/models_list';
+import type { ModelItem } from '../../model_management/models_list';
 import type { AddInferencePipelineSteps } from './types';
 import { ADD_INFERENCE_PIPELINE_STEPS } from './constants';
-import { AddInferencePipelineFooter } from './components/add_inference_pipeline_footer';
-import { AddInferencePipelineHorizontalSteps } from './components/add_inference_pipeline_horizontal_steps';
+import { AddInferencePipelineFooter } from '../shared';
+import { AddInferencePipelineHorizontalSteps } from '../shared';
 import { getInitialState, getModelType } from './state';
 import { PipelineDetails } from './components/pipeline_details';
 import { ProcessorConfiguration } from './components/processor_configuration';
-import { OnFailureConfiguration } from './components/on_failure_configuration';
+import { OnFailureConfiguration } from '../shared';
 import { TestPipeline } from './components/test_pipeline';
-import { ReviewAndCreatePipeline } from './components/review_and_create_pipeline';
-import { useMlApiContext } from '../../contexts/kibana';
+import { ReviewAndCreatePipeline } from '../shared';
+import { useMlApi } from '../../contexts/kibana';
 import { getPipelineConfig } from './get_pipeline_config';
 import { validateInferencePipelineConfigurationStep } from './validation';
-import type { MlInferenceState, InferenceModelTypes } from './types';
+import { type MlInferenceState, type InferenceModelTypes, TEST_PIPELINE_MODE } from './types';
 import { useFetchPipelines } from './hooks/use_fetch_pipelines';
 
 export interface AddInferencePipelineFlyoutProps {
@@ -53,7 +54,7 @@ export const AddInferencePipelineFlyout: FC<AddInferencePipelineFlyoutProps> = (
 
   const {
     trainedModels: { createInferencePipeline },
-  } = useMlApiContext();
+  } = useMlApi();
 
   const modelType = getModelType(model);
 
@@ -122,6 +123,8 @@ export const AddInferencePipelineFlyout: FC<AddInferencePipelineFlyoutProps> = (
           setStep={setStep}
           isDetailsStepValid={pipelineNameError === undefined && targetFieldError === undefined}
           isConfigureProcessorStepValid={hasUnsavedChanges === false}
+          hasProcessorStep
+          pipelineCreated={formState.pipelineCreated}
         />
         <EuiSpacer size="m" />
         {step === ADD_INFERENCE_PIPELINE_STEPS.DETAILS && (
@@ -157,7 +160,11 @@ export const AddInferencePipelineFlyout: FC<AddInferencePipelineFlyoutProps> = (
           />
         )}
         {step === ADD_INFERENCE_PIPELINE_STEPS.TEST && (
-          <TestPipeline sourceIndex={sourceIndex} state={formState} />
+          <TestPipeline
+            sourceIndex={sourceIndex}
+            state={formState}
+            mode={TEST_PIPELINE_MODE.STEP}
+          />
         )}
         {step === ADD_INFERENCE_PIPELINE_STEPS.CREATE && (
           <ReviewAndCreatePipeline
@@ -166,6 +173,7 @@ export const AddInferencePipelineFlyout: FC<AddInferencePipelineFlyoutProps> = (
             pipelineName={formState.pipelineName}
             pipelineCreated={formState.pipelineCreated}
             pipelineError={formState.pipelineError}
+            sourceIndex={sourceIndex}
           />
         )}
       </EuiFlyoutBody>
@@ -179,6 +187,7 @@ export const AddInferencePipelineFlyout: FC<AddInferencePipelineFlyoutProps> = (
           isConfigureProcessorStepValid={hasUnsavedChanges === false}
           pipelineCreated={formState.pipelineCreated}
           creatingPipeline={formState.creatingPipeline}
+          hasProcessorStep
         />
       </EuiFlyoutFooter>
     </EuiFlyout>

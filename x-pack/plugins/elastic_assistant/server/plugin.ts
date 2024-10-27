@@ -5,23 +5,27 @@
  * 2.0.
  */
 
-import {
-  PluginInitializerContext,
-  CoreSetup,
-  CoreStart,
-  Plugin,
-  Logger,
-  IContextProvider,
-} from '@kbn/core/server';
+import { PluginInitializerContext, CoreStart, Plugin, Logger } from '@kbn/core/server';
 
+import { AssistantFeatures } from '@kbn/elastic-assistant-common';
+import { ReplaySubject, type Subject } from 'rxjs';
+import { MlPluginSetup } from '@kbn/ml-plugin/server';
+import { events } from './lib/telemetry/event_based_telemetry';
 import {
+  AssistantTool,
+  ElasticAssistantPluginCoreSetupDependencies,
   ElasticAssistantPluginSetup,
   ElasticAssistantPluginSetupDependencies,
   ElasticAssistantPluginStart,
   ElasticAssistantPluginStartDependencies,
   ElasticAssistantRequestHandlerContext,
 } from './types';
-import { postActionsConnectorExecuteRoute } from './routes';
+import { AIAssistantService } from './ai_assistant_service';
+import { RequestContextFactory } from './routes/request_context_factory';
+import { PLUGIN_ID } from '../common/constants';
+import { registerRoutes } from './routes/register_routes';
+import { appContextService } from './services/app_context';
+import { createGetElserId } from './ai_assistant_service/helpers';
 
 export class ElasticAssistantPlugin
   implements
@@ -33,48 +37,100 @@ export class ElasticAssistantPlugin
     >
 {
   private readonly logger: Logger;
+  private assistantService: AIAssistantService | undefined;
+  private pluginStop$: Subject<void>;
+  private readonly kibanaVersion: PluginInitializerContext['env']['packageInfo']['version'];
+  private mlTrainedModelsProvider?: MlPluginSetup['trainedModelsProvider'];
+  private getElserId?: () => Promise<string>;
 
   constructor(initializerContext: PluginInitializerContext) {
+    this.pluginStop$ = new ReplaySubject(1);
     this.logger = initializerContext.logger.get();
+    this.kibanaVersion = initializerContext.env.packageInfo.version;
   }
 
-  private createRouteHandlerContext = (
-    core: CoreSetup<ElasticAssistantPluginStart, unknown>
-  ): IContextProvider<ElasticAssistantRequestHandlerContext, 'elasticAssistant'> => {
-    return async function elasticAssistantRouteHandlerContext(context, request) {
-      const [_, pluginsStart] = await core.getStartServices();
-
-      return {
-        actions: pluginsStart.actions,
-      };
-    };
-  };
-
-  public setup(core: CoreSetup, plugins: ElasticAssistantPluginSetupDependencies) {
+  public setup(
+    core: ElasticAssistantPluginCoreSetupDependencies,
+    plugins: ElasticAssistantPluginSetupDependencies
+  ) {
     this.logger.debug('elasticAssistant: Setup');
+
+    this.assistantService = new AIAssistantService({
+      logger: this.logger.get('service'),
+      ml: plugins.ml,
+      taskManager: plugins.taskManager,
+      kibanaVersion: this.kibanaVersion,
+      elasticsearchClientPromise: core
+        .getStartServices()
+        .then(([{ elasticsearch }]) => elasticsearch.client.asInternalUser),
+      pluginStop$: this.pluginStop$,
+    });
+
+    const requestContextFactory = new RequestContextFactory({
+      logger: this.logger,
+      core,
+      plugins,
+      kibanaVersion: this.kibanaVersion,
+      assistantService: this.assistantService,
+    });
+
     const router = core.http.createRouter<ElasticAssistantRequestHandlerContext>();
-
-    core.http.registerRouteHandlerContext<
-      ElasticAssistantRequestHandlerContext,
-      'elasticAssistant'
-    >(
-      'elasticAssistant',
-      this.createRouteHandlerContext(core as CoreSetup<ElasticAssistantPluginStart, unknown>)
+    core.http.registerRouteHandlerContext<ElasticAssistantRequestHandlerContext, typeof PLUGIN_ID>(
+      PLUGIN_ID,
+      (context, request) => requestContextFactory.create(context, request)
     );
+    events.forEach((eventConfig) => core.analytics.registerEventType(eventConfig));
 
-    postActionsConnectorExecuteRoute(router);
+    this.mlTrainedModelsProvider = plugins.ml.trainedModelsProvider;
+    this.getElserId = createGetElserId(this.mlTrainedModelsProvider);
+
+    registerRoutes(router, this.logger, this.getElserId);
+
     return {
       actions: plugins.actions,
+      getRegisteredFeatures: (pluginName: string) => {
+        return appContextService.getRegisteredFeatures(pluginName);
+      },
+      getRegisteredTools: (pluginName: string) => {
+        return appContextService.getRegisteredTools(pluginName);
+      },
     };
   }
 
-  public start(core: CoreStart, plugins: ElasticAssistantPluginStartDependencies) {
+  public start(
+    core: CoreStart,
+    plugins: ElasticAssistantPluginStartDependencies
+  ): ElasticAssistantPluginStart {
     this.logger.debug('elasticAssistant: Started');
+    appContextService.start({ logger: this.logger });
+
+    plugins.licensing.license$.subscribe(() => {
+      if (this.mlTrainedModelsProvider) {
+        this.getElserId = createGetElserId(this.mlTrainedModelsProvider);
+      }
+    });
 
     return {
       actions: plugins.actions,
+      inference: plugins.inference,
+      getRegisteredFeatures: (pluginName: string) => {
+        return appContextService.getRegisteredFeatures(pluginName);
+      },
+      getRegisteredTools: (pluginName: string) => {
+        return appContextService.getRegisteredTools(pluginName);
+      },
+      registerFeatures: (pluginName: string, features: Partial<AssistantFeatures>) => {
+        return appContextService.registerFeatures(pluginName, features);
+      },
+      registerTools: (pluginName: string, tools: AssistantTool[]) => {
+        return appContextService.registerTools(pluginName, tools);
+      },
     };
   }
 
-  public stop() {}
+  public stop() {
+    appContextService.stop();
+    this.pluginStop$.next();
+    this.pluginStop$.complete();
+  }
 }

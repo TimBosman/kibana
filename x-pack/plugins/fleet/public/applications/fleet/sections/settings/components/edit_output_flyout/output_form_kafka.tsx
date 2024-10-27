@@ -32,10 +32,12 @@ import type { OutputFormInputsType } from './use_output_form';
 
 interface Props {
   inputs: OutputFormInputsType;
+  useSecretsStorage: boolean;
+  onToggleSecretStorage: (secretEnabled: boolean) => void;
 }
 
 export const OutputFormKafkaSection: React.FunctionComponent<Props> = (props) => {
-  const { inputs } = props;
+  const { inputs, useSecretsStorage, onToggleSecretStorage } = props;
 
   const { docLinks } = useStartServices();
 
@@ -64,12 +66,6 @@ export const OutputFormKafkaSection: React.FunctionComponent<Props> = (props) =>
           data-test-subj="settingsOutputsFlyout.kafkaVersionInput"
           {...inputs.kafkaVersionInput.props}
           options={kafkaVersionOptions}
-          placeholder={i18n.translate(
-            'xpack.fleet.settings.editOutputFlyout.kafkaVersionInputPlaceholder',
-            {
-              defaultMessage: 'Specify version',
-            }
-          )}
         />
       </EuiFormRow>
 
@@ -104,7 +100,11 @@ export const OutputFormKafkaSection: React.FunctionComponent<Props> = (props) =>
       />
       <EuiSpacer size="m" />
 
-      <OutputFormKafkaAuthentication inputs={inputs} />
+      <OutputFormKafkaAuthentication
+        inputs={inputs}
+        useSecretsStorage={useSecretsStorage}
+        onToggleSecretStorage={onToggleSecretStorage}
+      />
 
       <EuiSpacer size="m" />
 

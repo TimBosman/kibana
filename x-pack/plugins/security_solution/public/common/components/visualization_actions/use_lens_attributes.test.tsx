@@ -18,12 +18,13 @@ import {
 } from './utils';
 
 import { filterFromSearchBar, queryFromSearchBar, wrapper } from './mocks';
-import { useSourcererDataView } from '../../containers/sourcerer';
+import { useSourcererDataView } from '../../../sourcerer/containers';
 import { kpiHostMetricLensAttributes } from './lens_attributes/hosts/kpi_host_metric';
 import { useRouteSpy } from '../../utils/route/use_route_spy';
 import { SecurityPageName } from '../../../app/types';
+import { getEventsHistogramLensAttributes } from './lens_attributes/common/events';
 
-jest.mock('../../containers/sourcerer');
+jest.mock('../../../sourcerer/containers');
 jest.mock('../../utils/route/use_route_spy', () => ({
   useRouteSpy: jest.fn(),
 }));
@@ -153,6 +154,31 @@ describe('useLensAttributes', () => {
     ]);
   });
 
+  it('should not apply tabs and pages when applyPageAndTabsFilters = false', () => {
+    (useRouteSpy as jest.Mock).mockReturnValue([
+      {
+        detailName: 'elastic',
+        pageName: 'user',
+        tabName: 'events',
+      },
+    ]);
+    const { result } = renderHook(
+      () =>
+        useLensAttributes({
+          applyPageAndTabsFilters: false,
+          getLensAttributes: getExternalAlertLensAttributes,
+          stackByField: 'event.dataset',
+        }),
+      { wrapper }
+    );
+
+    expect(result?.current?.state.filters).toEqual([
+      ...getExternalAlertLensAttributes().state.filters,
+      ...getIndexFilters(['auditbeat-*']),
+      ...filterFromSearchBar,
+    ]);
+  });
+
   it('should add data view id to references', () => {
     const { result } = renderHook(
       () =>
@@ -185,6 +211,25 @@ describe('useLensAttributes', () => {
         id: 'security-solution-default',
       },
     ]);
+  });
+
+  it('should not set splitAccessor if stackByField is undefined', () => {
+    const { result } = renderHook(
+      () =>
+        useLensAttributes({
+          getLensAttributes: getEventsHistogramLensAttributes,
+          stackByField: undefined,
+        }),
+      { wrapper }
+    );
+
+    expect(result?.current?.state?.visualization).toEqual(
+      expect.objectContaining({
+        layers: expect.arrayContaining([
+          expect.objectContaining({ seriesType: 'bar_stacked', splitAccessor: undefined }),
+        ]),
+      })
+    );
   });
 
   it('should return null if no indices exist', () => {

@@ -12,6 +12,20 @@ exports[`FlyoutService openFlyout() renders a flyout to the DOM 1`] = `
 Array [
   Array [
     <KibanaRenderContextProvider
+      analytics={
+        Object {
+          "optIn": [MockFunction],
+          "reportEvent": [MockFunction],
+          "telemetryCounter$": Subject {
+            "closed": false,
+            "currentObservers": null,
+            "hasError": false,
+            "isStopped": false,
+            "observers": Array [],
+            "thrownError": null,
+          },
+        }
+      }
       i18n={
         Object {
           "Context": [MockFunction],
@@ -19,6 +33,7 @@ Array [
       }
       theme={
         Object {
+          "getTheme": [MockFunction],
           "theme$": Observable {
             "_subscribe": [Function],
           },
@@ -45,22 +60,53 @@ exports[`FlyoutService openFlyout() with a currently active flyout replaces the 
 Array [
   Array [
     <KibanaRenderContextProvider
+      analytics={
+        Object {
+          "optIn": [MockFunction],
+          "reportEvent": [MockFunction],
+          "telemetryCounter$": Subject {
+            "closed": false,
+            "currentObservers": null,
+            "hasError": false,
+            "isStopped": false,
+            "observers": Array [],
+            "thrownError": null,
+          },
+        }
+      }
       i18n={
         Object {
           "Context": [MockFunction] {
             "calls": Array [
               Array [
                 Object {
-                  "children": <EuiErrorBoundary>
-                    <EuiFlyout
-                      onClose={[Function]}
-                    >
-                      <MountWrapper
-                        className="kbnOverlayMountWrapper"
-                        mount={[Function]}
-                      />
-                    </EuiFlyout>
-                  </EuiErrorBoundary>,
+                  "children": <KibanaErrorBoundaryProvider
+                    analytics={
+                      Object {
+                        "optIn": [MockFunction],
+                        "reportEvent": [MockFunction],
+                        "telemetryCounter$": Subject {
+                          "closed": false,
+                          "currentObservers": null,
+                          "hasError": false,
+                          "isStopped": false,
+                          "observers": Array [],
+                          "thrownError": null,
+                        },
+                      }
+                    }
+                  >
+                    <KibanaErrorBoundary>
+                      <EuiFlyout
+                        onClose={[Function]}
+                      >
+                        <MountWrapper
+                          className="kbnOverlayMountWrapper"
+                          mount={[Function]}
+                        />
+                      </EuiFlyout>
+                    </KibanaErrorBoundary>
+                  </KibanaErrorBoundaryProvider>,
                 },
                 Object {},
               ],
@@ -68,16 +114,35 @@ Array [
             "results": Array [
               Object {
                 "type": "return",
-                "value": <EuiErrorBoundary>
-                  <EuiFlyout
-                    onClose={[Function]}
+                "value": <I18nProvider>
+                  <KibanaErrorBoundaryProvider
+                    analytics={
+                      Object {
+                        "optIn": [MockFunction],
+                        "reportEvent": [MockFunction],
+                        "telemetryCounter$": Subject {
+                          "closed": false,
+                          "currentObservers": null,
+                          "hasError": false,
+                          "isStopped": false,
+                          "observers": Array [],
+                          "thrownError": null,
+                        },
+                      }
+                    }
                   >
-                    <MountWrapper
-                      className="kbnOverlayMountWrapper"
-                      mount={[Function]}
-                    />
-                  </EuiFlyout>
-                </EuiErrorBoundary>,
+                    <KibanaErrorBoundary>
+                      <EuiFlyout
+                        onClose={[Function]}
+                      >
+                        <MountWrapper
+                          className="kbnOverlayMountWrapper"
+                          mount={[Function]}
+                        />
+                      </EuiFlyout>
+                    </KibanaErrorBoundary>
+                  </KibanaErrorBoundaryProvider>
+                </I18nProvider>,
               },
             ],
           },
@@ -85,6 +150,7 @@ Array [
       }
       theme={
         Object {
+          "getTheme": [MockFunction],
           "theme$": Observable {
             "_subscribe": [Function],
           },
@@ -104,22 +170,53 @@ Array [
   ],
   Array [
     <KibanaRenderContextProvider
+      analytics={
+        Object {
+          "optIn": [MockFunction],
+          "reportEvent": [MockFunction],
+          "telemetryCounter$": Subject {
+            "closed": false,
+            "currentObservers": null,
+            "hasError": false,
+            "isStopped": false,
+            "observers": Array [],
+            "thrownError": null,
+          },
+        }
+      }
       i18n={
         Object {
           "Context": [MockFunction] {
             "calls": Array [
               Array [
                 Object {
-                  "children": <EuiErrorBoundary>
-                    <EuiFlyout
-                      onClose={[Function]}
-                    >
-                      <MountWrapper
-                        className="kbnOverlayMountWrapper"
-                        mount={[Function]}
-                      />
-                    </EuiFlyout>
-                  </EuiErrorBoundary>,
+                  "children": <KibanaErrorBoundaryProvider
+                    analytics={
+                      Object {
+                        "optIn": [MockFunction],
+                        "reportEvent": [MockFunction],
+                        "telemetryCounter$": Subject {
+                          "closed": false,
+                          "currentObservers": null,
+                          "hasError": false,
+                          "isStopped": false,
+                          "observers": Array [],
+                          "thrownError": null,
+                        },
+                      }
+                    }
+                  >
+                    <KibanaErrorBoundary>
+                      <EuiFlyout
+                        onClose={[Function]}
+                      >
+                        <MountWrapper
+                          className="kbnOverlayMountWrapper"
+                          mount={[Function]}
+                        />
+                      </EuiFlyout>
+                    </KibanaErrorBoundary>
+                  </KibanaErrorBoundaryProvider>,
                 },
                 Object {},
               ],
@@ -127,16 +224,35 @@ Array [
             "results": Array [
               Object {
                 "type": "return",
-                "value": <EuiErrorBoundary>
-                  <EuiFlyout
-                    onClose={[Function]}
+                "value": <I18nProvider>
+                  <KibanaErrorBoundaryProvider
+                    analytics={
+                      Object {
+                        "optIn": [MockFunction],
+                        "reportEvent": [MockFunction],
+                        "telemetryCounter$": Subject {
+                          "closed": false,
+                          "currentObservers": null,
+                          "hasError": false,
+                          "isStopped": false,
+                          "observers": Array [],
+                          "thrownError": null,
+                        },
+                      }
+                    }
                   >
-                    <MountWrapper
-                      className="kbnOverlayMountWrapper"
-                      mount={[Function]}
-                    />
-                  </EuiFlyout>
-                </EuiErrorBoundary>,
+                    <KibanaErrorBoundary>
+                      <EuiFlyout
+                        onClose={[Function]}
+                      >
+                        <MountWrapper
+                          className="kbnOverlayMountWrapper"
+                          mount={[Function]}
+                        />
+                      </EuiFlyout>
+                    </KibanaErrorBoundary>
+                  </KibanaErrorBoundaryProvider>
+                </I18nProvider>,
               },
             ],
           },
@@ -144,6 +260,7 @@ Array [
       }
       theme={
         Object {
+          "getTheme": [MockFunction],
           "theme$": Observable {
             "_subscribe": [Function],
           },

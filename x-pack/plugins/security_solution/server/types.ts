@@ -19,6 +19,7 @@ import type { ExceptionListClient, ListsApiRequestHandlerContext } from '@kbn/li
 import type { AlertsClient, IRuleDataService } from '@kbn/rule-registry-plugin/server';
 
 import type { Readable } from 'stream';
+import type { AuditLogger } from '@kbn/security-plugin-types-server';
 import type { Immutable } from '../common/endpoint/types';
 import { AppClient } from './client';
 import type { ConfigType } from './config';
@@ -29,8 +30,12 @@ import type {
 import type { FrameworkRequest } from './lib/framework';
 import type { EndpointAuthz } from '../common/endpoint/types/authz';
 import type { EndpointInternalFleetServicesInterface } from './endpoint/services/fleet';
-import type { RiskEngineDataClient } from './lib/risk_engine/risk_engine_data_client';
-
+import type { RiskEngineDataClient } from './lib/entity_analytics/risk_engine/risk_engine_data_client';
+import type { RiskScoreDataClient } from './lib/entity_analytics/risk_score/risk_score_data_client';
+import type { AssetCriticalityDataClient } from './lib/entity_analytics/asset_criticality';
+import type { IDetectionRulesClient } from './lib/detection_engine/rule_management/logic/detection_rules_client/detection_rules_client_interface';
+import type { EntityStoreDataClient } from './lib/entity_analytics/entity_store/entity_store_data_client';
+import type { SiemMigrationsClient } from './lib/siem_migrations/types';
 export { AppClient };
 
 export interface SecuritySolutionApiRequestHandlerContext {
@@ -42,12 +47,18 @@ export interface SecuritySolutionApiRequestHandlerContext {
   getAppClient: () => AppClient;
   getSpaceId: () => string;
   getRuleDataService: () => IRuleDataService;
+  getDetectionRulesClient: () => IDetectionRulesClient;
   getDetectionEngineHealthClient: () => IDetectionEngineHealthClient;
   getRuleExecutionLog: () => IRuleExecutionLogForRoutes;
   getRacClient: (req: KibanaRequest) => Promise<AlertsClient>;
+  getAuditLogger: () => AuditLogger | undefined;
   getExceptionListClient: () => ExceptionListClient | null;
   getInternalFleetServices: () => EndpointInternalFleetServicesInterface;
   getRiskEngineDataClient: () => RiskEngineDataClient;
+  getRiskScoreDataClient: () => RiskScoreDataClient;
+  getAssetCriticalityDataClient: () => AssetCriticalityDataClient;
+  getEntityStoreDataClient: () => EntityStoreDataClient;
+  getSiemMigrationsClient: () => SiemMigrationsClient;
 }
 
 export type SecuritySolutionRequestHandlerContext = CustomRequestHandlerContext<{

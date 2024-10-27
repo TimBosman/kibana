@@ -1,9 +1,10 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { fromSavedSearchAttributes, toSavedSearchAttributes } from './saved_searches_utils';
@@ -25,6 +26,9 @@ describe('saved_searches_utils', () => {
         hideChart: true,
         isTextBasedQuery: false,
         usesAdHocDataView: false,
+        rowsPerPage: 250,
+        sampleSize: 1000,
+        breakdownField: 'extension.keyword',
       };
 
       expect(
@@ -34,29 +38,38 @@ describe('saved_searches_utils', () => {
           ['tags-1', 'tags-2'],
           [],
           createSearchSourceMock(),
-          {}
+          {},
+          false
         )
       ).toMatchInlineSnapshot(`
         Object {
-          "breakdownField": undefined,
+          "breakdownField": "extension.keyword",
           "columns": Array [
             "a",
             "b",
           ],
+          "density": undefined,
           "description": "foo",
           "grid": Object {},
+          "headerRowHeight": undefined,
           "hideAggregatedPreview": undefined,
           "hideChart": true,
           "id": "id",
           "isTextBasedQuery": false,
+          "managed": false,
           "references": Array [],
           "refreshInterval": undefined,
           "rowHeight": undefined,
-          "rowsPerPage": undefined,
+          "rowsPerPage": 250,
+          "sampleSize": 1000,
           "searchSource": SearchSource {
             "dependencies": Object {
               "aggs": Object {
                 "createAggConfigs": [MockFunction],
+              },
+              "dataViews": Object {
+                "getMetaFields": [MockFunction],
+                "getShortDotsEnable": [MockFunction],
               },
               "getConfig": [MockFunction],
               "onResponse": [MockFunction],
@@ -84,6 +97,7 @@ describe('saved_searches_utils', () => {
           "title": "saved search",
           "usesAdHocDataView": false,
           "viewMode": undefined,
+          "visContext": undefined,
         }
       `);
     });
@@ -102,6 +116,7 @@ describe('saved_searches_utils', () => {
         hideChart: true,
         isTextBasedQuery: true,
         usesAdHocDataView: false,
+        managed: false,
       };
 
       expect(toSavedSearchAttributes(savedSearch, '{}')).toMatchInlineSnapshot(`
@@ -111,8 +126,10 @@ describe('saved_searches_utils', () => {
             "c",
             "d",
           ],
+          "density": undefined,
           "description": "description",
           "grid": Object {},
+          "headerRowHeight": undefined,
           "hideAggregatedPreview": undefined,
           "hideChart": true,
           "isTextBasedQuery": true,
@@ -122,6 +139,7 @@ describe('saved_searches_utils', () => {
           "refreshInterval": undefined,
           "rowHeight": undefined,
           "rowsPerPage": undefined,
+          "sampleSize": undefined,
           "sort": Array [
             Array [
               "a",
@@ -133,6 +151,7 @@ describe('saved_searches_utils', () => {
           "title": "title",
           "usesAdHocDataView": false,
           "viewMode": undefined,
+          "visContext": undefined,
         }
       `);
     });

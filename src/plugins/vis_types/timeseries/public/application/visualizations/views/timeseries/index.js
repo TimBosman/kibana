@@ -1,20 +1,18 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import React, { useRef, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import classNames from 'classnames';
+import { i18n } from '@kbn/i18n';
 import {
-  MULTILAYER_TIME_AXIS_STYLE,
-  renderEndzoneTooltip,
-  useActiveCursor,
-} from '@kbn/charts-plugin/public';
-import {
+  LegendValue,
   Axis,
   Chart,
   Position,
@@ -26,8 +24,13 @@ import {
   Placement,
   Tooltip,
 } from '@elastic/charts';
+import {
+  MULTILAYER_TIME_AXIS_STYLE,
+  renderEndzoneTooltip,
+  useActiveCursor,
+} from '@kbn/charts-plugin/public';
 import { EuiIcon } from '@elastic/eui';
-import { getTimezone } from '../../../lib/get_timezone';
+import { getTimeZone } from '@kbn/visualization-utils';
 import { getUISettings, getCharts } from '../../../../services';
 import { GRID_LINE_CONFIG, ICON_TYPES_MAP, STACKED_OPTIONS } from '../../constants';
 import { AreaSeriesDecorator } from './decorators/area_decorator';
@@ -88,7 +91,7 @@ export const TimeSeries = ({
   const { theme: themeService, activeCursor: activeCursorService } = getCharts();
 
   const chartRef = useRef();
-  const chartTheme = themeService.useChartsTheme();
+  const chartBaseTheme = getBaseTheme(themeService.useChartsBaseTheme(), backgroundColor);
 
   const handleCursorUpdate = useActiveCursor(activeCursorService, chartRef, {
     isDateHistogram: true,
@@ -120,13 +123,11 @@ export const TimeSeries = ({
   }
 
   const uiSettings = getUISettings();
-  const timeZone = getTimezone(uiSettings);
+  const timeZone = getTimeZone(uiSettings);
   const hasBarChart = series.some(({ bars }) => bars?.show);
 
   // apply legend style change if bgColor is configured
   const classes = classNames(getChartClasses(backgroundColor));
-
-  const baseTheme = getBaseTheme(themeService.useChartsBaseTheme(), backgroundColor);
 
   const onBrushEndListener = ({ x }) => {
     if (!x) {
@@ -184,7 +185,7 @@ export const TimeSeries = ({
       <Settings
         debugState={window._echDebugStateFlag ?? false}
         showLegend={legend}
-        showLegendExtra={true}
+        legendValues={[LegendValue.CurrentAndLastValue]}
         onRenderChange={onRenderChange}
         allowBrushingLastHistogramBin={true}
         legendPosition={legendPosition}
@@ -195,15 +196,12 @@ export const TimeSeries = ({
         pointerUpdateDebounce={0}
         theme={[
           {
-            crosshair: {
-              ...chartTheme.crosshair,
-            },
             axes: {
               tickLabel: {
                 padding: {
                   inner: hasVisibleAnnotations
                     ? TICK_LABEL_WITH_ANNOTATIONS_PADDING
-                    : chartTheme.axes.tickLabel.padding.inner,
+                    : chartBaseTheme.axes.tickLabel.padding.inner,
                 },
               },
             },
@@ -225,12 +223,12 @@ export const TimeSeries = ({
               labelOptions: { maxLines: truncateLegend ? maxLegendLines ?? 1 : 0 },
             },
           },
-          chartTheme,
         ]}
-        baseTheme={baseTheme}
+        baseTheme={chartBaseTheme}
         externalPointerEvents={{
           tooltip: { visible: syncTooltips, placement: Placement.Right },
         }}
+        locale={i18n.getLocale()}
       />
 
       {annotations.map(({ id, data, icon, color }) => {

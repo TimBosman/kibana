@@ -26,6 +26,7 @@ export function defineGetPrivilegesRoutes({ router, authz }: RouteDefinitionPara
           ),
         }),
       },
+      options: { access: 'public' },
     },
     createLicensedRouteHandler((context, request, response) => {
       const respectLicenseLevel = request.query.respectLicenseLevel !== 'false'; // if undefined resolve to true by default
@@ -38,12 +39,10 @@ export function defineGetPrivilegesRoutes({ router, authz }: RouteDefinitionPara
             space: Object.keys(privileges.space),
             features: Object.entries(privileges.features).reduce(
               (acc, [featureId, featurePrivileges]) => {
-                return {
-                  ...acc,
-                  [featureId]: Object.keys(featurePrivileges),
-                };
+                acc[featureId] = Object.keys(featurePrivileges);
+                return acc;
               },
-              {}
+              {} as Record<string, string[]>
             ),
             reserved: Object.keys(privileges.reserved),
           };

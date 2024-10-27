@@ -27,6 +27,8 @@ import {
   PluginSetup as DataPluginSetup,
 } from '@kbn/data-plugin/server';
 import { spacesMock } from '@kbn/spaces-plugin/server/mocks';
+import { schema } from '@kbn/config-schema';
+import { serverlessPluginMock } from '@kbn/serverless/server/mocks';
 import { AlertsService } from './alerts_service/alerts_service';
 import { alertsServiceMock } from './alerts_service/alerts_service.mock';
 
@@ -45,6 +47,7 @@ const sampleRuleType: RuleType<never, never, {}, never, never, 'default', 'recov
   isExportable: true,
   actionGroups: [],
   defaultActionGroupId: 'default',
+  category: 'test',
   producer: 'test',
   async executor() {
     return { state: {} };
@@ -73,8 +76,9 @@ describe('Alerting Plugin', () => {
           data: dataPluginMock.createSetupContract() as unknown as DataPluginSetup,
           features: featuresPluginMock.createSetup(),
           unifiedSearch: autocompletePluginMock.createSetupContract(),
-          // serverless setup is currently empty, and there is no mock
-          ...(useDataStreamForAlerts ? { serverless: {} } : {}),
+          ...(useDataStreamForAlerts
+            ? { serverless: serverlessPluginMock.createSetupContract() }
+            : {}),
         };
 
         let plugin: AlertingPlugin;
@@ -129,6 +133,23 @@ describe('Alerting Plugin', () => {
           expect(setupContract.frameworkAlerts.enabled()).toEqual(true);
         });
 
+        it('should not initialize AlertsService if node.roles.migrator is true', async () => {
+          const context = coreMock.createPluginInitializerContext<AlertingConfig>({
+            ...generateAlertingConfig(),
+            enableFrameworkAlerts: true,
+          });
+          context.node.roles.migrator = true;
+          plugin = new AlertingPlugin(context);
+
+          // need await to test number of calls of setupMocks.status.set, because it is under async function which awaiting core.getStartServices()
+          const setupContract = plugin.setup(setupMocks, mockPlugins);
+          await waitForSetupComplete(setupMocks);
+
+          expect(AlertsService).not.toHaveBeenCalled();
+
+          expect(setupContract.frameworkAlerts.enabled()).toEqual(true);
+        });
+
         it(`exposes configured minimumScheduleInterval()`, async () => {
           const context = coreMock.createPluginInitializerContext<AlertingConfig>(
             generateAlertingConfig()
@@ -139,8 +160,10 @@ describe('Alerting Plugin', () => {
           await waitForSetupComplete(setupMocks);
 
           expect(setupContract.getConfig()).toEqual({
+            maxScheduledPerMinute: 10000,
             isUsingSecurity: false,
             minimumScheduleInterval: { value: '1m', enforce: false },
+            run: { alerts: { max: 1000 }, actions: { max: 1000 } },
           });
 
           expect(setupContract.frameworkAlerts.enabled()).toEqual(false);
@@ -219,6 +242,32 @@ describe('Alerting Plugin', () => {
             expect(ruleType.cancelAlertsOnRuleTimeout).toBe(false);
           });
         });
+
+        describe('registerConnectorAdapter()', () => {
+          let setup: PluginSetupContract;
+
+          beforeEach(async () => {
+            const context = coreMock.createPluginInitializerContext<AlertingConfig>(
+              generateAlertingConfig()
+            );
+
+            plugin = new AlertingPlugin(context);
+            setup = await plugin.setup(setupMocks, mockPlugins);
+          });
+
+          it('should register a connector adapter', () => {
+            const adapter = {
+              connectorTypeId: '.test',
+              ruleActionParamsSchema: schema.object({}),
+              buildActionParams: jest.fn(),
+            };
+
+            setup.registerConnectorAdapter(adapter);
+
+            // @ts-expect-error: private properties cannot be accessed
+            expect(plugin.connectorAdapterRegistry.get('.test')).toEqual(adapter);
+          });
+        });
       });
 
       describe('start()', () => {
@@ -241,7 +290,9 @@ describe('Alerting Plugin', () => {
               data: dataPluginMock.createSetupContract() as unknown as DataPluginSetup,
               features: featuresPluginMock.createSetup(),
               unifiedSearch: autocompletePluginMock.createSetupContract(),
-              ...(useDataStreamForAlerts ? { serverless: {} } : {}),
+              ...(useDataStreamForAlerts
+                ? { serverless: serverlessPluginMock.createSetupContract() }
+                : {}),
             });
 
             const startContract = plugin.start(coreMock.createStart(), {
@@ -291,7 +342,9 @@ describe('Alerting Plugin', () => {
               data: dataPluginMock.createSetupContract() as unknown as DataPluginSetup,
               features: featuresPluginMock.createSetup(),
               unifiedSearch: autocompletePluginMock.createSetupContract(),
-              ...(useDataStreamForAlerts ? { serverless: {} } : {}),
+              ...(useDataStreamForAlerts
+                ? { serverless: serverlessPluginMock.createSetupContract() }
+                : {}),
             });
 
             const startContract = plugin.start(coreMock.createStart(), {
@@ -352,7 +405,9 @@ describe('Alerting Plugin', () => {
             data: dataPluginMock.createSetupContract() as unknown as DataPluginSetup,
             features: featuresPluginMock.createSetup(),
             unifiedSearch: autocompletePluginMock.createSetupContract(),
-            ...(useDataStreamForAlerts ? { serverless: {} } : {}),
+            ...(useDataStreamForAlerts
+              ? { serverless: serverlessPluginMock.createSetupContract() }
+              : {}),
           });
 
           const startContract = plugin.start(coreMock.createStart(), {

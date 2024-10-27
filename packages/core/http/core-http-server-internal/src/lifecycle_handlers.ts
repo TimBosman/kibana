@@ -1,13 +1,21 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import type { OnPostAuthHandler, OnPreResponseHandler } from '@kbn/core-http-server';
+import type {
+  OnPostAuthHandler,
+  OnPreResponseHandler,
+  OnPreResponseInfo,
+  KibanaRequest,
+} from '@kbn/core-http-server';
 import { isSafeMethod } from '@kbn/core-http-router-server-internal';
+import { Logger } from '@kbn/logging';
+import { KIBANA_BUILD_NR_HEADER } from '@kbn/core-http-common';
 import { HttpConfig } from './http_config';
 
 const VERSION_HEADER = 'kbn-version';
@@ -37,18 +45,35 @@ export const createXsrfPostAuthHandler = (config: HttpConfig): OnPostAuthHandler
   };
 };
 
+/**
+ * This should remain part of the logger prefix so that we can notify/track
+ * when we see this logged for observability purposes.
+ */
+export const INTERNAL_API_RESTRICTED_LOGGER_NAME = 'kbn-internal-api-restricted';
 export const createRestrictInternalRoutesPostAuthHandler = (
-  config: HttpConfig
+  config: HttpConfig,
+  log: Logger
 ): OnPostAuthHandler => {
   const isRestrictionEnabled = config.restrictInternalApis;
+  log = log.get('server', `${INTERNAL_API_RESTRICTED_LOGGER_NAME}`);
 
   return (request, response, toolkit) => {
     const isInternalRoute = request.route.options.access === 'internal';
-    if (isRestrictionEnabled && isInternalRoute && !request.isInternalApiRequest) {
-      // throw 400
-      return response.badRequest({
-        body: `uri [${request.url}] with method [${request.route.method}] exists but is not available with the current configuration`,
-      });
+    if (isInternalRoute && !request.isInternalApiRequest) {
+      if (!isRestrictionEnabled) {
+        // warn if the restriction is not enforced
+        log.warn(
+          `Access to uri [${request.url.pathname}] with method [${request.route.method}] is deprecated`
+        );
+      } else {
+        log.error(
+          `Access to uri [${request.url.pathname}] with method [${request.route.method}] is not available with the current configuration`
+        );
+        // throw 400
+        return response.badRequest({
+          body: `uri [${request.url.pathname}] with method [${request.route.method}] exists but is not available with the current configuration`,
+        });
+      }
     }
     return toolkit.next();
   };
@@ -79,16 +104,59 @@ export const createCustomHeadersPreResponseHandler = (config: HttpConfig): OnPre
     name: serverName,
     securityResponseHeaders,
     customResponseHeaders,
-    csp: { header: cspHeader },
+    csp: { header: cspHeader, reportOnlyHeader: cspReportOnlyHeader },
   } = config;
 
+  const additionalHeaders = {
+    ...securityResponseHeaders,
+    ...customResponseHeaders,
+    'Content-Security-Policy': cspHeader,
+    'Content-Security-Policy-Report-Only': cspReportOnlyHeader,
+    [KIBANA_NAME_HEADER]: serverName,
+  };
+
   return (request, response, toolkit) => {
-    const additionalHeaders = {
-      ...securityResponseHeaders,
-      ...customResponseHeaders,
-      'Content-Security-Policy': cspHeader,
-      [KIBANA_NAME_HEADER]: serverName,
-    };
-    return toolkit.next({ headers: additionalHeaders });
+    return toolkit.next({ headers: { ...additionalHeaders } });
+  };
+};
+
+const shouldLogBuildNumberMismatch = (
+  serverBuild: { number: number; string: string },
+  request: KibanaRequest,
+  response: OnPreResponseInfo
+): { log: true; clientBuild: number } | { log: false } => {
+  if (
+    response.statusCode >= 400 &&
+    request.headers[KIBANA_BUILD_NR_HEADER] !== serverBuild.string
+  ) {
+    const clientBuildNumber = parseInt(String(request.headers[KIBANA_BUILD_NR_HEADER]), 10);
+    if (!isNaN(clientBuildNumber)) {
+      return { log: true, clientBuild: clientBuildNumber };
+    }
+  }
+  return { log: false };
+};
+
+/**
+ * This should remain part of the logger prefix so that we can notify/track
+ * when we see this logged for observability purposes.
+ */
+const BUILD_NUMBER_MISMATCH_LOGGER_NAME = 'kbn-build-number-mismatch';
+export const createBuildNrMismatchLoggerPreResponseHandler = (
+  serverBuildNumber: number,
+  log: Logger
+): OnPreResponseHandler => {
+  const serverBuild = { number: serverBuildNumber, string: String(serverBuildNumber) };
+  log = log.get(BUILD_NUMBER_MISMATCH_LOGGER_NAME);
+
+  return (request, response, toolkit) => {
+    const result = shouldLogBuildNumberMismatch(serverBuild, request, response);
+    if (result.log === true) {
+      const clientCompAdjective = result.clientBuild > serverBuildNumber ? 'newer' : 'older';
+      log.warn(
+        `Client build (${result.clientBuild}) is ${clientCompAdjective} than this Kibana server build (${serverBuildNumber}). The [${response.statusCode}] error status in req id [${request.id}] may be due to client-server incompatibility!`
+      );
+    }
+    return toolkit.next();
   };
 };

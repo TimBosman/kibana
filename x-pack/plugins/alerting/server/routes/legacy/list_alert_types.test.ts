@@ -40,6 +40,7 @@ describe('listAlertTypesRoute', () => {
     const [config, handler] = router.get.mock.calls[0];
 
     expect(config.path).toMatchInlineSnapshot(`"/api/alerts/list_alert_types"`);
+    expect(config.options?.access).toBe('public');
 
     const listTypes = [
       {
@@ -60,10 +61,12 @@ describe('listAlertTypesRoute', () => {
           context: [],
           state: [],
         },
+        category: 'test',
         producer: 'test',
         enabledInLicense: true,
         hasAlertsMappings: false,
         hasFieldsForAAD: false,
+        validLegacyConsumers: [],
       } as RegistryAlertTypeWithAuth,
     ];
     rulesClient.listRuleTypes.mockResolvedValueOnce(new Set(listTypes));
@@ -85,6 +88,7 @@ describe('listAlertTypesRoute', () => {
               "state": Array [],
             },
             "authorizedConsumers": Object {},
+            "category": "test",
             "defaultActionGroupId": "default",
             "enabledInLicense": true,
             "hasAlertsMappings": false,
@@ -98,6 +102,7 @@ describe('listAlertTypesRoute', () => {
               "id": "recovered",
               "name": "Recovered",
             },
+            "validLegacyConsumers": Array [],
           },
         ],
       }
@@ -108,6 +113,18 @@ describe('listAlertTypesRoute', () => {
     expect(res.ok).toHaveBeenCalledWith({
       body: listTypes,
     });
+  });
+
+  it('should have internal access for serverless', async () => {
+    const licenseState = licenseStateMock.create();
+    const router = httpServiceMock.createRouter();
+
+    listAlertTypesRoute(router, licenseState, undefined, true);
+
+    const [config] = router.get.mock.calls[0];
+
+    expect(config.path).toMatchInlineSnapshot(`"/api/alerts/list_alert_types"`);
+    expect(config.options?.access).toBe('internal');
   });
 
   it('ensures the license allows listing alert types', async () => {
@@ -139,10 +156,12 @@ describe('listAlertTypesRoute', () => {
           context: [],
           state: [],
         },
+        category: 'test',
         producer: 'alerts',
         enabledInLicense: true,
         hasAlertsMappings: false,
         hasFieldsForAAD: false,
+        validLegacyConsumers: [],
       } as RegistryAlertTypeWithAuth,
     ];
 
@@ -194,10 +213,12 @@ describe('listAlertTypesRoute', () => {
           context: [],
           state: [],
         },
+        category: 'test',
         producer: 'alerts',
         enabledInLicense: true,
         hasAlertsMappings: false,
         hasFieldsForAAD: false,
+        validLegacyConsumers: [],
       } as RegistryAlertTypeWithAuth,
     ];
 
@@ -211,7 +232,7 @@ describe('listAlertTypesRoute', () => {
       ['ok']
     );
 
-    expect(handler(context, req, res)).rejects.toMatchInlineSnapshot(`[Error: OMG]`);
+    await expect(handler(context, req, res)).rejects.toMatchInlineSnapshot(`[Error: OMG]`);
 
     expect(verifyApiAccess).toHaveBeenCalledWith(licenseState);
   });

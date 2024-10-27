@@ -1,15 +1,17 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
 import { from } from 'rxjs';
 import type { Logger } from '@kbn/core/server';
-import { getKbnServerError, KbnServerError } from '@kbn/kibana-utils-plugin/server';
+import { getKbnSearchError, KbnSearchError } from '../../report_search_error';
 import type { ISearchStrategy } from '../../types';
+import { sanitizeRequestParams } from '../../sanitize_request_params';
 
 export const esqlSearchStrategyProvider = (
   logger: Logger,
@@ -19,23 +21,28 @@ export const esqlSearchStrategyProvider = (
    * @param request
    * @param options
    * @param deps
-   * @throws `KbnServerError`
+   * @throws `KbnSearchError`
    * @returns `Observable<IEsSearchResponse<any>>`
    */
   search: (request, { abortSignal, ...options }, { esClient, uiSettingsClient }) => {
     // Only default index pattern type is supported here.
     // See ese for other type support.
     if (request.indexType) {
-      throw new KbnServerError(`Unsupported index pattern type ${request.indexType}`, 400);
+      throw new KbnSearchError(`Unsupported index pattern type ${request.indexType}`, 400);
     }
 
     const search = async () => {
       try {
-        const { terminateAfter, ...requestParams } = request.params ?? {};
-        const { headers, body } = await esClient.asCurrentUser.transport.request(
+        // `drop_null_columns` is going to change the response
+        // now we get `all_columns` and `columns`
+        // `columns` contain only columns with data
+        // `all_columns` contain everything
+        const { terminateAfter, dropNullColumns, ...requestParams } = request.params ?? {};
+        const { headers, body, meta } = await esClient.asCurrentUser.transport.request(
           {
             method: 'POST',
-            path: '/_query',
+            path: `/_query`,
+            querystring: dropNullColumns ? 'drop_null_columns' : '',
             body: {
               ...requestParams,
             },
@@ -43,16 +50,22 @@ export const esqlSearchStrategyProvider = (
           {
             signal: abortSignal,
             meta: true,
+            // we don't want the ES client to retry (default value is 3)
+            maxRetries: 0,
+            requestTimeout: options.transport?.requestTimeout,
           }
         );
         return {
           rawResponse: body,
           isPartial: false,
           isRunning: false,
+          ...(meta?.request?.params
+            ? { requestParams: sanitizeRequestParams(meta?.request?.params) }
+            : {}),
           warning: headers?.warning,
         };
       } catch (e) {
-        throw getKbnServerError(e);
+        throw getKbnSearchError(e);
       }
     };
 

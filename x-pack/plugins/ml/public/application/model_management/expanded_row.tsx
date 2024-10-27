@@ -7,18 +7,18 @@
 
 import React, { type FC, useCallback, useMemo } from 'react';
 import { omit, pick } from 'lodash';
+import type { EuiDescriptionListProps, EuiTabbedContentTab } from '@elastic/eui';
 import {
   EuiBadge,
   EuiCodeBlock,
   EuiDescriptionList,
-  EuiDescriptionListProps,
   EuiFlexGrid,
+  EuiFlexGroup,
   EuiFlexItem,
   EuiNotificationBadge,
   EuiPanel,
   EuiSpacer,
   EuiTabbedContent,
-  EuiTabbedContentTab,
   EuiTitle,
   useEuiPaddingSize,
 } from '@elastic/eui';
@@ -27,16 +27,22 @@ import { FIELD_FORMAT_IDS } from '@kbn/field-formats-plugin/common';
 import { isPopulatedObject } from '@kbn/ml-is-populated-object';
 import { isDefined } from '@kbn/ml-is-defined';
 import { TRAINED_MODEL_TYPE } from '@kbn/ml-trained-models-utils';
-import { JobMap } from '../data_frame_analytics/pages/job_map';
+import { dynamic } from '@kbn/shared-ux-utility';
+import { InferenceApi } from './inference_api_tab';
 import type { ModelItemFull } from './models_list';
 import { ModelPipelines } from './pipelines';
 import { AllocatedModels } from '../memory_usage/nodes_overview/allocated_models';
 import type { AllocatedModel, TrainedModelStat } from '../../../common/types/trained_models';
 import { useFieldFormatter } from '../contexts/kibana/use_field_formatter';
+import { useEnabledFeatures } from '../contexts/ml';
 
 interface ExpandedRowProps {
   item: ModelItemFull;
 }
+
+const JobMap = dynamic(async () => ({
+  default: (await import('../data_frame_analytics/pages/job_map')).JobMap,
+}));
 
 const useBadgeFormatter = () => {
   const xs = useEuiPaddingSize('xs');
@@ -113,6 +119,7 @@ export function useListItemsFormatter() {
 
 export const ExpandedRow: FC<ExpandedRowProps> = ({ item }) => {
   const formatToListItems = useListItemsFormatter();
+  const { showLicenseInfo, showNodeInfo } = useEnabledFeatures();
 
   const {
     inference_config: inferenceConfig,
@@ -149,16 +156,17 @@ export const ExpandedRow: FC<ExpandedRowProps> = ({ item }) => {
       estimated_operations,
       estimated_heap_memory_usage_bytes,
       default_field_map,
-      license_level,
+      ...(showLicenseInfo ? { license_level } : {}),
     };
   }, [
-    default_field_map,
     description,
-    estimated_heap_memory_usage_bytes,
-    estimated_operations,
-    license_level,
     tags,
     version,
+    estimated_operations,
+    estimated_heap_memory_usage_bytes,
+    default_field_map,
+    showLicenseInfo,
+    license_level,
   ]);
 
   const deploymentStatItems: AllocatedModel[] = useMemo<AllocatedModel[]>(() => {
@@ -195,6 +203,10 @@ export const ExpandedRow: FC<ExpandedRowProps> = ({ item }) => {
 
     return items;
   }, [stats]);
+
+  const hideColumns = useMemo(() => {
+    return showNodeInfo ? ['model_id'] : ['model_id', 'node_name'];
+  }, [showNodeInfo]);
 
   const tabs = useMemo<EuiTabbedContentTab[]>(() => {
     return [
@@ -341,7 +353,7 @@ export const ExpandedRow: FC<ExpandedRowProps> = ({ item }) => {
                           </h5>
                         </EuiTitle>
                         <EuiSpacer size={'m'} />
-                        <AllocatedModels models={deploymentStatItems} hideColumns={['model_id']} />
+                        <AllocatedModels models={deploymentStatItems} hideColumns={hideColumns} />
                       </EuiPanel>
                       <EuiSpacer size={'s'} />
                     </>
@@ -401,15 +413,19 @@ export const ExpandedRow: FC<ExpandedRowProps> = ({ item }) => {
               id: 'pipelines',
               'data-test-subj': 'mlTrainedModelPipelines',
               name: (
-                <>
-                  <FormattedMessage
-                    id="xpack.ml.trainedModels.modelsList.expandedRow.pipelinesTabLabel"
-                    defaultMessage="Pipelines"
-                  />
+                <EuiFlexGroup alignItems={'center'} gutterSize={'xs'}>
+                  <EuiFlexItem grow={false}>
+                    <FormattedMessage
+                      id="xpack.ml.trainedModels.modelsList.expandedRow.pipelinesTabLabel"
+                      defaultMessage="Pipelines"
+                    />
+                  </EuiFlexItem>
                   {isPopulatedObject(pipelines) ? (
-                    <EuiNotificationBadge>{Object.keys(pipelines).length}</EuiNotificationBadge>
+                    <EuiFlexItem grow={false}>
+                      <EuiNotificationBadge>{Object.keys(pipelines).length}</EuiNotificationBadge>
+                    </EuiFlexItem>
                   ) : null}
-                </>
+                </EuiFlexGroup>
               ),
               content: (
                 <div data-test-subj={'mlTrainedModelPipelinesContent'}>
@@ -420,9 +436,36 @@ export const ExpandedRow: FC<ExpandedRowProps> = ({ item }) => {
             },
           ]
         : []),
+      ...(Array.isArray(item.inference_apis) && item.inference_apis.length > 0
+        ? [
+            {
+              id: 'inferenceApi',
+              'data-test-subj': 'inferenceAPIs',
+              name: (
+                <EuiFlexGroup alignItems={'center'} gutterSize={'xs'}>
+                  <EuiFlexItem grow={false}>
+                    <FormattedMessage
+                      id="xpack.ml.trainedModels.modelsList.expandedRow.inferenceAPIsTabLabel"
+                      defaultMessage="Inference services"
+                    />
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiNotificationBadge>{item.inference_apis.length}</EuiNotificationBadge>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+              ),
+              content: (
+                <div data-test-subj={'mlTrainedModelInferenceAPIContent'}>
+                  <EuiSpacer size={'s'} />
+                  <InferenceApi inferenceApis={item.inference_apis} />
+                </div>
+              ),
+            },
+          ]
+        : []),
       {
         id: 'models_map',
-        'data-test-subj': 'mlTrainedModelsMap',
+        'data-test-subj': 'mlTrainedModelMap',
         name: (
           <FormattedMessage
             id="xpack.ml.trainedModels.modelsList.expandedRow.modelsMapLabel"
@@ -430,7 +473,7 @@ export const ExpandedRow: FC<ExpandedRowProps> = ({ item }) => {
           />
         ),
         content: (
-          <div data-test-subj={'mlTrainedModelDetailsContent'}>
+          <div data-test-subj={'mlTrainedModelMapContent'}>
             <EuiSpacer size={'s'} />
             <EuiFlexItem css={{ height: 300 }}>
               <JobMap
@@ -455,6 +498,8 @@ export const ExpandedRow: FC<ExpandedRowProps> = ({ item }) => {
     restMetaData,
     stats,
     item.model_id,
+    item.inference_apis,
+    hideColumns,
   ]);
 
   const initialSelectedTab =

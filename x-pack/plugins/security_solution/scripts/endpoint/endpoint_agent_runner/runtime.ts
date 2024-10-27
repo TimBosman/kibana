@@ -5,11 +5,11 @@
  * 2.0.
  */
 
-import { ToolingLog } from '@kbn/tooling-log';
 import { getAgentVersionMatchingCurrentStack } from '../common/fleet_services';
 import type { StartRuntimeServicesOptions } from './types';
 import type { RuntimeServices } from '../common/stack_services';
 import { createRuntimeServices } from '../common/stack_services';
+import { createToolingLogger } from '../../../common/endpoint/data_loaders/utils';
 
 interface EndpointRunnerRuntimeServices extends RuntimeServices {
   options: Omit<
@@ -22,12 +22,14 @@ interface EndpointRunnerRuntimeServices extends RuntimeServices {
 let runtimeServices: undefined | EndpointRunnerRuntimeServices;
 
 export const startRuntimeServices = async ({
-  log = new ToolingLog(),
+  log = createToolingLogger(),
   elasticUrl,
   kibanaUrl,
   fleetServerUrl,
   username,
   password,
+  apiKey,
+  spaceId,
   ...otherOptions
 }: StartRuntimeServicesOptions) => {
   const stackServices = await createRuntimeServices({
@@ -36,7 +38,9 @@ export const startRuntimeServices = async ({
     fleetServerUrl,
     username,
     password,
+    apiKey,
     log,
+    spaceId,
     asSuperuser: otherOptions?.asSuperuser,
   });
 

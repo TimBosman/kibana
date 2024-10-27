@@ -6,8 +6,6 @@
  */
 
 import type { SavedObjectAttributes } from '@kbn/core/server';
-import { Filter } from '@kbn/es-query';
-import type { WeekdayStr } from '@kbn/rrule';
 import { IsoWeekday } from '../../../../common';
 import {
   ruleNotifyWhenAttributes,
@@ -16,38 +14,19 @@ import {
   ruleExecutionStatusErrorReasonAttributes,
   ruleExecutionStatusWarningReasonAttributes,
 } from '../constants';
+import { RRuleAttributes } from '../../r_rule/types';
+import { AlertsFilterQueryAttributes } from '../../alerts_filter_query/types';
 
 export type RuleNotifyWhenAttributes =
-  typeof ruleNotifyWhenAttributes[keyof typeof ruleNotifyWhenAttributes];
+  (typeof ruleNotifyWhenAttributes)[keyof typeof ruleNotifyWhenAttributes];
 export type RuleLastRunOutcomeValuesAttributes =
-  typeof ruleLastRunOutcomeValuesAttributes[keyof typeof ruleLastRunOutcomeValuesAttributes];
+  (typeof ruleLastRunOutcomeValuesAttributes)[keyof typeof ruleLastRunOutcomeValuesAttributes];
 export type RuleExecutionStatusValuesAttributes =
-  typeof ruleExecutionStatusValuesAttributes[keyof typeof ruleExecutionStatusValuesAttributes];
+  (typeof ruleExecutionStatusValuesAttributes)[keyof typeof ruleExecutionStatusValuesAttributes];
 export type RuleExecutionStatusErrorReasonAttributes =
-  typeof ruleExecutionStatusErrorReasonAttributes[keyof typeof ruleExecutionStatusErrorReasonAttributes];
+  (typeof ruleExecutionStatusErrorReasonAttributes)[keyof typeof ruleExecutionStatusErrorReasonAttributes];
 export type RuleExecutionStatusWarningReasonAttributes =
-  typeof ruleExecutionStatusWarningReasonAttributes[keyof typeof ruleExecutionStatusWarningReasonAttributes];
-
-type RRuleFreq = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-export interface RRuleAttributes {
-  dtstart: string;
-  tzid: string;
-  freq?: RRuleFreq;
-  until?: string;
-  count?: number;
-  interval?: number;
-  wkst?: WeekdayStr;
-  byweekday?: Array<string | number>;
-  bymonth?: number[];
-  bysetpos?: number[];
-  bymonthday: number[];
-  byyearday: number[];
-  byweekno: number[];
-  byhour: number[];
-  byminute: number[];
-  bysecond: number[];
-}
+  (typeof ruleExecutionStatusWarningReasonAttributes)[keyof typeof ruleExecutionStatusWarningReasonAttributes];
 
 export interface RuleSnoozeScheduleAttributes {
   duration: number;
@@ -135,18 +114,14 @@ interface AlertsFilterTimeFrameAttributes {
   };
 }
 
-interface AlertsFilterAttributes {
-  query?: {
-    kql: string;
-    filters: Filter[];
-    dsl: string;
-  };
+export interface AlertsFilterAttributes {
+  query?: AlertsFilterQueryAttributes;
   timeframe?: AlertsFilterTimeFrameAttributes;
 }
 
 export interface RuleActionAttributes {
   uuid: string;
-  group: string;
+  group?: string;
   actionRef: string;
   actionTypeId: string;
   params: SavedObjectAttributes;
@@ -156,6 +131,7 @@ export interface RuleActionAttributes {
     throttle: string | null;
   };
   alertsFilter?: AlertsFilterAttributes;
+  useAlertDataAsTemplate?: boolean;
 }
 
 type MappedParamsAttributes = SavedObjectAttributes & {
@@ -165,6 +141,15 @@ type MappedParamsAttributes = SavedObjectAttributes & {
 
 interface RuleMetaAttributes {
   versionApiKeyLastmodified?: string;
+}
+
+interface AlertDelayAttributes {
+  active: number;
+}
+
+interface FlappingAttributes {
+  lookBackWindow: number;
+  statusChangeThreshold: number;
 }
 
 export interface RuleAttributes {
@@ -191,7 +176,7 @@ export interface RuleAttributes {
   muteAll: boolean;
   mutedInstanceIds: string[];
   meta?: RuleMetaAttributes;
-  executionStatus: RuleExecutionStatusAttributes;
+  executionStatus?: RuleExecutionStatusAttributes;
   monitoring?: RuleMonitoringAttributes;
   snoozeSchedule?: RuleSnoozeScheduleAttributes[];
   isSnoozedUntil?: string | null;
@@ -199,4 +184,6 @@ export interface RuleAttributes {
   nextRun?: string | null;
   revision: number;
   running?: boolean | null;
+  alertDelay?: AlertDelayAttributes;
+  flapping?: FlappingAttributes | null;
 }

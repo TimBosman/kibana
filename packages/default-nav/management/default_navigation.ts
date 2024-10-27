@@ -1,10 +1,12 @@
 /*
  * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
- * or more contributor license agreements. Licensed under the Elastic License
- * 2.0 and the Server Side Public License, v 1; you may not use this file except
- * in compliance with, at your election, the Elastic License 2.0 or the Server
- * Side Public License, v 1.
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
  */
+
 import { i18n } from '@kbn/i18n';
 import type { NodeDefinitionWithChildren } from '@kbn/core-chrome-browser';
 import type { DeepLinkId } from '@kbn/deeplinks-management';
@@ -27,21 +29,17 @@ export const defaultNavigation: ManagementNodeDefinition = {
     defaultMessage: 'Management',
   }),
   icon: 'gear',
+  renderAs: 'accordion',
   children: [
     {
-      id: 'root',
-      title: '',
-      children: [
-        {
-          link: 'monitoring',
-        },
-      ],
+      link: 'monitoring',
     },
     {
       id: 'integration_management',
       title: i18n.translate('defaultNavigation.management.integrationManagement', {
         defaultMessage: 'Integration management',
       }),
+      renderAs: 'accordion',
       children: [
         {
           link: 'integrations',
@@ -59,12 +57,14 @@ export const defaultNavigation: ManagementNodeDefinition = {
       title: i18n.translate('defaultNavigation.management.stackManagement', {
         defaultMessage: 'Stack management',
       }),
+      renderAs: 'accordion',
       children: [
         {
           id: 'ingest',
           title: i18n.translate('defaultNavigation.management.ingest', {
             defaultMessage: 'Ingest',
           }),
+          renderAs: 'accordion',
           children: [
             {
               link: 'management:ingest_pipelines',
@@ -79,6 +79,7 @@ export const defaultNavigation: ManagementNodeDefinition = {
           title: i18n.translate('defaultNavigation.management.stackManagementData', {
             defaultMessage: 'Data',
           }),
+          renderAs: 'accordion',
           children: [
             {
               link: 'management:index_management',
@@ -93,6 +94,7 @@ export const defaultNavigation: ManagementNodeDefinition = {
           title: i18n.translate('defaultNavigation.management.alertAndInsights', {
             defaultMessage: 'Alerts and insights',
           }),
+          renderAs: 'accordion',
           children: [
             {
               // Rules
@@ -114,9 +116,13 @@ export const defaultNavigation: ManagementNodeDefinition = {
         {
           id: 'kibana',
           title: 'Kibana',
+          renderAs: 'accordion',
           children: [
             {
               link: 'management:dataViews',
+            },
+            {
+              link: 'management:aiAssistantManagementSelection',
             },
             {
               // Saved objects

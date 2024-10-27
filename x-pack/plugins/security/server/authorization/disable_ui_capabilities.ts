@@ -14,11 +14,13 @@ import type {
   FeatureElasticsearchPrivileges,
   KibanaFeature,
 } from '@kbn/features-plugin/server';
+import type {
+  AuthorizationServiceSetup,
+  CheckPrivilegesResponse,
+} from '@kbn/security-plugin-types-server';
 import type { RecursiveReadonly, RecursiveReadonlyArray } from '@kbn/utility-types';
 
-import type { AuthorizationServiceSetup } from './authorization_service';
-import type { CheckPrivilegesResponse } from './types';
-import type { AuthenticatedUser } from '../../common/model';
+import type { AuthenticatedUser } from '../../common';
 
 export function disableUICapabilitiesFactory(
   request: KibanaRequest,
@@ -37,10 +39,8 @@ export function disableUICapabilitiesFactory(
   const elasticsearchFeatureMap = elasticsearchFeatures.reduce<
     Record<string, RecursiveReadonlyArray<FeatureElasticsearchPrivileges>>
   >((acc, esFeature) => {
-    return {
-      ...acc,
-      [esFeature.id]: esFeature.privileges,
-    };
+    acc[esFeature.id] = esFeature.privileges;
+    return acc;
   }, {});
 
   const allRequiredClusterPrivileges = Array.from(
@@ -59,11 +59,9 @@ export function disableUICapabilitiesFactory(
       return {
         ...acc,
         ...Object.entries(p.requiredIndexPrivileges!).reduce((acc2, [indexName, privileges]) => {
-          return {
-            ...acc2,
-            [indexName]: [...(acc[indexName] ?? []), ...privileges],
-          };
-        }, {}),
+          acc2[indexName] = [...(acc[indexName] ?? []), ...privileges];
+          return acc2;
+        }, {} as Record<string, string[]>),
       };
     }, {});
 
@@ -77,11 +75,15 @@ export function disableUICapabilitiesFactory(
   const shouldAffectCapability = (featureId: keyof UICapabilities, uiCapability: string) => {
     // This method answers: 'Should we affect a capability based on privileges?'
 
-    // 'spaces' and 'fileUpload' feature ID's are handled independently
-    // The spaces and file_upload plugins have their own capabilites switchers
+    // 'fileUpload' feature ID is handled independently
+    // The spaces and file_upload plugins have their own capabilities switchers.
 
-    // Always affect global settings
-    if (featureId === 'globalSettings') {
+    // The spaces capabilities switcher handles disabling capabilities within a specific
+    // space, but the root 'spaces' feature ID needs to be affected here, where we can check
+    // if the current user is privileged to for general spaces capabilities (e.g., manage).
+
+    // Always affect global settings, and the "spaces" feature (see above)
+    if (featureId === 'globalSettings' || featureId === 'spaces') {
       return true;
     }
 
@@ -142,7 +144,7 @@ export function disableUICapabilitiesFactory(
       // Capabilities derived from Elasticsearch features should not be
       // included here, as the result is used to check authorization against
       // Kibana Privileges, rather than Elasticsearch Privileges.
-      if (elasticsearchFeatureMap.hasOwnProperty(featureId)) {
+      if (Object.hasOwn(elasticsearchFeatureMap, featureId)) {
         return [];
       }
       if (typeof value === 'boolean') {
@@ -157,14 +159,16 @@ export function disableUICapabilitiesFactory(
     }
 
     const uiActions = Object.entries(uiCapabilities).reduce<string[]>(
-      (acc, [featureId, featureUICapabilities]) => [
-        ...acc,
-        ...flatten(
-          Object.entries(featureUICapabilities).map(([uiCapability, value]) => {
-            return getActionsForFeatureCapability(featureId, uiCapability, value);
-          })
-        ),
-      ],
+      (acc, [featureId, featureUICapabilities]) => {
+        acc.push(
+          ...flatten(
+            Object.entries(featureUICapabilities).map(([uiCapability, value]) => {
+              return getActionsForFeatureCapability(featureId, uiCapability, value);
+            })
+          )
+        );
+        return acc;
+      },
       []
     );
 
@@ -203,7 +207,7 @@ export function disableUICapabilitiesFactory(
 
       const action = authz.actions.ui.get(featureId, ...uiCapabilityParts);
 
-      const isElasticsearchFeature = elasticsearchFeatureMap.hasOwnProperty(featureId);
+      const isElasticsearchFeature = Object.hasOwn(elasticsearchFeatureMap, featureId);
       const isCatalogueFeature = featureId === 'catalogue';
       const isManagementFeature = featureId === 'management';
 
@@ -234,7 +238,7 @@ export function disableUICapabilitiesFactory(
         } else if (isManagementFeature) {
           const [managementSectionId, managementEntryId] = uiCapabilityParts;
           const featureGrantsManagementEntry =
-            (esFeature.management ?? {}).hasOwnProperty(managementSectionId) &&
+            Object.hasOwn(esFeature.management ?? {}, managementSectionId) &&
             esFeature.management![managementSectionId].includes(managementEntryId);
 
           return (

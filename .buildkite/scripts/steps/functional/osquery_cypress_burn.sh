@@ -2,11 +2,9 @@
 
 set -euo pipefail
 
-source .buildkite/scripts/common/util.sh
-source .buildkite/scripts/steps/functional/common_cypress.sh
+source .buildkite/scripts/steps/functional/common.sh
 
-.buildkite/scripts/bootstrap.sh
-node scripts/build_kibana_platform_plugins.js
+export KIBANA_INSTALL_DIR=${KIBANA_BUILD_LOCATION}
 
 export JOB=kibana-osquery-cypress
 
@@ -14,5 +12,4 @@ buildkite-agent meta-data set "${BUILDKITE_JOB_ID}_is_test_execution_step" 'fals
 
 echo "--- Osquery Cypress tests, burning changed specs (Chrome)"
 
-set +e
-yarn cypress:changed-specs-only; status=$?; yarn junit:merge && exit $status
+yarn --cwd x-pack/plugins/osquery cypress:changed-specs-only

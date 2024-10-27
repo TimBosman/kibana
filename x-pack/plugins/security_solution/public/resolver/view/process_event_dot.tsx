@@ -131,6 +131,7 @@ const UnstyledProcessEventDot = React.memo(
     nodeID,
     projectionMatrix,
     timeAtRender,
+    onClick,
   }: {
     /**
      * Id that identify the scope of analyzer
@@ -161,6 +162,11 @@ const UnstyledProcessEventDot = React.memo(
      * The time (unix epoch) at render.
      */
     timeAtRender: number;
+
+    /**
+     * Optional onClick to be called when clicking on a node
+     */
+    onClick?: () => void | undefined;
   }) => {
     const resolverComponentInstanceID = id;
     // This should be unique to each instance of Resolver
@@ -291,7 +297,9 @@ const UnstyledProcessEventDot = React.memo(
        */ false
     );
 
-    const labelHTMLID = htmlIdGenerator('resolver')(`${nodeID}:label`);
+    const labelHTMLID = useMemo(() => {
+      return htmlIdGenerator('resolver')(`${nodeID}:label`);
+    }, [nodeID]);
 
     const isAriaCurrent = nodeID === ariaActiveDescendant;
     const isAriaSelected = nodeID === selectedNode;
@@ -315,7 +323,7 @@ const UnstyledProcessEventDot = React.memo(
     }, [dispatch, nodeID, timestamp, id]);
 
     const handleClick = useCallback(
-      (clickEvent) => {
+      (clickEvent: React.MouseEvent) => {
         if (animationTarget.current?.beginElement) {
           animationTarget.current.beginElement();
         }
@@ -332,8 +340,12 @@ const UnstyledProcessEventDot = React.memo(
           );
           processDetailNavProps.onClick(clickEvent);
         }
+
+        if (onClick) {
+          onClick();
+        }
       },
-      [animationTarget, dispatch, nodeID, processDetailNavProps, nodeState, timestamp, id]
+      [animationTarget, dispatch, nodeID, processDetailNavProps, nodeState, timestamp, id, onClick]
     );
 
     const grandTotal: number | null = useSelector((state: State) =>
@@ -351,6 +363,14 @@ const UnstyledProcessEventDot = React.memo(
       }
     }, [processEvent, nodeName]);
 
+    const flowToId = useMemo(() => {
+      return ariaFlowtoNodeID === null ? undefined : nodeHTMLID(ariaFlowtoNodeID);
+    }, [ariaFlowtoNodeID, nodeHTMLID]);
+
+    const generatedNodeHTMLID = useMemo(() => {
+      return nodeHTMLID(nodeID);
+    }, [nodeHTMLID, nodeID]);
+
     /* eslint-disable jsx-a11y/click-events-have-key-events */
     return (
       <div
@@ -359,13 +379,13 @@ const UnstyledProcessEventDot = React.memo(
         className={`${className} kbn-resetFocusState`}
         role="treeitem"
         aria-level={ariaLevel === null ? undefined : ariaLevel}
-        aria-flowto={ariaFlowtoNodeID === null ? undefined : nodeHTMLID(ariaFlowtoNodeID)}
+        aria-flowto={flowToId}
         aria-labelledby={labelHTMLID}
         aria-haspopup="true"
         aria-current={isAriaCurrent ? 'true' : undefined}
         aria-selected={isAriaSelected ? 'true' : undefined}
         style={nodeViewportStyle}
-        id={nodeHTMLID(nodeID)}
+        id={generatedNodeHTMLID}
         tabIndex={-1}
       >
         <svg
@@ -454,7 +474,7 @@ const UnstyledProcessEventDot = React.memo(
           >
             <FormattedMessage
               id="xpack.securitySolution.endpoint.resolver.processDescription"
-              defaultMessage="{isEventBeingAnalyzed, select, true {Analyzed Event · {descriptionText}} false {{descriptionText}}}"
+              defaultMessage="{isEventBeingAnalyzed, select, true {Analyzed Event · {descriptionText}} other {{descriptionText}}}"
               values={{
                 isEventBeingAnalyzed: isOrigin,
                 descriptionText,
@@ -523,6 +543,7 @@ const UnstyledProcessEventDot = React.memo(
                   buttonFill={colorMap.resolverBackground}
                   nodeStats={nodeStats}
                   nodeID={nodeID}
+                  onClick={onClick}
                 />
               )}
             </EuiFlexItem>
@@ -574,7 +595,7 @@ export const ProcessEventDot = styled(UnstyledProcessEventDot)`
     width: fit-content;
   }
 
-  & .euiSelectableList-bordered {
+  & .euiSelectableList {
     border-top-right-radius: 0px;
     border-top-left-radius: 0px;
   }
